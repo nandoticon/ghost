@@ -50,14 +50,14 @@ export const TaskItem = React.memo<TaskItemProps>(({
     const getContextPills = () => {
         const pills = []
 
-        if (task.location === 'home') pills.push(<ContextPill key="loc" icon={<Home className="w-2.5 h-2.5" />} label="Home" />)
-        if (task.location === 'outside') pills.push(<ContextPill key="loc" icon={<MapPin className="w-2.5 h-2.5" />} label="Outside" />)
+        if (task.location === 'home') pills.push(<ContextPill key="loc" icon={<Home className="w-3 h-3" />} label="Home" />)
+        if (task.location === 'outside') pills.push(<ContextPill key="loc" icon={<MapPin className="w-3 h-3" />} label="Outside" />)
 
-        if (task.energy === 'high') pills.push(<ContextPill key="en" icon={<Zap className="w-2.5 h-2.5 text-yellow-400" />} label="High" />)
-        if (task.energy === 'low') pills.push(<ContextPill key="en" icon={<ZapOff className="w-2.5 h-2.5 text-blue-400" />} label="Low" />)
+        if (task.energy === 'high') pills.push(<ContextPill key="en" icon={<Zap className="w-3 h-3 text-accent-warm" />} label="High" />)
+        if (task.energy === 'low') pills.push(<ContextPill key="en" icon={<ZapOff className="w-3 h-3 text-blue-400" />} label="Low" />)
 
-        if (task.focus === 'immersion') pills.push(<ContextPill key="fo" icon={<Target className="w-2.5 h-2.5 text-purple-400" />} label="Immersion" />)
-        if (task.focus === 'process') pills.push(<ContextPill key="fo" icon={<Layers className="w-2.5 h-2.5 text-green-400" />} label="Process" />)
+        if (task.focus === 'immersion') pills.push(<ContextPill key="fo" icon={<Target className="w-3 h-3 text-purple-400" />} label="Immersion" />)
+        if (task.focus === 'process') pills.push(<ContextPill key="fo" icon={<Layers className="w-3 h-3 text-green-400" />} label="Process" />)
 
         return pills
     }
@@ -67,14 +67,14 @@ export const TaskItem = React.memo<TaskItemProps>(({
         const dueDate = new Date(task.end_at)
 
         if (isToday(dueDate)) {
-            return "text-orange-400 bg-orange-400/10 border-orange-400/20"
+            return "text-accent-warm bg-accent-warm/10 border-accent-warm/20"
         }
 
         if (isPast(dueDate) && startOfDay(dueDate) < startOfDay(new Date())) {
-            return "text-red-400 bg-red-400/10 border-red-400/20 font-bold"
+            return "text-red-500 bg-red-500/10 border-red-500/20 font-heavy"
         }
 
-        return "text-text-muted bg-surface/50 border-border/30"
+        return "text-text-muted bg-surface-secondary/40 border-border/40"
     }
 
     const dueDateStyle = getDueDateStyle()
@@ -83,95 +83,96 @@ export const TaskItem = React.memo<TaskItemProps>(({
     return (
         <div
             className={cn(
-                "group flex items-center space-x-3 px-4 py-3.5 xl:py-5 rounded-lg border border-transparent transition-all cursor-pointer",
+                "group relative flex items-center space-x-4 px-4 py-4 xl:py-5 rounded-2xl border border-transparent transition-all cursor-pointer overflow-hidden",
                 isDragging
-                    ? "bg-surface/80 border-accent/30 shadow-2xl ring-1 ring-accent/30 scale-[1.02] z-50"
-                    : "hover:bg-surface/50 hover:border-border/50",
-                isCompleted && "opacity-60"
+                    ? "bg-surface shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border-accent/30 scale-[1.03] z-50 ring-2 ring-accent/20"
+                    : "hover:bg-surface hover:border-border/60 hover:shadow-lg hover:-translate-y-0.5",
+                isCompleted && "opacity-50"
             )}
             onClick={() => onClickTitle ? onClickTitle(task) : onClick(task)}
         >
+            {/* Project Color Side-Bar Indicator */}
+            <div
+                className="absolute left-0 top-3 bottom-3 w-1.5 rounded-r-full transition-all duration-300 group-hover:w-2"
+                style={{ backgroundColor: task.project?.color || 'transparent' }}
+            />
+
             {/* Drag Handle */}
             {!hideDragHandle && !isCompleted && (
                 <div
                     {...dragHandleProps}
                     onClick={(e) => e.stopPropagation()}
                     className={cn(
-                        "cursor-grab active:cursor-grabbing text-text-muted transition-opacity -ml-2 p-1",
-                        isDragging ? "opacity-100 text-accent" : "opacity-0 group-hover:opacity-40"
+                        "cursor-grab active:cursor-grabbing text-text-muted transition-opacity -ml-1 p-1",
+                        isDragging ? "opacity-100 text-accent" : "opacity-0 group-hover:opacity-60"
                     )}
                 >
-                    <GripVertical className="w-4 h-4" />
+                    <GripVertical className="w-4 h-4 xl:w-5 xl:h-5" />
                 </div>
             )}
 
-            {/* Checkbox */}
-            <button
-                onClick={(e) => {
-                    e.stopPropagation()
-                    onToggleComplete(task.id, !isCompleted)
-                }}
-                className="text-text-muted hover:text-accent transition-all shrink-0 active:scale-125 hover:scale-110"
-            >
-                {isCompleted ? (
-                    <CheckCircle2 className="w-5 h-5 text-accent transition-transform duration-200" />
-                ) : (
-                    <Circle className="w-5 h-5 transition-transform duration-200" />
-                )}
-            </button>
+            {/* Checkbox Container */}
+            <div className="relative shrink-0 flex items-center justify-center">
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation()
+                        onToggleComplete(task.id, !isCompleted)
+                    }}
+                    className="relative z-10 text-text-muted hover:text-accent transition-all active:scale-125 hover:scale-110"
+                >
+                    {isCompleted ? (
+                        <CheckCircle2 className="w-6 h-6 xl:w-[26px] xl:h-[26px] text-accent animate-in zoom-in-50 duration-200" />
+                    ) : (
+                        <Circle className="w-6 h-6 xl:w-[26px] xl:h-[26px] transition-transform duration-200" />
+                    )}
+                </button>
+                {/* Rings animation could be added here on click */}
+            </div>
 
-            {/* Title & Extra Info */}
-            <div className="flex-1 min-w-0 space-y-1">
-                <div className="flex items-center space-x-2">
+            {/* Title & Metadata */}
+            <div className="flex-1 min-w-0 flex flex-col justify-center">
+                <div className="flex items-center space-x-2 mb-1">
                     <span className={cn(
-                        "text-sm xl:text-base font-medium truncate transition-all duration-300",
+                        "text-[15px] xl:text-[17px] font-heavy tracking-tight transition-all duration-300",
                         isCompleted
                             ? "line-through text-text-muted decoration-text-muted/60"
-                            : "no-underline"
+                            : "text-text-primary no-underline"
                     )}>
                         {task.title}
                     </span>
                     {task.recurrence && (
-                        <RefreshCw className="w-3 h-3 text-text-muted shrink-0" />
+                        <RefreshCw className="w-3.5 h-3.5 text-text-muted shrink-0" />
                     )}
                     {task.today && !isCompleted && (
-                        <span className="text-[11px] xl:text-xs uppercase font-bold tracking-widest text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] xl:text-[11px] uppercase font-black tracking-widest text-accent-warm bg-accent-warm/10 px-2 py-0.5 rounded-full border border-accent-warm/10">
                             Today
                         </span>
                     )}
                     {isOverdue && (
-                        <span className="text-[11px] xl:text-xs uppercase font-bold tracking-widest text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] xl:text-[11px] uppercase font-black tracking-widest text-red-500 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/10">
                             Overdue
-                        </span>
-                    )}
-                    {task.parent_task_id && (
-                        <span className="text-[11px] xl:text-xs uppercase font-bold tracking-widest text-accent bg-accent/10 px-1.5 py-0.5 rounded flex items-center space-x-1">
-                            <RefreshCw className="w-2.5 h-2.5" />
-                            <span>Recurring</span>
                         </span>
                     )}
                 </div>
 
-                <div className="flex items-center flex-wrap gap-1.5 overflow-hidden">
-                    {/* Project Dot */}
+                <div className="flex items-center flex-wrap gap-2 overflow-hidden">
+                    {/* Project Name (if exists) */}
                     {task.project && (
-                        <div
-                            className="w-1.5 h-1.5 rounded-full shrink-0"
-                            style={{ backgroundColor: task.project.color || '#7c6aff' }}
-                            title={task.project.name}
-                        />
+                        <span className="text-[10px] xl:text-[11px] font-black uppercase tracking-widest text-text-muted/80">
+                            {task.project.name}
+                        </span>
                     )}
 
                     {/* Context Pills */}
                     {getContextPills()}
 
-                    {/* Dates */}
+                    {/* Due Date */}
                     {task.end_at && (
                         <div className={cn(
-                            "flex items-center space-x-1 text-[10px] xl:text-xs px-2 py-0.5 rounded border shrink-0",
+                            "flex items-center space-x-1.5 text-[10px] xl:text-[11px] px-2.5 py-1 rounded-full border shrink-0 font-bold uppercase tracking-wider",
                             dueDateStyle
                         )}>
-                            <Clock className="w-2.5 h-2.5" />
+                            <Clock className="w-3 h-3" />
                             <span>
                                 {isToday(new Date(task.end_at)) ? 'Today' : format(new Date(task.end_at), 'MMM d')}
                                 {task.end_at.includes('T') && !task.end_at.endsWith('00:00:00') && ` · ${format(new Date(task.end_at), 'p')}`}
@@ -192,11 +193,11 @@ export const TaskItem = React.memo<TaskItemProps>(({
                         onToggleToday(task.id, !task.today)
                     }}
                     className={cn(
-                        "shrink-0 transition-all p-1.5 rounded-full",
-                        task.today ? "text-yellow-400 opacity-100" : "text-text-muted opacity-0 group-hover:opacity-100 hover:bg-surface-secondary"
+                        "shrink-0 transition-all p-2 rounded-xl",
+                        task.today ? "text-accent-warm" : "text-text-muted opacity-0 group-hover:opacity-100 hover:bg-surface-secondary"
                     )}
                 >
-                    <Star className={cn("w-4 h-4", task.today && "fill-current")} />
+                    <Star className={cn("w-5 h-5 xl:w-6 xl:h-6", task.today && "fill-current")} />
                 </button>
             )}
         </div>
@@ -207,7 +208,6 @@ function SubtaskProgress({ taskId }: { taskId: string }) {
     const [stats, setStats] = React.useState<SubtaskStats | null>(null)
 
     React.useEffect(() => {
-        // Skip for temporary (optimistic) tasks
         if (taskId.startsWith('temp-')) return
 
         const fetchStats = async () => {
@@ -243,38 +243,37 @@ function SubtaskProgress({ taskId }: { taskId: string }) {
     const percent = Math.round((stats.completed / stats.total) * 100)
 
     return (
-        <div className="flex items-center space-x-2 text-[10px] text-text-muted bg-surface/30 px-2 py-0.5 rounded border border-border/20 shrink-0">
-            {/* Progress Circle SVG */}
-            <svg className="w-2.5 h-2.5 -rotate-90">
+        <div className="flex items-center space-x-2 text-[10px] xl:text-[11px] text-text-muted font-black uppercase tracking-widest bg-surface-secondary/40 px-2.5 py-1 rounded-full border border-border/20 shrink-0">
+            <svg className="w-3 h-3 -rotate-90">
                 <circle
-                    cx="5"
-                    cy="5"
-                    r="4"
+                    cx="6"
+                    cy="6"
+                    r="5"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="1.5"
+                    strokeWidth="2"
                     className="text-border"
                 />
                 <circle
-                    cx="5"
-                    cy="5"
-                    r="4"
+                    cx="6"
+                    cy="6"
+                    r="5"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeDasharray={25.12}
-                    strokeDashoffset={25.12 * (1 - percent / 100)}
+                    strokeWidth="2"
+                    strokeDasharray={31.4}
+                    strokeDashoffset={31.4 * (1 - percent / 100)}
                     className="text-accent transition-all duration-500"
                 />
             </svg>
-            <span className="font-bold tabular-nums">{stats.completed}/{stats.total}</span>
+            <span className="tabular-nums">{stats.completed}/{stats.total}</span>
         </div>
     )
 }
 
 function ContextPill({ icon, label }: { icon: React.ReactNode, label: string }) {
     return (
-        <div className="flex items-center space-x-1 px-2 py-0.5 bg-surface-secondary/50 rounded border border-border/30 text-[9px] xl:text-[11px] text-text-muted font-medium shrink-0">
+        <div className="flex items-center space-x-1.5 px-2.5 py-1 bg-surface-secondary/60 rounded-full border border-border/40 text-[10px] xl:text-[11px] text-text-muted font-bold tracking-tight shrink-0 uppercase">
             {icon}
             <span>{label}</span>
         </div>

@@ -7,6 +7,7 @@ import { ProjectForm } from '../components/ProjectForm'
 import { EmptyState } from '../components/EmptyState'
 import { useToast } from '../components/Toast'
 import { Project } from '../types'
+import { cn } from '../lib/cn'
 
 export default function Projects() {
     const { projects, loading: projectsLoading, createProject, updateProject, deleteProject } = useProjects()
@@ -39,7 +40,7 @@ export default function Projects() {
             }
             setIsFormOpen(false)
             setEditingProject(undefined)
-        } catch (error) {
+        } catch (_error) {
             showToast('Failed to save project', 'error')
         }
     }
@@ -51,23 +52,23 @@ export default function Projects() {
 
     if (projectsLoading || tasksLoading) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-                <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm xl:text-base text-text-muted font-medium">Gathering projects...</p>
+            <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6">
+                <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+                <p className="text-base xl:text-lg text-text-muted font-bold tracking-tight">Gathering initiatives...</p>
             </div>
         )
     }
 
     return (
-        <div className="mx-auto px-4 py-8 md:py-12 space-y-10">
-            <header className="flex items-center justify-between">
-                <div className="space-y-1">
-                    <h1 className="text-3xl md:text-4xl xl:text-5xl font-bold tracking-tight text-text-primary">Projects</h1>
-                    <p className="text-sm xl:text-base text-text-muted font-medium">{activeProjects.length} active initiatives</p>
+        <div className="space-y-12">
+            <header className="flex items-end justify-between border-b border-border/40 pb-8">
+                <div className="space-y-2">
+                    <h1 className="text-4xl md:text-5xl xl:text-6xl font-black tracking-tightest title-gradient">Projects</h1>
+                    <p className="text-sm xl:text-base text-text-muted font-heavy uppercase tracking-widest">{activeProjects.length} active initiatives</p>
                 </div>
                 <button
                     onClick={() => setIsFormOpen(true)}
-                    className="flex items-center space-x-2 px-5 py-2.5 xl:px-6 xl:py-3 bg-accent hover:bg-accent/90 text-white rounded-full text-sm xl:text-base font-bold transition-all active:scale-95 shadow-lg shadow-accent/20"
+                    className="flex items-center space-x-2.5 px-6 py-3.5 xl:px-8 xl:py-4 bg-accent hover:bg-accent/90 text-white rounded-2xl text-sm xl:text-base font-black uppercase tracking-widest transition-all active:scale-95 shadow-2xl shadow-accent/20"
                 >
                     <Plus className="w-5 h-5 xl:w-6 xl:h-6" />
                     <span className="hidden md:inline">New Project</span>
@@ -83,7 +84,7 @@ export default function Projects() {
                     description="Organize your tasks into projects to track progress and stay focused."
                 />
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 4k:grid-cols-4 gap-5 xl:gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 4k:grid-cols-4 gap-6 xl:gap-8">
                     {activeProjects.map(project => (
                         <ProjectCard
                             key={project.id}
@@ -101,17 +102,17 @@ export default function Projects() {
 
             {/* Archived Projects Section */}
             {archivedProjects.length > 0 && (
-                <div className="space-y-4 pt-6 border-t border-border/50">
+                <div className="space-y-6 pt-10">
                     <button
                         onClick={() => setShowArchived(!showArchived)}
-                        className="flex items-center space-x-2 text-text-muted hover:text-text-primary transition-colors group"
+                        className="flex items-center space-x-3 text-text-muted hover:text-text-primary transition-all group"
                     >
-                        {showArchived ? <ChevronDown className="w-4 h-4 xl:w-5 xl:h-5" /> : <ChevronRight className="w-4 h-4 xl:w-5 xl:h-5" />}
-                        <span className="text-sm xl:text-base font-bold uppercase tracking-widest">Archived ({archivedProjects.length})</span>
+                        {showArchived ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                        <span className="text-sm xl:text-base font-black uppercase tracking-widest">Archived ({archivedProjects.length})</span>
                     </button>
 
                     {showArchived && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 4k:grid-cols-4 gap-5 xl:gap-6 opacity-70">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 4k:grid-cols-4 gap-6 xl:gap-8 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
                             {archivedProjects.map(project => (
                                 <ProjectCard
                                     key={project.id}
@@ -163,17 +164,29 @@ function ProjectCard({
     isArchived?: boolean
 }) {
     return (
-        <div className="group relative bg-surface border border-border rounded-2xl p-6 xl:p-8 hover:border-accent/30 transition-all hover:shadow-xl hover:-translate-y-1">
-            <Link to={`/projects/${project.id}`} className="absolute inset-0 z-0" />
+        <div className="group relative flex flex-col bg-surface border border-border/60 rounded-3xl p-7 xl:p-9 hover:border-accent/40 transition-all hover:shadow-[0_32px_64px_-16px_rgba(0,0,0,0.4)] hover:-translate-y-2 overflow-hidden">
+            {/* Background noise texture */}
+            <div className="surface-texture" />
+            
+            {/* Color Accent Bar */}
+            <div 
+                className="absolute top-0 left-0 right-0 h-2 xl:h-2.5 opacity-80 group-hover:opacity-100 transition-opacity"
+                style={{ backgroundColor: project.color || '#7c6aff' }}
+            />
 
-            <div className="relative z-10 space-y-6">
-                <div className="flex items-start justify-between">
-                    <div className="flex items-center space-x-3">
-                        <div
-                            className="w-3 h-3 xl:w-4 xl:h-4 rounded-full shadow-lg shrink-0"
-                            style={{ backgroundColor: project.color || '#7c6aff', boxShadow: `0 0 10px ${project.color}40` }}
-                        />
-                        <h3 className="text-lg xl:text-xl font-bold text-text-primary group-hover:text-accent transition-colors">
+            <Link to={`/projects/${project.id}`} className="absolute inset-0 z-0 rounded-3xl" />
+
+            <div className="relative z-10 flex-1 flex flex-col space-y-7">
+                <div className="flex items-start justify-between min-h-[64px]">
+                    <div className="space-y-1.5 flex-1 min-w-0">
+                        <div className="flex items-center space-x-3">
+                           <div 
+                                className="w-3 h-3 rounded-full shrink-0"
+                                style={{ backgroundColor: project.color || '#7c6aff', boxShadow: `0 0 12px ${project.color}60` }}
+                            />
+                            <p className="text-[10px] xl:text-[11px] font-black uppercase tracking-widest text-text-muted">Initiative</p>
+                        </div>
+                        <h3 className="text-xl xl:text-2xl font-black tracking-tight text-text-primary group-hover:text-accent transition-colors truncate">
                             {project.name}
                         </h3>
                     </div>
@@ -183,32 +196,46 @@ function ProjectCard({
                                 e.preventDefault()
                                 onEdit(project)
                             }}
-                            className="p-1.5 xl:p-2 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors"
+                            className="p-2.5 xl:p-3 hover:bg-surface-secondary rounded-2xl text-text-muted hover:text-text-primary transition-all active:scale-90"
                         >
-                            <MoreVertical className="w-4 h-4 xl:w-5 xl:h-5" />
+                            <MoreVertical className="w-5 h-5 xl:w-6 xl:h-6" />
                         </button>
                     </div>
                 </div>
 
-                {project.description && (
-                    <p className="text-sm xl:text-base text-text-muted line-clamp-2 min-h-[2.5rem]">
+                {project.description ? (
+                    <p className="text-sm xl:text-base text-text-muted line-clamp-2 min-h-[3rem] leading-relaxed">
                         {project.description}
                     </p>
+                ) : (
+                    <div className="flex-1 min-h-[3rem]" />
                 )}
 
-                <div className="space-y-3">
-                    <div className="flex items-center justify-between text-xs xl:text-sm font-bold uppercase tracking-wider text-text-muted">
-                        <span>{stats.total} tasks · {stats.completed} completed</span>
-                        <span className="text-text-primary">{Math.round(stats.progress)}%</span>
+                <div className="space-y-4 mt-auto">
+                    <div className="flex items-end justify-between">
+                        <div className="space-y-1">
+                            <p className="text-[10px] xl:text-[11px] font-black uppercase tracking-widest text-text-muted">Progress</p>
+                            <p className="text-lg xl:text-xl font-black text-text-primary tabular-nums">
+                                {Math.round(stats.progress)}%
+                            </p>
+                        </div>
+                        <span className="text-xs xl:text-sm font-heavy text-text-muted bg-surface-secondary/50 px-3 py-1 rounded-full border border-border/30">
+                            {stats.completed} / {stats.total}
+                        </span>
                     </div>
-                    <div className="h-1.5 xl:h-2 w-full bg-surface-secondary rounded-full overflow-hidden">
+                    
+                    {/* Visual Progress Bar */}
+                    <div className="h-3 xl:h-4 w-full bg-surface-secondary rounded-full overflow-hidden border border-border/10 p-[2px]">
                         <div
-                            className="h-full bg-accent transition-all duration-500 ease-out"
+                            className="h-full rounded-full transition-all duration-1000 ease-out relative group-hover:opacity-100 opacity-90"
                             style={{
                                 width: `${stats.progress}%`,
-                                backgroundColor: project.color || '#7c6aff'
+                                backgroundColor: project.color || '#7c6aff',
+                                boxShadow: `0 0 20px ${project.color}30`
                             }}
-                        />
+                        >
+                            <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent" />
+                        </div>
                     </div>
                 </div>
 
@@ -218,7 +245,7 @@ function ProjectCard({
                             e.preventDefault()
                             onArchive()
                         }}
-                        className="mt-2 w-full py-1.5 xl:py-2 text-xs xl:text-sm font-bold uppercase tracking-widest text-accent border border-accent/20 rounded-lg hover:bg-accent/10 transition-colors"
+                        className="mt-2 w-full py-2.5 xl:py-3 text-xs xl:text-sm font-black uppercase tracking-widest text-accent border border-accent/20 rounded-2xl hover:bg-accent/10 transition-all font-heavy"
                     >
                         Unarchive
                     </button>
