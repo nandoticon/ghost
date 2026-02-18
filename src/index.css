@@ -4,48 +4,44 @@
 
 @layer base {
   :root {
-    --color-bg: #f5f5f5;
+    --color-bg: #f4f4f6;
     --color-surface: #ffffff;
-    --color-surface-secondary: #eeeeee;
-    --color-border: #e2e2e2;
+    --color-surface-secondary: #eeeeef;
+    --color-border: #e0e0e4;
     --color-accent: #7c6aff;
+    --color-accent-warm: #f59e0b;
     --color-text-primary: #111111;
     --color-text-muted: #6b7280;
 
-    font-size: 16px;
+    font-size: 15px;
     color-scheme: light;
   }
 
   .dark {
-    --color-bg: #0e0e0e;
-    --color-surface: #161616;
-    --color-surface-secondary: #1a1a1a;
-    --color-border: #262626;
+    --color-bg: #0d0d0f;
+    --color-surface: #17171a;
+    --color-surface-secondary: #1e1e22;
+    --color-border: #2a2a30;
     --color-accent: #7c6aff;
-    --color-text-primary: #f0f0f0;
-    --color-text-muted: #888888;
+    --color-accent-warm: #f59e0b;
+    --color-text-primary: #f0f0f2;
+    --color-text-muted: #7a7a85;
     color-scheme: dark;
   }
 
-  /* Large monitors (1440p, high-DPI 1080p) */
+  /* Large monitors (1440p) */
   @media (min-width: 1440px) {
-    :root {
-      font-size: 17px;
-    }
+    :root { font-size: 16px; }
   }
 
-  /* 1920p and above — full HD large screens */
+  /* 1920p and above */
   @media (min-width: 1920px) {
-    :root {
-      font-size: 18px;
-    }
+    :root { font-size: 17px; }
   }
 
   /* 4K / QHD monitors */
   @media (min-width: 2560px) {
-    :root {
-      font-size: 20px;
-    }
+    :root { font-size: 19px; }
   }
 
   body {
@@ -54,7 +50,7 @@
   }
 
   ::selection {
-    background-color: color-mix(in srgb, var(--color-accent) 30%, transparent);
+    background-color: color-mix(in srgb, var(--color-accent) 25%, transparent);
   }
 
   *,
@@ -68,17 +64,33 @@
   .no-transitions *::after {
     transition: none !important;
   }
+
+  h1, h2, h3 {
+    letter-spacing: -0.03em;
+    font-weight: 800;
+  }
 }
 
 @layer components {
   .nav-link-active {
     @apply bg-accent/10 text-accent border-l-2 border-accent;
   }
+
+  /* Subtle noise texture overlay for surfaces */
+  .surface-texture::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    border-radius: inherit;
+    opacity: 0.35;
+  }
 }
 
 @layer utilities {
   .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
+    width: 5px;
   }
 
   .custom-scrollbar::-webkit-scrollbar-track {
@@ -89,9 +101,9 @@
     @apply bg-border rounded-full hover:bg-text-muted transition-colors;
   }
 
-  /* Global scrollbar for the app */
+  /* Global scrollbar */
   ::-webkit-scrollbar {
-    width: 6px;
+    width: 5px;
   }
 
   ::-webkit-scrollbar-track {
@@ -102,10 +114,17 @@
     @apply bg-border rounded-full hover:bg-text-muted transition-colors;
   }
 
-  /* Prevent horizontal scrollbar on scrollable containers */
   ::-webkit-scrollbar:horizontal {
     height: 0;
     display: none;
+  }
+
+  /* Page title gradient */
+  .title-gradient {
+    background: linear-gradient(135deg, var(--color-text-primary) 0%, color-mix(in srgb, var(--color-text-primary) 70%, var(--color-accent)) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 }
 
@@ -114,11 +133,16 @@
 }
 
 @keyframes shimmer {
-  0% {
-    transform: translateX(-100%);
-  }
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
 
-  100% {
-    transform: translateX(200%);
-  }
+@keyframes ring-pulse {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+@keyframes check-draw {
+  0% { stroke-dashoffset: 20; }
+  100% { stroke-dashoffset: 0; }
 }

@@ -26,7 +26,6 @@ export default function Layout() {
         setModalOpen
     } = useShortcutContext()
 
-    // Initialize global keyboard shortcuts
     useKeyboardShortcuts()
 
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
@@ -43,62 +42,96 @@ export default function Layout() {
         navigate('/login')
     }
 
+    // Derive user initials for avatar
+    const initials = user?.email
+        ? user.email.slice(0, 2).toUpperCase()
+        : '?'
+
     return (
         <div className="flex h-[100dvh] bg-background overflow-hidden text-text-primary">
-            {/* Sidebar - Hidden on mobile */}
-            <aside className="hidden md:flex w-[280px] xl:w-[320px] 4k:w-[400px] flex-col border-r border-border bg-surface/30 overflow-x-hidden shrink-0">
-                <div className="p-6 xl:p-8">
-                    <h1 className="text-2xl xl:text-3xl font-bold tracking-tighter text-text-primary">Ghost</h1>
+            {/* Sidebar — Hidden on mobile */}
+            <aside className="hidden tablet:flex w-[260px] xl:w-[290px] 4k:w-[360px] flex-col border-r border-border bg-surface shrink-0 relative overflow-hidden">
+                {/* Top accent line */}
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-accent via-accent/60 to-transparent" />
+
+                {/* Brand */}
+                <div className="px-6 pt-8 pb-6 xl:px-7">
+                    <h1 className="text-2xl xl:text-3xl font-black tracking-tightest text-text-primary select-none">
+                        Ghost
+                    </h1>
                 </div>
 
-                <SearchBar onTaskClick={(id) => setActiveTaskId(id)} />
+                {/* Search */}
+                <div className="px-3 xl:px-4 mb-3">
+                    <SearchBar onTaskClick={(id) => setActiveTaskId(id)} />
+                </div>
 
-                <nav className="flex-1 px-3 xl:px-4 space-y-1 overflow-y-auto overflow-x-hidden">
+                {/* Nav */}
+                <nav className="flex-1 px-3 xl:px-4 space-y-0.5 overflow-y-auto overflow-x-hidden">
                     {navItems.map((item) => (
                         <NavLink
                             key={item.to}
                             to={item.to}
                             className={() =>
                                 cn(
-                                    "flex items-center space-x-3 px-4 py-3 xl:py-3.5 rounded transition-all text-sm xl:text-base font-medium",
+                                    "flex items-center space-x-3 px-3 py-2.5 xl:py-3 rounded-xl transition-all text-sm xl:text-base font-semibold",
                                     location.pathname.startsWith(item.to)
-                                        ? "bg-accent/10 text-accent border-l-2 border-accent -ml-4 pl-4"
-                                        : "text-text-muted hover:text-text-primary hover:bg-surface/50"
+                                        ? "bg-accent/10 text-accent"
+                                        : "text-text-muted hover:text-text-primary hover:bg-surface-secondary"
                                 )
                             }
                         >
-                            <item.icon className="w-4 h-4 xl:w-5 xl:h-5 shrink-0" />
+                            <item.icon className="w-4 h-4 xl:w-[18px] xl:h-[18px] shrink-0" />
                             <span>{item.label}</span>
+                            {location.pathname.startsWith(item.to) && (
+                                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-accent" />
+                            )}
                         </NavLink>
                     ))}
 
+                    {/* Divider */}
+                    <div className="pt-3 pb-1">
+                        <div className="h-px bg-border/50 mx-2" />
+                    </div>
+
+                    {/* New Task */}
                     <button
                         onClick={() => setQuickCaptureOpen(true)}
-                        className="flex items-center justify-between w-full px-4 py-3 xl:py-3.5 rounded text-sm xl:text-base font-medium text-text-muted hover:text-text-primary hover:bg-surface/50 transition-all mt-4 group"
+                        className="flex items-center justify-between w-full px-3 py-2.5 xl:py-3 rounded-xl text-sm xl:text-base font-semibold text-text-muted hover:text-text-primary hover:bg-surface-secondary transition-all group"
                     >
                         <span className="flex items-center space-x-3">
-                            <Plus className="w-4 h-4 xl:w-5 xl:h-5 shrink-0" />
+                            <Plus className="w-4 h-4 xl:w-[18px] xl:h-[18px] shrink-0" />
                             <span>New Task</span>
                         </span>
-                        <kbd className="text-[10px] xl:text-xs bg-surface-secondary px-1.5 py-0.5 rounded border border-border font-sans opacity-50 group-hover:opacity-100 transition-opacity">N</kbd>
+                        <kbd className="text-[10px] xl:text-xs bg-surface-secondary px-1.5 py-0.5 rounded border border-border font-sans opacity-40 group-hover:opacity-80 transition-opacity">N</kbd>
                     </button>
                 </nav>
 
+                {/* Bottom user section */}
                 {user && (
-                    <div className="p-4 border-t border-border space-y-2 overflow-x-hidden">
-                        <div className="px-4 py-2">
-                            <p className="text-[10px] xl:text-xs uppercase font-bold tracking-widest text-text-muted">User</p>
-                            <p className="text-xs xl:text-sm font-medium truncate text-text-primary">{user.email}</p>
+                    <div className="p-4 xl:p-5 border-t border-border">
+                        {/* User identity */}
+                        <div className="flex items-center space-x-3 px-1 mb-3">
+                            <div className="w-8 h-8 xl:w-9 xl:h-9 rounded-full bg-accent/15 border border-accent/20 flex items-center justify-center shrink-0">
+                                <span className="text-[11px] xl:text-xs font-black text-accent">{initials}</span>
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-[9px] xl:text-[10px] uppercase font-black tracking-widest text-text-muted">Account</p>
+                                <p className="text-xs xl:text-sm font-semibold truncate text-text-primary">{user.email}</p>
+                            </div>
                         </div>
+
+                        {/* Sign out */}
                         <button
                             onClick={handleSignOut}
-                            className="flex w-full items-center space-x-3 px-4 py-2.5 text-sm xl:text-base text-text-muted hover:text-red-400 transition-colors"
+                            className="flex w-full items-center space-x-2.5 px-3 py-2 text-sm xl:text-base text-text-muted hover:text-red-400 rounded-xl hover:bg-red-400/5 transition-all"
                         >
-                            <LogOut className="w-4 h-4 xl:w-5 xl:h-5 shrink-0" />
-                            <span>Sign Out</span>
+                            <LogOut className="w-3.5 h-3.5 xl:w-4 xl:h-4 shrink-0" />
+                            <span className="text-sm font-semibold">Sign Out</span>
                         </button>
 
-                        <div className="px-4 py-2 mt-2 border-t border-border/30 pt-4 flex items-center justify-between">
+                        {/* Footer tools */}
+                        <div className="flex items-center justify-between mt-2 pt-3 border-t border-border/40 px-1">
                             <ThemeSwitcher />
                             <div className="flex items-center space-x-1">
                                 <button
@@ -106,8 +139,8 @@ export default function Layout() {
                                     className="p-2 xl:p-2.5 hover:bg-surface-secondary rounded-xl text-text-muted hover:text-text-primary transition-all active:scale-95 group relative"
                                     title="Settings"
                                 >
-                                    <SettingsIcon className="w-4 h-4 xl:w-5 xl:h-5" />
-                                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-surface border border-border rounded text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
+                                    <SettingsIcon className="w-4 h-4 xl:w-[18px] xl:h-[18px]" />
+                                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-surface border border-border rounded text-[10px] font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
                                         Settings
                                     </span>
                                 </button>
@@ -116,8 +149,8 @@ export default function Layout() {
                                     className="p-2 xl:p-2.5 hover:bg-surface-secondary rounded-xl text-text-muted hover:text-text-primary transition-all active:scale-95 group relative"
                                     title="Keyboard shortcuts (?)"
                                 >
-                                    <HelpCircle className="w-4 h-4 xl:w-5 xl:h-5" />
-                                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-surface border border-border rounded text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
+                                    <HelpCircle className="w-4 h-4 xl:w-[18px] xl:h-[18px]" />
+                                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-surface border border-border rounded text-[10px] font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
                                         Shortcuts (?)
                                     </span>
                                 </button>
@@ -127,11 +160,11 @@ export default function Layout() {
                 )}
             </aside>
 
-            {/* Main Content Area */}
+            {/* Main content area */}
             <div className="flex-1 flex flex-col min-w-0 h-full relative">
                 {/* Mobile Top Bar */}
-                <header className="md:hidden flex items-center justify-between px-6 h-16 bg-surface/50 backdrop-blur-md border-b border-border sticky top-0 z-40">
-                    <h1 className="text-xl font-bold tracking-tighter text-text-primary">Ghost</h1>
+                <header className="tablet:hidden flex items-center justify-between px-5 h-14 bg-surface/70 backdrop-blur-md border-b border-border sticky top-0 z-40">
+                    <h1 className="text-xl font-black tracking-tightest text-text-primary">Ghost</h1>
                     <button
                         onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
                         className="p-2 hover:bg-surface-secondary rounded-xl text-text-muted transition-colors"
@@ -139,7 +172,7 @@ export default function Layout() {
                         <SearchIcon className="w-5 h-5" />
                     </button>
                     {isMobileSearchOpen && (
-                        <div className="absolute top-16 left-0 right-0 bg-surface border-b border-border p-4 animate-in slide-in-from-top duration-200">
+                        <div className="absolute top-14 left-0 right-0 bg-surface border-b border-border p-4 animate-in slide-in-from-top duration-200 z-50">
                             <SearchBar onTaskClick={(id) => {
                                 setActiveTaskId(id)
                                 setIsMobileSearchOpen(false)
@@ -148,33 +181,73 @@ export default function Layout() {
                     )}
                 </header>
 
-                <main className="flex-1 overflow-y-auto p-4 md:p-8 xl:p-12 pb-24 md:pb-8">
+                {/* Page Content — fluid width */}
+                <main className="flex-1 overflow-y-auto p-4 tablet:p-8 xl:p-12 pb-24 tablet:pb-10">
                     <div
                         key={location.pathname}
-                        className="max-w-[860px] xl:max-w-[1100px] 4k:max-w-[1500px] mx-auto animate-in fade-in slide-in-from-bottom-2 duration-200"
+                        className="w-full max-w-[clamp(540px,80%,1320px)] 4k:max-w-[1600px] mx-auto animate-in fade-in slide-in-from-bottom-2 duration-200"
                     >
                         <Outlet />
                     </div>
                 </main>
 
-                {/* Bottom Nav - Mobile Only */}
-                <nav className="md:hidden flex items-center justify-around bg-surface/90 backdrop-blur border-t border-border fixed bottom-0 left-0 right-0 h-16 px-4 z-50">
-                    {navItems.map((item) => (
+                {/* Bottom Nav — Mobile only */}
+                <nav className="tablet:hidden flex items-center bg-surface/95 backdrop-blur border-t border-border fixed bottom-0 left-0 right-0 z-50">
+                    {/* Left nav items */}
+                    {navItems.slice(0, 1).map((item) => (
                         <NavLink
                             key={item.to}
                             to={item.to}
                             className={({ isActive }) =>
                                 cn(
-                                    "flex flex-col items-center space-y-1 transition-colors",
+                                    "flex-1 flex flex-col items-center py-3 space-y-1 transition-colors",
                                     isActive ? "text-accent" : "text-text-muted"
                                 )
                             }
                         >
-                            <item.icon className="w-5 h-5" />
-                            <span className="text-[10px] font-medium">{item.label}</span>
+                            {({ isActive }) => (
+                                <>
+                                    <item.icon className={cn("w-5 h-5", isActive && "fill-accent/20")} />
+                                    <span className="text-[10px] font-bold">{item.to === '/today' ? 'Today' : item.label}</span>
+                                    {isActive && <span className="absolute bottom-1 w-1 h-1 rounded-full bg-accent" />}
+                                </>
+                            )}
+                        </NavLink>
+                    ))}
+
+                    {/* Center FAB */}
+                    <div className="flex-none px-4">
+                        <button
+                            onClick={() => setQuickCaptureOpen(true)}
+                            className="w-12 h-12 bg-accent text-white rounded-full flex items-center justify-center shadow-lg shadow-accent/30 active:scale-95 transition-all"
+                        >
+                            <Plus className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    {/* Right nav items */}
+                    {navItems.slice(1).map((item) => (
+                        <NavLink
+                            key={item.to}
+                            to={item.to}
+                            className={({ isActive }) =>
+                                cn(
+                                    "flex-1 flex flex-col items-center py-3 space-y-1 transition-colors relative",
+                                    isActive ? "text-accent" : "text-text-muted"
+                                )
+                            }
+                        >
+                            {({ isActive }) => (
+                                <>
+                                    <item.icon className={cn("w-5 h-5")} />
+                                    <span className="text-[10px] font-bold">{item.label}</span>
+                                    {isActive && <span className="absolute bottom-1 w-1 h-1 rounded-full bg-accent" />}
+                                </>
+                            )}
                         </NavLink>
                     ))}
                 </nav>
+
                 {/* Overlays */}
                 <QuickCapture
                     isOpen={isQuickCaptureOpen}
