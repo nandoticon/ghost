@@ -1,0 +1,62 @@
+export interface Project {
+    id: string;
+    user_id: string;
+    name: string;
+    description: string | null;
+    color: string;
+    sort_order: number;
+    archived: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface Task {
+    id: string;
+    user_id: string;
+    title: string;
+    notes: string | null;
+    completed: boolean;
+    today: boolean;
+    project_id: string | null;
+    start_at: string | null;
+    end_at: string | null;
+    location: 'home' | 'outside' | null;
+    energy: 'high' | 'low' | null;
+    focus: 'immersion' | 'process' | null;
+    recurrence: 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly' | null;
+    recurrence_end_at: string | null;
+    parent_task_id: string | null;
+    sort_order: number;
+    sort_order_today: number;
+    created_at: string;
+    updated_at: string;
+    project?: Project; // Included for joins
+}
+
+export interface Subtask {
+    id: string;
+    task_id: string;
+    title: string;
+    completed: boolean;
+    sort_order: number;
+    created_at: string;
+}
+
+export interface Comment {
+    id: string;
+    task_id: string;
+    body: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface TaskFilters {
+    location?: 'home' | 'outside' | null;
+    energy?: 'high' | 'low' | null;
+    focus?: 'immersion' | 'process' | null;
+    completed?: boolean;
+    today?: boolean;
+    projectId?: string | null;
+    status?: 'all' | 'active' | 'completed';
+    dateFilter?: 'any' | 'has_date' | 'overdue';
+}
