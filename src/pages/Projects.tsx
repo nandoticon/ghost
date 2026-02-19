@@ -125,7 +125,7 @@ export default function Projects() {
                     }
                 />
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 4k:grid-cols-4 gap-6 2xl:gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 min-[1500px]:grid-cols-4 4k:grid-cols-4 gap-6 2xl:gap-8">
                     {activeProjects.map(project => (
                         <ProjectCard
                             key={project.id}
@@ -154,7 +154,7 @@ export default function Projects() {
                     </button>
 
                     {showArchived && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 4k:grid-cols-4 gap-6 2xl:gap-8 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 min-[1500px]:grid-cols-4 4k:grid-cols-4 gap-6 2xl:gap-8 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
                             {archivedProjects.map(project => (
                                 <ProjectCard
                                     key={project.id}
@@ -237,7 +237,7 @@ function ProjectCard({
                                 </span>
                             )}
                         </div>
-                        <h3 className="text-2xl 2xl:text-3xl font-black tracking-tight text-text-primary group-hover:text-accent transition-colors truncate">
+                        <h3 className="text-2xl 2xl:text-3xl font-black tracking-tight text-text-primary group-hover:text-accent transition-colors whitespace-normal break-words">
                             {project.name}
                         </h3>
                     </div>
