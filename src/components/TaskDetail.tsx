@@ -20,7 +20,10 @@ import {
     CheckCircle2,
     Circle,
     GripVertical,
-    RefreshCw
+    RefreshCw,
+    FolderKanban,
+    SlidersHorizontal,
+    NotebookPen
 } from 'lucide-react'
 import { Task } from '../types'
 import { useTasks } from '../hooks/useTasks'
@@ -64,6 +67,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
     const [showMenu, setShowMenu] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+    const [completionPulse, setCompletionPulse] = useState(false)
 
     // Handle initialization and external updates
     useEffect(() => {
@@ -145,22 +149,34 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                 </div>
 
                 {/* Header */}
-                <header className="flex items-center justify-between px-6 py-4 border-b border-border/50 sticky top-0 bg-surface/80 backdrop-blur-xl z-20">
+                <header className="flex items-center justify-between px-6 py-5 border-b border-border/50 sticky top-0 bg-surface/85 backdrop-blur-xl z-20">
                     <div className="flex items-center space-x-3 flex-1 min-w-0">
                         <button
                             onClick={async () => {
                                 if (!taskId) return
-                                const res = await completeTask(taskId, !completed)
+                                const nextCompleted = !completed
+                                setCompleted(nextCompleted)
+                                if (nextCompleted) {
+                                    setCompletionPulse(true)
+                                    setTimeout(() => setCompletionPulse(false), 450)
+                                }
+                                const res = await completeTask(taskId, nextCompleted)
                                 if (res.success && res.nextOccurrenceCreated) {
                                     const dateStr = res.nextOccurrenceDate ? new Date(res.nextOccurrenceDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'the future'
                                     showToast(`Task completed · Next on ${dateStr}`, 'success')
                                 }
                             }}
                             className={cn(
-                                "w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0",
-                                completed ? "bg-accent border-accent text-white" : "border-border hover:border-accent"
+                                "relative w-7 h-7 rounded-xl border-2 flex items-center justify-center transition-all shrink-0",
+                                completed ? "bg-accent-warm border-accent-warm text-white" : "border-border hover:border-accent-warm"
                             )}
                         >
+                            {completionPulse && (
+                                <span
+                                    className="absolute inset-0 rounded-xl border-2 border-accent-warm/50 pointer-events-none"
+                                    style={{ animation: 'ring-pulse 0.45s ease-out forwards' }}
+                                />
+                            )}
                             {completed && <Check className="w-4 h-4" />}
                         </button>
                         <input
@@ -231,16 +247,17 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                         </div>
                     )}
 
-                    {/* Metadata Section */}
-                    <div className="space-y-6">
-                        {/* Project */}
-                        <div className="grid grid-cols-[100px,1fr] items-center gap-4">
-                            <span className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Project</span>
+                    <div className="space-y-4">
+                        <SectionCard icon={<FolderKanban className="w-4 h-4 text-accent" />} title="Project">
                             <div className="relative group">
                                 <select
                                     value={projectId || ''}
-                                    onChange={(e) => handleFieldUpdate('project_id', e.target.value || null)}
-                                    className="w-full bg-surface-secondary border border-border rounded-xl px-4 py-2 text-sm text-text-primary appearance-none focus:border-accent/50 outline-none transition-all pr-10"
+                                    onChange={(e) => {
+                                        const nextProjectId = e.target.value || null
+                                        setProjectId(nextProjectId)
+                                        handleFieldUpdate('project_id', nextProjectId)
+                                    }}
+                                    className="w-full bg-surface-secondary border border-border rounded-xl px-4 py-2.5 text-sm text-text-primary appearance-none focus:border-accent/50 outline-none transition-all pr-10"
                                 >
                                     <option value="">No Project</option>
                                     {projects.map(p => (
@@ -249,90 +266,55 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                 </select>
                                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none group-hover:text-text-primary transition-colors" />
                             </div>
-                        </div>
+                        </SectionCard>
 
-                        {/* Today Toggle */}
-                        <div className="grid grid-cols-[100px,1fr] items-center gap-4">
-                            <span className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Schedule</span>
-                            <button
-                                onClick={() => handleFieldUpdate('today', !today)}
-                                className={cn(
-                                    "flex items-center space-x-2 px-4 py-2 rounded-xl border transition-all w-fit",
-                                    today ? "bg-yellow-400/10 border-yellow-400/30 text-yellow-500 shadow-lg shadow-yellow-400/5 scale-105" : "bg-surface-secondary border-border text-text-muted hover:text-text-primary"
-                                )}
-                            >
-                                <Star className={cn("w-4 h-4", today && "fill-current")} />
-                                <span className="text-xs font-bold uppercase tracking-wider">Today</span>
-                            </button>
-                        </div>
+                        <SectionCard icon={<Calendar className="w-4 h-4 text-accent-warm" />} title="Schedule">
+                            <div className="space-y-3.5">
+                                <button
+                                    onClick={() => {
+                                        const nextToday = !today
+                                        setToday(nextToday)
+                                        handleFieldUpdate('today', nextToday)
+                                    }}
+                                    className={cn(
+                                        "flex items-center space-x-2 px-4 py-2 rounded-xl border transition-all w-fit",
+                                        today ? "bg-yellow-400/10 border-yellow-400/30 text-yellow-500 shadow-lg shadow-yellow-400/5 scale-105" : "bg-surface-secondary border-border text-text-muted hover:text-text-primary"
+                                    )}
+                                >
+                                    <Star className={cn("w-4 h-4", today && "fill-current")} />
+                                    <span className="text-xs font-bold uppercase tracking-wider">Today</span>
+                                </button>
 
-                        {/* Dates */}
-                        <div className="grid grid-cols-[100px,1fr] items-start gap-4">
-                            <span className="text-[10px] uppercase font-bold tracking-widest text-text-muted mt-2.5">Timeline</span>
-                            <div className="space-y-3">
-                                <div className="relative group">
-                                    <input
-                                        type="datetime-local"
-                                        value={startAt}
-                                        onChange={(e) => {
-                                            setStartAt(e.target.value)
-                                            handleFieldUpdate('start_at', e.target.value || null)
-                                        }}
-                                        className="w-full bg-surface-secondary border border-border rounded-xl px-10 py-2.5 text-xs text-text-primary focus:border-accent/50 outline-none transition-all"
-                                    />
-                                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted group-hover:text-text-primary transition-colors" />
-                                    {!startAt && <span className="absolute left-10 top-1/2 -translate-y-1/2 text-xs text-text-muted pointer-events-none">Add start date</span>}
+                                <div className="space-y-3">
+                                    <div className="relative group">
+                                        <input
+                                            type="datetime-local"
+                                            value={startAt}
+                                            onChange={(e) => {
+                                                setStartAt(e.target.value)
+                                                handleFieldUpdate('start_at', e.target.value || null)
+                                            }}
+                                            className="w-full bg-surface-secondary border border-border rounded-xl px-10 py-2.5 text-xs text-text-primary focus:border-accent/50 outline-none transition-all"
+                                        />
+                                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted group-hover:text-text-primary transition-colors" />
+                                        {!startAt && <span className="absolute left-10 top-1/2 -translate-y-1/2 text-xs text-text-muted pointer-events-none">Add start date</span>}
+                                    </div>
+                                    <div className="relative group">
+                                        <input
+                                            type="datetime-local"
+                                            value={endAt}
+                                            onChange={(e) => {
+                                                setEndAt(e.target.value)
+                                                handleFieldUpdate('end_at', e.target.value || null)
+                                            }}
+                                            className="w-full bg-surface-secondary border border-border rounded-xl px-10 py-2.5 text-xs text-text-primary focus:border-accent/50 outline-none transition-all"
+                                        />
+                                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted group-hover:text-text-primary transition-colors" />
+                                        {!endAt && <span className="absolute left-10 top-1/2 -translate-y-1/2 text-xs text-text-muted pointer-events-none">Add end date</span>}
+                                    </div>
                                 </div>
-                                <div className="relative group">
-                                    <input
-                                        type="datetime-local"
-                                        value={endAt}
-                                        onChange={(e) => {
-                                            setEndAt(e.target.value)
-                                            handleFieldUpdate('end_at', e.target.value || null)
-                                        }}
-                                        className="w-full bg-surface-secondary border border-border rounded-xl px-10 py-2.5 text-xs text-text-primary focus:border-accent/50 outline-none transition-all"
-                                    />
-                                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted group-hover:text-text-primary transition-colors" />
-                                    {!endAt && <span className="absolute left-10 top-1/2 -translate-y-1/2 text-xs text-text-muted pointer-events-none">Add end date</span>}
-                                </div>
-                            </div>
-                        </div>
 
-                        {/* Pills */}
-                        <div className="space-y-4">
-                            <PillGroup
-                                label="Location"
-                                value={location}
-                                options={[
-                                    { value: 'home', icon: <Home className="w-3 h-3" />, label: 'Home' },
-                                    { value: 'outside', icon: <MapPin className="w-3 h-3" />, label: 'Outside' }
-                                ]}
-                                onChange={(val) => handleFieldUpdate('location', val)}
-                            />
-                            <PillGroup
-                                label="Energy"
-                                value={energy}
-                                options={[
-                                    { value: 'high', icon: <Zap className="w-3 h-3" />, label: 'High' },
-                                    { value: 'low', icon: <ZapOff className="w-3 h-3" />, label: 'Low' }
-                                ]}
-                                onChange={(val) => handleFieldUpdate('energy', val)}
-                            />
-                            <PillGroup
-                                label="Focus"
-                                value={focus}
-                                options={[
-                                    { value: 'immersion', icon: <Target className="w-3 h-3" />, label: 'Immersion' },
-                                    { value: 'process', icon: <Layers className="w-3 h-3" />, label: 'Process' }
-                                ]}
-                                onChange={(val) => handleFieldUpdate('focus', val)}
-                            />
-
-                            {/* Recurrence Selection */}
-                            <div className="pt-4 border-t border-border/30 space-y-4">
-                                <div className="grid grid-cols-[100px,1fr] items-center gap-4">
-                                    <span className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Repeat</span>
+                                <div className="pt-2 border-t border-border/30 space-y-3">
                                     <div className="relative group">
                                         <select
                                             value={recurrence || ''}
@@ -341,9 +323,9 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                                 setRecurrence(val)
                                                 handleFieldUpdate('recurrence', val)
                                             }}
-                                            className="w-full bg-surface-secondary border border-border rounded-xl px-4 py-2 text-sm text-text-primary appearance-none focus:border-accent/50 outline-none transition-all pr-10"
+                                            className="w-full bg-surface-secondary border border-border rounded-xl px-4 py-2.5 text-sm text-text-primary appearance-none focus:border-accent/50 outline-none transition-all pr-10"
                                         >
-                                            <option value="">None</option>
+                                            <option value="">No repeat</option>
                                             <option value="daily">Daily</option>
                                             <option value="weekdays">Weekdays</option>
                                             <option value="weekly">Weekly</option>
@@ -352,12 +334,9 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                         </select>
                                         <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none group-hover:text-text-primary transition-colors" />
                                     </div>
-                                </div>
 
-                                {recurrence && (
-                                    <div className="grid grid-cols-[100px,1fr] items-center gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                                        <span className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Ends</span>
-                                        <div className="relative group">
+                                    {recurrence && (
+                                        <div className="relative group animate-in fade-in slide-in-from-top-2 duration-300">
                                             <input
                                                 type="date"
                                                 value={recurrenceEndAt}
@@ -365,25 +344,60 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                                     setRecurrenceEndAt(e.target.value)
                                                     handleFieldUpdate('recurrence_end_at', e.target.value || null)
                                                 }}
-                                                className="w-full bg-surface-secondary border border-border rounded-xl px-4 py-2 text-xs text-text-primary focus:border-accent/50 outline-none transition-all"
+                                                className="w-full bg-surface-secondary border border-border rounded-xl px-4 py-2.5 text-xs text-text-primary focus:border-accent/50 outline-none transition-all"
                                             />
-                                            {!recurrenceEndAt && <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] text-text-muted pointer-events-none">Never</span>}
+                                            {!recurrenceEndAt && <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] text-text-muted pointer-events-none">Never ends</span>}
                                         </div>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
-                        </div>
+                        </SectionCard>
+
+                        <SectionCard icon={<SlidersHorizontal className="w-4 h-4 text-accent" />} title="Context">
+                            <div className="space-y-4">
+                                <PillGroup
+                                    label="Location"
+                                    value={location}
+                                    options={[
+                                        { value: 'home', icon: <Home className="w-3 h-3" />, label: 'Home' },
+                                        { value: 'outside', icon: <MapPin className="w-3 h-3" />, label: 'Outside' }
+                                    ]}
+                                    onChange={(val) => handleFieldUpdate('location', val)}
+                                />
+                                <PillGroup
+                                    label="Energy"
+                                    value={energy}
+                                    options={[
+                                        { value: 'high', icon: <Zap className="w-3 h-3" />, label: 'High' },
+                                        { value: 'low', icon: <ZapOff className="w-3 h-3" />, label: 'Low' }
+                                    ]}
+                                    onChange={(val) => handleFieldUpdate('energy', val)}
+                                />
+                                <PillGroup
+                                    label="Focus"
+                                    value={focus}
+                                    options={[
+                                        { value: 'immersion', icon: <Target className="w-3 h-3" />, label: 'Immersion' },
+                                        { value: 'process', icon: <Layers className="w-3 h-3" />, label: 'Process' }
+                                    ]}
+                                    onChange={(val) => handleFieldUpdate('focus', val)}
+                                />
+                            </div>
+                        </SectionCard>
                     </div>
 
                     {/* Notes Section */}
-                    <div className="space-y-3">
-                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-muted ml-1">Notes</label>
+                    <div className="space-y-3 bg-surface-secondary/20 border border-border/50 rounded-2xl p-4">
+                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-muted ml-1 inline-flex items-center gap-2">
+                            <NotebookPen className="w-3.5 h-3.5" />
+                            Notes
+                        </label>
                         <textarea
                             value={notes}
                             onChange={(e) => handleNotesChange(e.target.value)}
                             onKeyDown={(e) => (e.metaKey || e.ctrlKey) && e.key === 'Enter' && (e.target as HTMLTextAreaElement).blur()}
-                            placeholder="Add notes..."
-                            className="w-full bg-surface-secondary/50 border border-border rounded-2xl p-4 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent/50 resize-none min-h-[120px] transition-all"
+                            placeholder="Capture details, links, blockers, and the next concrete step for this task."
+                            className="w-full bg-surface-secondary/70 border border-border rounded-2xl p-4 text-sm text-text-primary placeholder:text-text-muted/90 focus:outline-none focus:border-accent/50 resize-none min-h-[140px] transition-all"
                         />
                     </div>
 
@@ -577,6 +591,20 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                 )
             )}
         </div>
+    )
+}
+
+function SectionCard({ icon, title, children }: { icon: React.ReactNode, title: string, children: React.ReactNode }) {
+    return (
+        <section className="bg-surface-secondary/20 border border-border/50 rounded-2xl p-4 space-y-3">
+            <header className="flex items-center gap-2">
+                <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-surface-secondary border border-border/70">
+                    {icon}
+                </span>
+                <h3 className="text-[11px] uppercase font-black tracking-widest text-text-muted">{title}</h3>
+            </header>
+            {children}
+        </section>
     )
 }
 

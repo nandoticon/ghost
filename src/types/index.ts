@@ -4,8 +4,19 @@ export interface Project {
     name: string;
     description: string | null;
     color: string;
+    category_id: string | null;
+    category?: Pick<ProjectCategory, 'id' | 'name'> | null;
     sort_order: number;
     archived: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface ProjectCategory {
+    id: string;
+    user_id: string;
+    name: string;
+    sort_order: number;
     created_at: string;
     updated_at: string;
 }

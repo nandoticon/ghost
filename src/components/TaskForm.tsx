@@ -113,12 +113,17 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     }
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-6 transition-all animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-6 transition-all animate-in fade-in duration-200">
             <div
-                className="w-full max-w-xl 4k:max-w-2xl bg-surface border-t md:border border-border rounded-t-[2rem] md:rounded-2xl shadow-2xl overflow-hidden flex flex-col md:max-h-[85vh] animate-in slide-in-from-bottom duration-300"
+                className="absolute inset-0 bg-background/75 backdrop-blur-md"
+                onClick={onCancel}
+            />
+            <div
+                className="relative w-full max-w-xl 4k:max-w-2xl bg-surface border-t md:border border-border rounded-t-[2rem] md:rounded-2xl shadow-2xl overflow-hidden flex flex-col md:max-h-[85vh] animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-300"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-surface/80 backdrop-blur sticky top-0 z-10">
+                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-accent to-accent-warm/70" />
+                <div className="flex items-center justify-between px-7 py-5 border-b border-border bg-surface/85 backdrop-blur sticky top-0 z-10">
                     <h2 className="text-lg font-bold tracking-tight text-text-primary">
                         {task ? 'Edit Task' : 'New Task'}
                     </h2>
@@ -130,7 +135,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-7 space-y-6">
                     {/* Title - Auto Focused */}
                     <div className="space-y-1">
                         <input
@@ -336,7 +341,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                     </div>
                 </form>
 
-                <div className="p-6 border-t border-border bg-surface/80 backdrop-blur flex justify-end space-x-3">
+                <div className="p-7 border-t border-border bg-surface/85 backdrop-blur flex justify-end space-x-3">
                     <button
                         type="button"
                         onClick={onCancel}
@@ -346,6 +351,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                     </button>
                     <button
                         onClick={handleSubmit}
+                        type="button"
                         disabled={submitting || !title.trim()}
                         className={cn(
                             "px-8 py-2 rounded-full bg-accent text-sm font-bold text-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed",

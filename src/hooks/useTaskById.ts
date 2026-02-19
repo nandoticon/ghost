@@ -25,7 +25,10 @@ export function useTaskById(taskId: string | null) {
                 .from('tasks')
                 .select(`
                     *,
-                    project:projects(*)
+                    project:projects(
+                        *,
+                        category:project_categories(id,name)
+                    )
                 `)
                 .eq('id', taskId)
                 .eq('user_id', user.id)

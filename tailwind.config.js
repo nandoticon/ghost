@@ -18,7 +18,7 @@ export default {
         "text-muted": "var(--color-text-muted)",
       },
       screens: {
-        'tablet': '820px',
+        'tablet': '960px',
         '4k': '2560px',
       },
       fontWeight: {
@@ -30,14 +30,19 @@ export default {
         'tighter': '-0.03em',
       },
       maxWidth: {
-        'content': 'clamp(560px, 72%, 1380px)',
+        'content': 'clamp(520px, 70%, 1300px)',
       },
       animation: {
         'ring-pulse': 'ring-pulse 0.5s ease-out forwards',
         'check-draw': 'check-draw 0.3s ease-out forwards',
         'float': 'float 3s ease-in-out infinite',
+        'shimmer': 'shimmer 1.8s linear infinite',
       },
       keyframes: {
+        shimmer: {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(200%)' },
+        },
         float: {
           '0%, 100%': { transform: 'translateY(0px)' },
           '50%': { transform: 'translateY(-8px)' },

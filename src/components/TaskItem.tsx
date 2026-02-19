@@ -83,7 +83,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
     return (
         <div
             className={cn(
-                "group relative flex items-center space-x-4 px-4 py-4 xl:py-5 rounded-2xl border border-transparent transition-all cursor-pointer overflow-hidden",
+                "group relative flex items-center space-x-4 px-4 py-4 2xl:py-5 rounded-2xl border border-transparent transition-all cursor-pointer overflow-hidden",
                 isDragging
                     ? "bg-surface shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border-accent/30 scale-[1.03] z-50 ring-2 ring-accent/20"
                     : "hover:bg-surface hover:border-border/60 hover:shadow-lg hover:-translate-y-0.5",
@@ -107,7 +107,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
                         isDragging ? "opacity-100 text-accent" : "opacity-0 group-hover:opacity-60"
                     )}
                 >
-                    <GripVertical className="w-4 h-4 xl:w-5 xl:h-5" />
+                    <GripVertical className="w-4 h-4 2xl:w-5 2xl:h-5" />
                 </div>
             )}
 
@@ -118,12 +118,12 @@ export const TaskItem = React.memo<TaskItemProps>(({
                         e.stopPropagation()
                         onToggleComplete(task.id, !isCompleted)
                     }}
-                    className="relative z-10 text-text-muted hover:text-accent transition-all active:scale-125 hover:scale-110"
+                    className="relative z-10 text-text-muted hover:text-accent-warm transition-all active:scale-125 hover:scale-110"
                 >
                     {isCompleted ? (
-                        <CheckCircle2 className="w-6 h-6 xl:w-[26px] xl:h-[26px] text-accent animate-in zoom-in-50 duration-200" />
+                        <CheckCircle2 className="w-6 h-6 2xl:w-[26px] 2xl:h-[26px] text-accent-warm animate-in zoom-in-50 duration-200" />
                     ) : (
-                        <Circle className="w-6 h-6 xl:w-[26px] xl:h-[26px] transition-transform duration-200" />
+                        <Circle className="w-6 h-6 2xl:w-[26px] 2xl:h-[26px] transition-transform duration-200" />
                     )}
                 </button>
                 {/* Rings animation could be added here on click */}
@@ -133,7 +133,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
             <div className="flex-1 min-w-0 flex flex-col justify-center">
                 <div className="flex items-center space-x-2 mb-1">
                     <span className={cn(
-                        "text-[15px] xl:text-[17px] font-heavy tracking-tight transition-all duration-300",
+                        "text-[15px] 2xl:text-[17px] font-heavy tracking-tight transition-all duration-300",
                         isCompleted
                             ? "line-through text-text-muted decoration-text-muted/60"
                             : "text-text-primary no-underline"
@@ -144,12 +144,12 @@ export const TaskItem = React.memo<TaskItemProps>(({
                         <RefreshCw className="w-3.5 h-3.5 text-text-muted shrink-0" />
                     )}
                     {task.today && !isCompleted && (
-                        <span className="text-[10px] xl:text-[11px] uppercase font-black tracking-widest text-accent-warm bg-accent-warm/10 px-2 py-0.5 rounded-full border border-accent-warm/10">
+                        <span className="text-xs 2xl:text-sm uppercase font-black tracking-widest text-accent-warm bg-accent-warm/10 px-2 py-0.5 rounded-full border border-accent-warm/10">
                             Today
                         </span>
                     )}
                     {isOverdue && (
-                        <span className="text-[10px] xl:text-[11px] uppercase font-black tracking-widest text-red-500 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/10">
+                        <span className="text-xs 2xl:text-sm uppercase font-black tracking-widest text-red-500 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/10">
                             Overdue
                         </span>
                     )}
@@ -158,9 +158,16 @@ export const TaskItem = React.memo<TaskItemProps>(({
                 <div className="flex items-center flex-wrap gap-2 overflow-hidden">
                     {/* Project Name (if exists) */}
                     {task.project && (
-                        <span className="text-[10px] xl:text-[11px] font-black uppercase tracking-widest text-text-muted/80">
-                            {task.project.name}
-                        </span>
+                        <>
+                            <span className="text-xs 2xl:text-sm font-black uppercase tracking-widest text-text-muted/80">
+                                {task.project.name}
+                            </span>
+                            {task.project.category?.name && (
+                                <span className="text-xs 2xl:text-sm uppercase tracking-widest font-black text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-full">
+                                    {task.project.category.name}
+                                </span>
+                            )}
+                        </>
                     )}
 
                     {/* Context Pills */}
@@ -169,7 +176,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
                     {/* Due Date */}
                     {task.end_at && (
                         <div className={cn(
-                            "flex items-center space-x-1.5 text-[10px] xl:text-[11px] px-2.5 py-1 rounded-full border shrink-0 font-bold uppercase tracking-wider",
+                            "flex items-center space-x-1.5 text-xs 2xl:text-sm px-2.5 py-1 rounded-full border shrink-0 font-bold uppercase tracking-wider",
                             dueDateStyle
                         )}>
                             <Clock className="w-3 h-3" />
@@ -197,7 +204,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
                         task.today ? "text-accent-warm" : "text-text-muted opacity-0 group-hover:opacity-100 hover:bg-surface-secondary"
                     )}
                 >
-                    <Star className={cn("w-5 h-5 xl:w-6 xl:h-6", task.today && "fill-current")} />
+                    <Star className={cn("w-5 h-5 2xl:w-6 2xl:h-6", task.today && "fill-current")} />
                 </button>
             )}
         </div>
@@ -243,7 +250,7 @@ function SubtaskProgress({ taskId }: { taskId: string }) {
     const percent = Math.round((stats.completed / stats.total) * 100)
 
     return (
-        <div className="flex items-center space-x-2 text-[10px] xl:text-[11px] text-text-muted font-black uppercase tracking-widest bg-surface-secondary/40 px-2.5 py-1 rounded-full border border-border/20 shrink-0">
+        <div className="flex items-center space-x-2 text-xs 2xl:text-sm text-text-muted font-black uppercase tracking-widest bg-surface-secondary/40 px-2.5 py-1 rounded-full border border-border/20 shrink-0">
             <svg className="w-3 h-3 -rotate-90">
                 <circle
                     cx="6"
@@ -273,7 +280,7 @@ function SubtaskProgress({ taskId }: { taskId: string }) {
 
 function ContextPill({ icon, label }: { icon: React.ReactNode, label: string }) {
     return (
-        <div className="flex items-center space-x-1.5 px-2.5 py-1 bg-surface-secondary/60 rounded-full border border-border/40 text-[10px] xl:text-[11px] text-text-muted font-bold tracking-tight shrink-0 uppercase">
+        <div className="flex items-center space-x-1.5 px-2.5 py-1 bg-surface-secondary/60 rounded-full border border-border/40 text-xs 2xl:text-sm text-text-muted font-bold tracking-tight shrink-0 uppercase">
             {icon}
             <span>{label}</span>
         </div>

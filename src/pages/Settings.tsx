@@ -1,17 +1,25 @@
-import { useState } from 'react'
-import { User, Database, Shield, LogOut, Loader2, Key } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { User, Database, Shield, LogOut, Loader2, Key, Tags, Plus, Pencil, Trash2, Folder } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../components/Toast'
 import { cn } from '../lib/cn'
 import { ExportImport } from '../components/ExportImport'
 import { ConfirmModal } from '../components/ConfirmModal'
+import { useProjectCategories } from '../hooks/useProjectCategories'
+import { useProjects } from '../hooks/useProjects'
 
 export default function Settings() {
     const { user } = useAuth()
     const { showToast } = useToast()
-    const [activeTab, setActiveTab] = useState<'account' | 'data'>('account')
+    const { categories, createCategory, updateCategory, deleteCategory } = useProjectCategories()
+    const { projects } = useProjects()
+    const [activeTab, setActiveTab] = useState<'account' | 'data' | 'projects'>('account')
     const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
+    const [newCategoryName, setNewCategoryName] = useState('')
+    const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
+    const [editingCategoryName, setEditingCategoryName] = useState('')
+    const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null)
 
     // Password Change State
     const [newPassword, setNewPassword] = useState('')
@@ -53,6 +61,56 @@ export default function Settings() {
         }
     }
 
+    const projectsByCategory = useMemo(() => {
+        const counts = new Map<string, number>()
+        for (const project of projects) {
+            if (!project.category_id) continue
+            counts.set(project.category_id, (counts.get(project.category_id) || 0) + 1)
+        }
+        return counts
+    }, [projects])
+
+    const handleCreateCategory = async (e: React.FormEvent) => {
+        e.preventDefault()
+        const name = newCategoryName.trim()
+        if (!name) return
+
+        try {
+            await createCategory(name)
+            setNewCategoryName('')
+            showToast('Category created', 'success')
+        } catch (error: unknown) {
+            showToast(error instanceof Error ? error.message : 'Failed to create category', 'error')
+        }
+    }
+
+    const handleSaveCategoryEdit = async () => {
+        if (!editingCategoryId) return
+        const name = editingCategoryName.trim()
+        if (!name) return
+
+        try {
+            await updateCategory(editingCategoryId, name)
+            setEditingCategoryId(null)
+            setEditingCategoryName('')
+            showToast('Category updated', 'success')
+        } catch (error: unknown) {
+            showToast(error instanceof Error ? error.message : 'Failed to update category', 'error')
+        }
+    }
+
+    const handleDeleteCategory = async () => {
+        if (!deletingCategoryId) return
+
+        try {
+            await deleteCategory(deletingCategoryId)
+            setDeletingCategoryId(null)
+            showToast('Category deleted', 'success')
+        } catch (error: unknown) {
+            showToast(error instanceof Error ? error.message : 'Failed to delete category', 'error')
+        }
+    }
+
     return (
         <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <header className="space-y-2">
@@ -80,6 +138,16 @@ export default function Settings() {
                 >
                     <Database className="w-4 h-4" />
                     <span>Data</span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('projects')}
+                    className={cn(
+                        "flex items-center space-x-2 px-6 py-2 rounded-xl text-sm font-bold transition-all",
+                        activeTab === 'projects' ? "bg-accent text-white shadow-lg shadow-accent/20" : "text-text-muted hover:text-text-primary"
+                    )}
+                >
+                    <Tags className="w-4 h-4" />
+                    <span>Projects</span>
                 </button>
             </div>
 
@@ -157,9 +225,116 @@ export default function Settings() {
                         </div>
                     </section>
                 </div>
-            ) : (
+            ) : activeTab === 'data' ? (
                 <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                     <ExportImport />
+                </div>
+            ) : (
+                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                    <section className="bg-surface border border-border rounded-3xl p-8 space-y-6">
+                        <div className="flex items-center space-x-3">
+                            <Tags className="w-5 h-5 text-accent" />
+                            <h2 className="text-xl font-bold text-text-primary">Project Categories</h2>
+                        </div>
+                        <p className="text-sm text-text-muted">
+                            Categories help organize your initiatives. You can assign categories while creating or editing projects.
+                        </p>
+
+                        <form onSubmit={handleCreateCategory} className="flex flex-col sm:flex-row gap-3">
+                            <input
+                                type="text"
+                                value={newCategoryName}
+                                onChange={(e) => setNewCategoryName(e.target.value)}
+                                placeholder="Create a category (e.g. Learning)"
+                                className="flex-1 bg-surface-secondary border border-border rounded-xl px-4 py-3 text-text-primary focus:border-accent/50 outline-none transition-all"
+                            />
+                            <button
+                                type="submit"
+                                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-accent text-white font-bold hover:bg-accent/90 transition-all"
+                            >
+                                <Plus className="w-4 h-4" />
+                                Add
+                            </button>
+                        </form>
+                    </section>
+
+                    <section className="bg-surface border border-border rounded-3xl p-8 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-bold text-text-primary">Current Categories</h3>
+                            <span className="text-xs uppercase tracking-widest font-black text-text-muted">
+                                {categories.length} total
+                            </span>
+                        </div>
+
+                        {categories.length === 0 ? (
+                            <div className="text-sm text-text-muted border border-border rounded-xl p-4">
+                                No categories available.
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {categories.map((category) => {
+                                    const usageCount = projectsByCategory.get(category.id) || 0
+                                    const isEditing = editingCategoryId === category.id
+                                    return (
+                                        <div
+                                            key={category.id}
+                                            className="flex flex-col sm:flex-row sm:items-center gap-3 border border-border rounded-2xl p-4 bg-surface-secondary/25"
+                                        >
+                                            <div className="flex-1 min-w-0">
+                                                {isEditing ? (
+                                                    <input
+                                                        autoFocus
+                                                        value={editingCategoryName}
+                                                        onChange={(e) => setEditingCategoryName(e.target.value)}
+                                                        onBlur={handleSaveCategoryEdit}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                e.preventDefault()
+                                                                handleSaveCategoryEdit()
+                                                            }
+                                                            if (e.key === 'Escape') {
+                                                                setEditingCategoryId(null)
+                                                                setEditingCategoryName('')
+                                                            }
+                                                        }}
+                                                        className="w-full bg-surface border border-accent/40 rounded-lg px-3 py-2 text-sm text-text-primary outline-none"
+                                                    />
+                                                ) : (
+                                                    <p className="text-base font-bold text-text-primary">{category.name}</p>
+                                                )}
+                                                <p className="text-xs text-text-muted mt-1 inline-flex items-center gap-1.5">
+                                                    <Folder className="w-3.5 h-3.5" />
+                                                    {usageCount} project{usageCount === 1 ? '' : 's'}
+                                                </p>
+                                            </div>
+
+                                            {!isEditing && (
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            setEditingCategoryId(category.id)
+                                                            setEditingCategoryName(category.name)
+                                                        }}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-text-muted hover:text-text-primary hover:bg-surface-secondary transition-all"
+                                                    >
+                                                        <Pencil className="w-3.5 h-3.5" />
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setDeletingCategoryId(category.id)}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-all"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
+                    </section>
                 </div>
             )}
 
@@ -176,6 +351,20 @@ export default function Settings() {
                             setShowSignOutConfirm(false)
                             handleSignOutAll()
                         }
+                    }
+                ]}
+            />
+
+            <ConfirmModal
+                isOpen={Boolean(deletingCategoryId)}
+                title="Delete category?"
+                description="Projects in this category will keep existing data, but category assignment will be removed."
+                onClose={() => setDeletingCategoryId(null)}
+                options={[
+                    {
+                        label: 'Delete category',
+                        variant: 'danger',
+                        onClick: handleDeleteCategory
                     }
                 ]}
             />

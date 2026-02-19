@@ -7,10 +7,23 @@ export default defineConfig({
         react(),
         VitePWA({
             registerType: 'autoUpdate',
-            includeAssets: ['icons/*.png'],
+            includeAssets: [
+                'favicon.ico',
+                'favicon-16x16.webp',
+                'favicon-32x32.webp',
+                'favicon-48x48.webp',
+                'favicon-16x16.png',
+                'favicon-32x32.png',
+                'favicon-48x48.png',
+                'apple-touch-icon.png',
+                'og-image.jpg',
+                'og-image.webp',
+                'icons/*.webp',
+                'icons/*.png'
+            ],
             manifest: false, // using our own manifest.json
             workbox: {
-                globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+                globPatterns: ['**/*.{js,css,html,ico,png,webp,svg,woff2}'],
                 runtimeCaching: [
                     {
                         urlPattern: /^https:\/\/nktxoaslnnxbzlalhcea\.supabase\.co\/rest\/.*/i,

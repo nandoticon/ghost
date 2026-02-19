@@ -1,4 +1,4 @@
-import { Sun, Moon, Monitor } from 'lucide-react'
+import { Sun, Moon, Monitor, Sparkles, MoonStar } from 'lucide-react'
 import { useThemeContext } from './ThemeProvider'
 import { cn } from '../lib/cn'
 
@@ -12,7 +12,8 @@ export function ThemeSwitcher() {
     ] as const
 
     return (
-        <div className="flex items-center bg-surface-secondary/50 p-1 rounded-xl border border-border/50">
+        <div className="flex items-center gap-1 bg-surface-secondary/50 p-1 rounded-xl border border-border/50">
+            <Sparkles className="w-3.5 h-3.5 text-accent-warm/80 ml-1" />
             {options.map((opt) => {
                 const Icon = opt.icon
                 const isActive = theme === opt.value
@@ -37,6 +38,7 @@ export function ThemeSwitcher() {
                     </button>
                 )
             })}
+            <MoonStar className="w-3.5 h-3.5 text-accent/80 mr-1" />
         </div>
     )
 }

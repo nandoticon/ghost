@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Plus, Filter, LayoutList, AlertCircle, ChevronDown, Home, MapPin, Zap, ZapOff, Target, Layers } from 'lucide-react'
+import { Plus, Filter, LayoutList, AlertCircle, ChevronDown, Home, MapPin, Zap, ZapOff, Target, Layers, ChevronsUpDown, Sparkles } from 'lucide-react'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { useTasks } from '../hooks/useTasks'
 import { useProjects } from '../hooks/useProjects'
@@ -34,6 +34,7 @@ export default function Tasks() {
     const { setActiveTaskId } = useShortcutContext()
 
     const [isFormOpen, setIsFormOpen] = useState(false)
+    const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
 
     // Persist filters
     useEffect(() => {
@@ -47,6 +48,16 @@ export default function Tasks() {
             filters.focus !== null ||
             filters.projectId !== null ||
             filters.dateFilter !== 'any'
+    }, [filters])
+    const activeFilterCount = useMemo(() => {
+        return [
+            filters.status !== 'all',
+            filters.dateFilter !== 'any',
+            filters.projectId !== null,
+            filters.location !== null,
+            filters.energy !== null,
+            filters.focus !== null
+        ].filter(Boolean).length
     }, [filters])
 
     const isReorderingEnabled = !hasActiveFilters
@@ -92,62 +103,76 @@ export default function Tasks() {
     }, [tasks, filters.projectId, projects])
 
     return (
-        <div className="mx-auto px-4 py-8 md:py-12 space-y-8 animate-in fade-in duration-500">
-            <header className="flex items-center justify-between">
-                <h1 className="text-3xl md:text-4xl xl:text-5xl font-bold tracking-tight text-text-primary">Tasks</h1>
+        <div className="w-full max-w-full mx-auto px-4 py-8 md:py-12 space-y-8 animate-in fade-in duration-500">
+            <header className="flex items-center justify-between gap-4 flex-wrap">
+                <h1 className="text-4xl md:text-5xl xl:text-5xl 2xl:text-6xl font-black tracking-tightest title-gradient">Tasks</h1>
                 <button
                     onClick={() => setIsFormOpen(true)}
-                    className="flex items-center space-x-2 px-5 py-2.5 xl:px-6 xl:py-3 bg-accent hover:bg-accent/90 text-white rounded-full text-sm xl:text-base font-bold transition-all active:scale-95"
+                    className="flex items-center space-x-2 px-5 py-2.5 2xl:px-6 2xl:py-3 bg-accent hover:bg-accent/90 text-white rounded-full text-sm 2xl:text-base font-bold transition-all active:scale-95"
                 >
-                    <Plus className="w-4 h-4 xl:w-5 xl:h-5" />
+                    <Plus className="w-4 h-4 2xl:w-5 2xl:h-5" />
                     <span>Add Task</span>
                 </button>
             </header>
 
             {/* Filter Bar */}
-            <div className="space-y-4">
-                <div className="flex items-center justify-between text-xs xl:text-sm uppercase font-bold tracking-widest text-text-muted">
+            <div className="space-y-3 bg-surface-secondary/25 border border-border/40 rounded-2xl p-4">
+                <div className="flex items-center justify-between text-xs 2xl:text-sm uppercase font-bold tracking-widest text-text-muted">
                     <div className="flex items-center space-x-2">
-                        <Filter className="w-3 h-3 xl:w-4 xl:h-4" />
+                        <Filter className="w-3 h-3 2xl:w-4 2xl:h-4" />
                         <span>Filters</span>
+                        {activeFilterCount > 0 && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs tracking-normal font-black bg-accent-warm/10 text-accent-warm border border-accent-warm/20">
+                                {activeFilterCount} active
+                            </span>
+                        )}
                     </div>
-                    {hasActiveFilters && (
+                    <div className="flex items-center gap-3">
+                        {hasActiveFilters && (
+                            <button
+                                onClick={clearFilters}
+                                className="text-accent hover:underline lowercase tracking-normal font-medium"
+                            >
+                                Clear filters
+                            </button>
+                        )}
                         <button
-                            onClick={clearFilters}
-                            className="text-accent hover:underline lowercase tracking-normal font-medium"
+                            onClick={() => setIsFiltersExpanded((v) => !v)}
+                            className="inline-flex items-center gap-1 text-text-muted hover:text-text-primary transition-colors lowercase tracking-normal font-medium"
                         >
-                            Clear filters
+                            <ChevronsUpDown className="w-3.5 h-3.5" />
+                            {isFiltersExpanded ? 'collapse' : 'expand'}
                         </button>
-                    )}
+                    </div>
                 </div>
 
-                {/* All filter groups in a single wrapping row — no horizontal scroll */}
-                <div className="flex flex-wrap items-center gap-2 xl:gap-3">
-                    {/* Status */}
-                    <FilterGroup
-                        options={['all', 'active', 'completed']}
-                        value={filters.status ?? 'all'}
-                        onChange={(val) => updateFilter({ status: val as TaskFilters['status'] })}
-                    />
+                <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap no-scrollbar pb-1">
+                    <div className="min-w-[240px]">
+                        <FilterGroup
+                            options={['all', 'active', 'completed']}
+                            value={filters.status ?? 'all'}
+                            onChange={(val) => updateFilter({ status: val as TaskFilters['status'] })}
+                        />
+                    </div>
 
-                    {/* Date */}
-                    <FilterGroup
-                        options={['any', 'has_date', 'overdue']}
-                        value={filters.dateFilter ?? 'any'}
-                        onChange={(val) => updateFilter({ dateFilter: val as TaskFilters['dateFilter'] })}
-                    />
+                    <div className="min-w-[240px]">
+                        <FilterGroup
+                            options={['any', 'has_date', 'overdue']}
+                            value={filters.dateFilter ?? 'any'}
+                            onChange={(val) => updateFilter({ dateFilter: val as TaskFilters['dateFilter'] })}
+                        />
+                    </div>
 
-                    {/* Project Selector */}
-                    <div className="relative group/select">
+                    <div className="relative group/select min-w-[210px]">
                         <select
                             value={filters.projectId || ''}
                             onChange={(e) => updateFilter({ projectId: e.target.value || null })}
                             className={cn(
-                                "pl-3 pr-8 py-1.5 xl:py-2 rounded-full text-xs xl:text-sm font-bold uppercase tracking-wider border border-border bg-surface transition-all appearance-none cursor-pointer",
+                                "w-full pl-3 pr-8 py-2 rounded-xl text-xs 2xl:text-sm font-bold uppercase tracking-wider border border-border bg-surface transition-all appearance-none cursor-pointer",
                                 filters.projectId ? "bg-accent/10 border-accent/50 text-accent" : "text-text-muted hover:border-text-muted hover:text-text-primary"
                             )}
                         >
-                            <option value="">Project: Any</option>
+                            <option value="">Any project</option>
                             {projects.map(p => (
                                 <option key={p.id} value={p.id}>{p.name}</option>
                             ))}
@@ -155,36 +180,51 @@ export default function Tasks() {
                         <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted pointer-events-none group-hover/select:text-text-primary transition-colors" />
                     </div>
 
-                    {/* Location */}
-                    <FilterGroup
-                        options={[null, 'home', 'outside']}
-                        value={filters.location ?? null}
-                        onChange={(val) => updateFilter({ location: val as TaskFilters['location'] })}
-                        icons={{ home: <Home className="w-3 h-3 xl:w-3.5 xl:h-3.5" />, outside: <MapPin className="w-3 h-3 xl:w-3.5 xl:h-3.5" /> }}
-                    />
-
-                    {/* Energy */}
-                    <FilterGroup
-                        options={[null, 'high', 'low']}
-                        value={filters.energy ?? null}
-                        onChange={(val) => updateFilter({ energy: val as TaskFilters['energy'] })}
-                        icons={{ high: <Zap className="w-3 h-3 xl:w-3.5 xl:h-3.5" />, low: <ZapOff className="w-3 h-3 xl:w-3.5 xl:h-3.5" /> }}
-                    />
-
-                    {/* Focus */}
-                    <FilterGroup
-                        options={[null, 'immersion', 'process']}
-                        value={filters.focus ?? null}
-                        onChange={(val) => updateFilter({ focus: val as TaskFilters['focus'] })}
-                        icons={{ immersion: <Target className="w-3 h-3 xl:w-3.5 xl:h-3.5" />, process: <Layers className="w-3 h-3 xl:w-3.5 xl:h-3.5" /> }}
-                    />
+                    <button
+                        onClick={() => setIsFiltersExpanded((v) => !v)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-surface text-xs font-black uppercase tracking-wider text-text-muted hover:text-text-primary transition-colors"
+                    >
+                        <Sparkles className="w-3 h-3 text-accent-warm" />
+                        {isFiltersExpanded ? 'Simple' : 'Advanced'}
+                    </button>
                 </div>
 
-                <div className="text-xs xl:text-sm text-text-muted uppercase font-bold tracking-widest flex items-center justify-between">
+                {isFiltersExpanded && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3 2xl:gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                        <FilterSection label="Location">
+                            <FilterGroup
+                                options={[null, 'home', 'outside']}
+                                value={filters.location ?? null}
+                                onChange={(val) => updateFilter({ location: val as TaskFilters['location'] })}
+                                icons={{ home: <Home className="w-3 h-3 2xl:w-3.5 2xl:h-3.5" />, outside: <MapPin className="w-3 h-3 2xl:w-3.5 2xl:h-3.5" /> }}
+                            />
+                        </FilterSection>
+
+                        <FilterSection label="Energy">
+                            <FilterGroup
+                                options={[null, 'high', 'low']}
+                                value={filters.energy ?? null}
+                                onChange={(val) => updateFilter({ energy: val as TaskFilters['energy'] })}
+                                icons={{ high: <Zap className="w-3 h-3 2xl:w-3.5 2xl:h-3.5" />, low: <ZapOff className="w-3 h-3 2xl:w-3.5 2xl:h-3.5" /> }}
+                            />
+                        </FilterSection>
+
+                        <FilterSection label="Focus">
+                            <FilterGroup
+                                options={[null, 'immersion', 'process']}
+                                value={filters.focus ?? null}
+                                onChange={(val) => updateFilter({ focus: val as TaskFilters['focus'] })}
+                                icons={{ immersion: <Target className="w-3 h-3 2xl:w-3.5 2xl:h-3.5" />, process: <Layers className="w-3 h-3 2xl:w-3.5 2xl:h-3.5" /> }}
+                            />
+                        </FilterSection>
+                    </div>
+                )}
+
+                <div className="text-xs 2xl:text-sm text-text-muted uppercase font-bold tracking-widest flex items-center justify-between">
                     <span>Showing {tasks.length} tasks</span>
                     {!isReorderingEnabled && (
                         <span className="text-yellow-500/80 flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3 xl:w-4 xl:h-4" />
+                            <AlertCircle className="w-3 h-3 2xl:w-4 2xl:h-4" />
                             Clear filters to reorder
                         </span>
                     )}
@@ -196,7 +236,7 @@ export default function Tasks() {
                 {loading && tasks.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 space-y-4">
                         <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                        <p className="text-sm xl:text-base text-text-muted font-medium">Loading tasks...</p>
+                        <p className="text-sm 2xl:text-base text-text-muted font-medium">Loading tasks...</p>
                     </div>
                 ) : tasks.length === 0 ? (
                     <EmptyState
@@ -214,10 +254,10 @@ export default function Tasks() {
                                             {group.name && (
                                                 <div className="sticky top-0 z-10 bg-background/80 backdrop-blur py-2 flex items-center space-x-2 border-b border-border/50">
                                                     {group.color && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: group.color }} />}
-                                                    <h3 className="text-sm xl:text-base font-bold tracking-tight text-text-primary">{group.name}</h3>
+                                                    <h3 className="text-sm 2xl:text-base font-bold tracking-tight text-text-primary">{group.name}</h3>
                                                 </div>
                                             )}
-                                            <div className="space-y-1">
+                                            <div className="space-y-2">
                                                 {group.tasks.map((task, index) => (
                                                     <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={!isReorderingEnabled}>
                                                         {(provided, snapshot) => (
@@ -270,13 +310,13 @@ function FilterGroup<T extends string | null>({ options, value, onChange, icons 
     icons?: Record<string, React.ReactNode>
 }) {
     return (
-        <div className="flex items-center bg-surface border border-border rounded-full p-0.5 flex-shrink-0">
+        <div className="flex flex-wrap items-center bg-surface border border-border/70 rounded-xl p-1 gap-1">
             {options.map((opt) => (
                 <button
                     key={String(opt)}
                     onClick={() => onChange(opt)}
                     className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 xl:px-4 xl:py-2 rounded-full text-[10px] xl:text-xs font-bold uppercase tracking-wider transition-all",
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs 2xl:text-sm font-bold uppercase tracking-wider transition-all",
                         value === opt ? "bg-accent text-white shadow-sm" : "text-text-muted hover:text-text-primary"
                     )}
                 >
@@ -286,6 +326,15 @@ function FilterGroup<T extends string | null>({ options, value, onChange, icons 
                     </span>
                 </button>
             ))}
+        </div>
+    )
+}
+
+function FilterSection({ label, children }: { label: string, children: React.ReactNode }) {
+    return (
+        <div className="space-y-1.5 p-2 rounded-2xl bg-surface-secondary/40 border border-border/40">
+            <p className="text-xs uppercase tracking-widest font-black text-text-muted/80 px-1">{label}</p>
+            {children}
         </div>
     )
 }

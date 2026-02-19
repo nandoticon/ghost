@@ -12,6 +12,7 @@ import {
     Edit3
 } from 'lucide-react'
 import { useProjects } from '../hooks/useProjects'
+import { useProjectCategories } from '../hooks/useProjectCategories'
 import { useTasks } from '../hooks/useTasks'
 import { TaskItem } from '../components/TaskItem'
 import { TaskForm } from '../components/TaskForm'
@@ -28,6 +29,7 @@ export default function ProjectDetail() {
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
     const { projects, updateProject, deleteProject, loading: projectsLoading } = useProjects()
+    const { categories } = useProjectCategories()
 
     // Filters for the task list
     const [filters, setFilters] = useState<TaskFilters>({
@@ -51,6 +53,10 @@ export default function ProjectDetail() {
 
     // Find current project
     const project = useMemo(() => projects.find(p => p.id === id), [projects, id])
+    const projectCategoryName = useMemo(() => {
+        if (!project?.category_id) return null
+        return categories.find((category) => category.id === project.category_id)?.name || null
+    }, [categories, project?.category_id])
 
     // Inline edit state
     const [editName, setEditName] = useState('')
@@ -213,13 +219,18 @@ export default function ProjectDetail() {
                         ) : (
                             <h1
                                 onClick={() => setIsEditingInline(true)}
-                                className="text-3xl md:text-4xl font-bold tracking-tight text-text-primary cursor-pointer hover:text-accent transition-colors truncate"
+                                className="text-3xl md:text-4xl xl:text-4xl 2xl:text-5xl font-black tracking-tightest title-gradient cursor-pointer hover:opacity-80 transition-opacity truncate"
                             >
                                 {project.name}
                             </h1>
                         )}
 
-                        <div className="mt-2">
+                        <div className="mt-2 space-y-2">
+                            {projectCategoryName && (
+                                <div className="inline-flex items-center px-2.5 py-1 rounded-full border border-accent/25 bg-accent/10 text-xs font-black uppercase tracking-widest text-accent">
+                                    {projectCategoryName}
+                                </div>
+                            )}
                             {isEditingInline ? (
                                 <textarea
                                     value={editDesc}
@@ -264,7 +275,7 @@ export default function ProjectDetail() {
 
                 {/* Simple Horizontal Filter Bar (Project-filtered) */}
                 <div className="space-y-4">
-                    <div className="flex items-center justify-between text-[10px] uppercase font-bold tracking-widest text-text-muted">
+                    <div className="flex items-center justify-between text-xs uppercase font-bold tracking-widest text-text-muted">
                         <div className="flex items-center space-x-2">
                             <Filter className="w-3 h-3" />
                             <span>Filter Tasks</span>
@@ -312,7 +323,7 @@ export default function ProjectDetail() {
                         <DragDropContext onDragEnd={handleDragEnd}>
                             <Droppable droppableId={`project-${id}-tasks`} isDropDisabled={!isReorderingEnabled}>
                                 {(provided) => (
-                                    <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-1">
+                                    <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
                                         {tasks.map((task, index) => (
                                             <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={!isReorderingEnabled}>
                                                 {(provided, snapshot) => (
@@ -350,6 +361,7 @@ export default function ProjectDetail() {
             <ProjectForm
                 isOpen={isProjectFormOpen}
                 project={project}
+                categories={categories}
                 onSave={async (data) => {
                     await updateProject(project.id, data)
                     setIsProjectFormOpen(false)
@@ -378,7 +390,7 @@ export default function ProjectDetail() {
 function StatCard({ label, value, icon, color }: { label: string, value: number, icon: React.ReactNode, color: string }) {
     return (
         <div className="bg-surface border border-border p-4 rounded-2xl space-y-2">
-            <div className={cn("flex items-center space-x-2 text-[10px] font-bold uppercase tracking-widest", color)}>
+            <div className={cn("flex items-center space-x-2 text-xs font-bold uppercase tracking-widest", color)}>
                 {icon}
                 <span>{label}</span>
             </div>

@@ -45,6 +45,7 @@ export function useProjects() {
         const newProject = {
             ...project,
             user_id: user.id,
+            category_id: project.category_id ?? null,
             sort_order: maxSortOrder,
             archived: false,
             created_at: new Date().toISOString(),

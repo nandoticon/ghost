@@ -11,6 +11,7 @@ type JsonRecord = Record<string, JsonValue>
 interface GhostExportData {
     exported_at: string
     version: number
+    project_categories: JsonRecord[]
     projects: JsonRecord[]
     tasks: JsonRecord[]
     subtasks: JsonRecord[]
@@ -34,11 +35,13 @@ export function ExportImport() {
         try {
             // Fetch all data
             const [
+                { data: projectCategories },
                 { data: projects },
                 { data: tasks },
                 { data: subtasks },
                 { data: comments }
             ] = await Promise.all([
+                supabase.from('project_categories').select('*'),
                 supabase.from('projects').select('*'),
                 supabase.from('tasks').select('*'),
                 supabase.from('subtasks').select('*'),
@@ -48,6 +51,7 @@ export function ExportImport() {
             const exportData = {
                 exported_at: new Date().toISOString(),
                 version: 1,
+                project_categories: projectCategories || [],
                 projects: projects || [],
                 tasks: tasks || [],
                 subtasks: subtasks || [],
@@ -159,21 +163,37 @@ export function ExportImport() {
 
         try {
             const projectMap = new Map<string, string>() // old_id -> new_id
+            const categoryMap = new Map<string, string>() // old_id -> new_id
             const taskMap = new Map<string, string>() // old_id -> new_id
 
-            // 1. Import Projects
+            // 1. Import Categories
+            if (importPreview.project_categories?.length > 0) {
+                setImportProgress(`Importing ${importPreview.project_categories.length} project categories...`)
+                for (const c of importPreview.project_categories) {
+                    const oldId = c.id as string
+                    const { id: _id, created_at: _ca, updated_at: _ua, ...categoryData } = c
+                    const { data, error } = await supabase.from('project_categories').insert(categoryData).select('id').single()
+                    if (error) throw error
+                    categoryMap.set(oldId, data.id)
+                }
+            }
+
+            // 2. Import Projects
             if (importPreview.projects?.length > 0) {
                 setImportProgress(`Importing ${importPreview.projects.length} projects...`)
                 for (const p of importPreview.projects) {
                     const oldId = p.id as string
                     const { id: _id, created_at: _ca, updated_at: _ua, ...projectData } = p
+                    if (projectData.category_id && categoryMap.has(projectData.category_id as string)) {
+                        projectData.category_id = categoryMap.get(projectData.category_id as string)
+                    }
                     const { data, error } = await supabase.from('projects').insert(projectData).select('id').single()
                     if (error) throw error
                     projectMap.set(oldId, data.id)
                 }
             }
 
-            // 2. Import Tasks
+            // 3. Import Tasks
             if (importPreview.tasks?.length > 0) {
                 setImportProgress(`Importing ${importPreview.tasks.length} tasks...`)
                 for (const t of importPreview.tasks) {
@@ -189,7 +209,7 @@ export function ExportImport() {
                 }
             }
 
-            // 3. Import Subtasks
+            // 4. Import Subtasks
             if (importPreview.subtasks?.length > 0) {
                 setImportProgress(`Importing ${importPreview.subtasks.length} subtasks...`)
                 const subtasksToInsert = importPreview.subtasks.map((s: JsonRecord) => {
@@ -203,7 +223,7 @@ export function ExportImport() {
                 if (error) throw error
             }
 
-            // 4. Import Comments
+            // 5. Import Comments
             if (importPreview.comments?.length > 0) {
                 setImportProgress(`Importing ${importPreview.comments.length} comments...`)
                 const commentsToInsert = importPreview.comments.map((c: JsonRecord) => {
@@ -278,7 +298,7 @@ export function ExportImport() {
                     >
                         <FileJson className="w-8 h-8 text-accent mb-4 group-hover:scale-110 transition-transform" />
                         <h3 className="font-bold text-white mb-1">JSON Export</h3>
-                        <p className="text-xs text-text-muted">Full backup including projects, tasks, comments, and subtasks.</p>
+                        <p className="text-xs text-text-muted">Full backup including categories, projects, tasks, comments, and subtasks.</p>
                         {isExporting && <Loader2 className="w-4 h-4 animate-spin mt-4 text-accent" />}
                     </button>
 
@@ -336,7 +356,11 @@ export function ExportImport() {
                             </button>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="p-4 bg-surface rounded-xl border border-border">
+                                <p className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Categories</p>
+                                <p className="text-xl font-bold text-white">{importPreview.project_categories?.length || 0}</p>
+                            </div>
                             <div className="p-4 bg-surface rounded-xl border border-border">
                                 <p className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Projects</p>
                                 <p className="text-xl font-bold text-white">{importPreview.projects?.length || 0}</p>

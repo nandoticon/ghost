@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Plus, X, Folder, Calendar } from 'lucide-react'
 import { useTasks } from '../hooks/useTasks'
 import { useProjects } from '../hooks/useProjects'
+import { useProjectCategories } from '../hooks/useProjectCategories'
 import { useToast } from './Toast'
 import { cn } from '../lib/cn'
 
@@ -13,6 +14,7 @@ interface QuickCaptureProps {
 export function QuickCapture({ isOpen, onClose }: QuickCaptureProps) {
     const { createTask } = useTasks()
     const { projects } = useProjects()
+    const { categories } = useProjectCategories()
     const { showToast } = useToast()
     const [title, setTitle] = useState('')
     const [projectId, setProjectId] = useState<string | null>(null)
@@ -27,6 +29,11 @@ export function QuickCapture({ isOpen, onClose }: QuickCaptureProps) {
             setTimeout(() => inputRef.current?.focus(), 50)
         }
     }, [isOpen])
+
+    const categoryMap = new Map(categories.map((category) => [category.id, category.name]))
+    const selectedProject = projectId ? projects.find((project) => project.id === projectId) : null
+    const selectedCategoryName =
+        selectedProject?.category_id ? categoryMap.get(selectedProject.category_id) || null : null
 
     const handleSave = async (e?: React.FormEvent) => {
         e?.preventDefault()
@@ -93,7 +100,9 @@ export function QuickCapture({ isOpen, onClose }: QuickCaptureProps) {
                             >
                                 <option value="">No Project</option>
                                 {projects.map(p => (
-                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                    <option key={p.id} value={p.id}>
+                                        {p.name}{p.category_id ? ` · ${categoryMap.get(p.category_id) || 'Uncategorized'}` : ''}
+                                    </option>
                                 ))}
                             </select>
                             <Folder className={cn(
@@ -101,6 +110,12 @@ export function QuickCapture({ isOpen, onClose }: QuickCaptureProps) {
                                 projectId ? "text-accent" : "text-text-muted"
                             )} />
                         </div>
+
+                        {selectedCategoryName && (
+                            <span className="px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-widest bg-accent/10 border border-accent/25 text-accent">
+                                {selectedCategoryName}
+                            </span>
+                        )}
 
                         {/* Today Toggle */}
                         <button
@@ -119,7 +134,7 @@ export function QuickCapture({ isOpen, onClose }: QuickCaptureProps) {
                     </div>
 
                     <div className="flex items-center justify-between pt-4 border-t border-border">
-                        <span className="text-[10px] text-text-muted font-medium italic">
+                        <span className="text-xs text-text-muted font-medium italic">
                             Press <kbd className="font-sans bg-surface-secondary px-1.5 py-0.5 rounded border border-border">Enter</kbd> to save
                         </span>
                         <div className="flex items-center space-x-3">

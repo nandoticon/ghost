@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { X, Check, Trash2, AlertTriangle } from 'lucide-react'
-import { Project } from '../types'
+import { Project, ProjectCategory } from '../types'
 import { cn } from '../lib/cn'
 
 interface ProjectFormProps {
     isOpen: boolean
     project?: Project
+    categories: ProjectCategory[]
     onSave: (project: Partial<Project>) => Promise<void>
     onCancel: () => void
     onDelete?: (id: string) => Promise<void>
@@ -25,6 +26,7 @@ const PRESET_COLORS = [
 export const ProjectForm: React.FC<ProjectFormProps> = ({
     isOpen,
     project,
+    categories,
     onSave,
     onCancel,
     onDelete
@@ -32,6 +34,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
     const [color, setColor] = useState(PRESET_COLORS[0])
+    const [categoryId, setCategoryId] = useState('')
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -40,10 +43,12 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
             setName(project.name)
             setDescription(project.description || '')
             setColor(project.color || PRESET_COLORS[0])
+            setCategoryId(project.category_id || '')
         } else {
             setName('')
             setDescription('')
             setColor(PRESET_COLORS[0])
+            setCategoryId('')
         }
         setShowDeleteConfirm(false)
     }, [project, isOpen])
@@ -59,7 +64,8 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
             await onSave({
                 name: name.trim(),
                 description: description.trim() || null,
-                color
+                color,
+                category_id: categoryId || null
             })
         } finally {
             setIsSubmitting(false)
@@ -78,16 +84,17 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
             {/* Backdrop */}
             <div
-                className="absolute inset-0 bg-background/80 backdrop-blur-sm animate-in fade-in duration-300"
+                className="absolute inset-0 bg-background/80 backdrop-blur-md animate-in fade-in duration-300"
                 onClick={onCancel}
             />
 
             {/* Modal Content */}
-            <div className="relative w-full max-w-md bg-surface border border-border rounded-2xl shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden">
-                <div className="flex items-center justify-between p-6 border-b border-border/50">
+            <div className="relative w-full max-w-md bg-surface border-t md:border border-border rounded-t-[2rem] md:rounded-2xl shadow-2xl animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-300 overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-1.5" style={{ background: `linear-gradient(90deg, ${color}, color-mix(in srgb, ${color} 65%, #ffffff))` }} />
+                <div className="flex items-center justify-between p-7 border-b border-border/50 bg-surface/85 backdrop-blur">
                     <h2 className="text-xl font-bold text-text-primary">
                         {project ? 'Edit Project' : 'New Project'}
                     </h2>
@@ -96,7 +103,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                <form onSubmit={handleSubmit} className="p-7 space-y-7">
                     <div className="space-y-4">
                         {/* Name Input */}
                         <div className="space-y-1.5">
@@ -126,6 +133,25 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                                 rows={3}
                                 className="w-full bg-surface-secondary border border-border rounded-xl px-4 py-3 text-text-primary focus:border-accent focus:ring-1 focus:ring-accent outline-none transition-all resize-none"
                             />
+                        </div>
+
+                        {/* Category Selector */}
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] uppercase font-bold tracking-widest text-text-muted ml-1">
+                                Category
+                            </label>
+                            <select
+                                value={categoryId}
+                                onChange={(e) => setCategoryId(e.target.value)}
+                                className="w-full bg-surface-secondary border border-border rounded-xl px-4 py-3 text-text-primary focus:border-accent focus:ring-1 focus:ring-accent outline-none transition-all"
+                            >
+                                <option value="">No Category</option>
+                                {categories.map((category) => (
+                                    <option key={category.id} value={category.id}>
+                                        {category.name}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
 
                         {/* Color Picker */}
@@ -165,7 +191,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                         </div>
                     </div>
 
-                    <div className="flex flex-col space-y-3 pt-2">
+                    <div className="flex flex-col space-y-3 pt-3">
                         <button
                             type="submit"
                             disabled={isSubmitting || !name.trim()}

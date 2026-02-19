@@ -13,7 +13,7 @@
     --color-text-primary: #111111;
     --color-text-muted: #6b7280;
 
-    font-size: 15px;
+    font-size: 16px;
     color-scheme: light;
   }
 
@@ -29,24 +29,35 @@
     color-scheme: dark;
   }
 
-  /* Large monitors (1440p) */
-  @media (min-width: 1440px) {
-    :root { font-size: 16px; }
-  }
-
-  /* 1920p and above */
-  @media (min-width: 1920px) {
+  /* Desktop monitors */
+  @media (min-width: 1680px) {
     :root { font-size: 17px; }
   }
 
+  /* 2K class */
+  @media (min-width: 2200px) {
+    :root { font-size: 18px; }
+  }
+
   /* 4K / QHD monitors */
-  @media (min-width: 2560px) {
+  @media (min-width: 3000px) {
     :root { font-size: 19px; }
   }
 
   body {
     @apply bg-background text-text-primary antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  html, body, #root {
+    width: 100%;
+    max-width: 100%;
+    min-height: 100%;
+  }
+
+  body {
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   ::selection {

@@ -23,7 +23,10 @@ export function useTasks(filters?: TaskFilters) {
                 .from('tasks')
                 .select(`
           *,
-          project:projects(*)
+          project:projects(
+            *,
+            category:project_categories(id,name)
+          )
         `)
                 .eq('user_id', user.id)
 

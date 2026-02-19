@@ -52,7 +52,13 @@ export function SearchBar({ onTaskClick }: SearchBarProps) {
             try {
                 const { data, error } = await supabase
                     .from('tasks')
-                    .select('*, project:projects(*)')
+                    .select(`
+                        *,
+                        project:projects(
+                            *,
+                            category:project_categories(id,name)
+                        )
+                    `)
                     .ilike('title', `%${query}%`)
                     .limit(5)
 
