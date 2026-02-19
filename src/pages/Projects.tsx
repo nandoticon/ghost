@@ -230,7 +230,6 @@ function ProjectCard({
                                 className="w-3 h-3 rounded-full shrink-0"
                                 style={{ backgroundColor: project.color || '#7c6aff', boxShadow: `0 0 12px ${project.color}60` }}
                             />
-                            <p className="text-xs 2xl:text-sm font-black uppercase tracking-widest text-text-muted">Initiative</p>
                             {categoryName && (
                                 <span className="px-2 py-0.5 text-xs 2xl:text-sm rounded-full border border-accent/25 bg-accent/10 text-accent uppercase tracking-widest font-black">
                                     {categoryName}

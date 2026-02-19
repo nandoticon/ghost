@@ -1,5 +1,5 @@
 import { NavLink, useNavigate, Outlet, useLocation } from 'react-router-dom'
-import { Calendar, CheckSquare, Folder, LogOut, Search as SearchIcon, HelpCircle, Settings as SettingsIcon, Plus, Ghost, Sparkles, MoonStar } from 'lucide-react'
+import { Calendar, CheckSquare, Folder, LogOut, Search as SearchIcon, HelpCircle, Settings as SettingsIcon, Plus, Ghost, MoreHorizontal } from 'lucide-react'
 import { cn } from '../lib/cn'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
@@ -29,6 +29,7 @@ export default function Layout() {
     useKeyboardShortcuts()
 
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
+    const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
     const location = useLocation()
 
     const navItems = [
@@ -56,9 +57,6 @@ export default function Layout() {
             <aside className="hidden tablet:flex w-[250px] 2xl:w-[320px] 4k:w-[380px] flex-col border-r border-border bg-surface shrink-0 relative overflow-hidden surface-texture">
                 {/* Top accent line */}
                 <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-accent via-accent/60 to-transparent" />
-                <Ghost className="absolute top-24 right-6 w-6 h-6 text-accent/20 rotate-6 pointer-events-none" />
-                <MoonStar className="absolute top-52 left-4 w-4 h-4 text-accent-warm/25 -rotate-12 pointer-events-none" />
-                <Sparkles className="absolute bottom-32 right-6 w-5 h-5 text-accent/20 pointer-events-none" />
 
                 {/* Brand */}
                 <div className="px-6 pt-8 pb-6 2xl:px-8">
@@ -67,7 +65,6 @@ export default function Layout() {
                         <h1 className="text-3xl 2xl:text-4xl font-black tracking-tightest text-text-primary select-none">
                             Ghost
                         </h1>
-                        <Sparkles className="w-4 h-4 text-accent-warm opacity-90" />
                     </div>
                     <p className="text-xs 2xl:text-sm font-black uppercase tracking-widest text-text-muted/50 mt-1">Task Manager</p>
                 </div>
@@ -126,50 +123,76 @@ export default function Layout() {
                 {user && (
                     <div className="p-4 2xl:p-5 border-t border-border">
                         {/* User identity */}
-                        <div className="flex items-center space-x-3 px-1 mb-3">
-                            <div className="w-10 h-10 2xl:w-11 2xl:h-11 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center shrink-0 shadow-inner">
-                                <span className="text-sm 2xl:text-base font-black text-accent">{initials}</span>
-                            </div>
-                            <div className="min-w-0">
-                                <p className="text-xs 2xl:text-sm uppercase font-black tracking-widest text-text-muted">Account</p>
-                                <p className="text-xs 2xl:text-sm font-semibold truncate text-text-primary">{user.email}</p>
+                        <div className="flex items-center justify-between px-1 mb-3">
+                            <div className="flex items-center space-x-3 min-w-0">
+                                <div className="w-10 h-10 2xl:w-11 2xl:h-11 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center shrink-0 shadow-inner">
+                                    <span className="text-sm 2xl:text-base font-black text-accent">{initials}</span>
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-xs 2xl:text-sm uppercase font-black tracking-widest text-text-muted">Account</p>
+                                    <p className="text-sm 2xl:text-base font-semibold text-text-primary">FT</p>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Sign out */}
-                        <button
-                            onClick={handleSignOut}
-                            className="flex w-full items-center space-x-2.5 px-3 py-2 text-sm 2xl:text-base text-text-muted hover:text-red-400 rounded-xl hover:bg-red-400/5 transition-all"
-                        >
-                            <LogOut className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 shrink-0" />
-                            <span className="text-sm font-semibold">Sign Out</span>
-                        </button>
-
                         {/* Footer tools */}
-                        <div className="flex items-center justify-between mt-2 pt-3 border-t border-border/40 px-1">
+                        <div className="flex items-center justify-between mt-2 pt-3 border-t border-border/40 px-1 relative">
                             <ThemeSwitcher />
-                            <div className="flex items-center space-x-1">
+                            <div className="w-10 h-10 2xl:w-11 2xl:h-11 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center shrink-0 shadow-inner">
                                 <button
-                                    onClick={() => navigate('/settings')}
-                                    className="p-2 2xl:p-2.5 hover:bg-surface-secondary rounded-xl text-text-muted hover:text-text-primary transition-all active:scale-95 group relative"
-                                    title="Settings"
+                                    onClick={() => setIsAccountMenuOpen((prev) => !prev)}
+                                    className="w-full h-full flex items-center justify-center rounded-full text-text-muted hover:text-text-primary hover:bg-surface-secondary/70 transition-all"
+                                    title="Account menu"
+                                    aria-label="Open account menu"
+                                    aria-haspopup="menu"
+                                    aria-expanded={isAccountMenuOpen}
                                 >
-                                    <SettingsIcon className="w-4 h-4 2xl:w-[18px] 2xl:h-[18px]" />
-                                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-surface border border-border rounded text-xs font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
-                                        Settings
-                                    </span>
-                                </button>
-                                <button
-                                    onClick={() => setModalOpen(true)}
-                                    className="p-2 2xl:p-2.5 hover:bg-surface-secondary rounded-xl text-text-muted hover:text-text-primary transition-all active:scale-95 group relative"
-                                    title="Keyboard shortcuts (?)"
-                                >
-                                    <HelpCircle className="w-4 h-4 2xl:w-[18px] 2xl:h-[18px]" />
-                                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-surface border border-border rounded text-xs font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
-                                        Shortcuts (?)
-                                    </span>
+                                    <MoreHorizontal className="w-5 h-5 2xl:w-6 2xl:h-6" />
                                 </button>
                             </div>
+
+                            {isAccountMenuOpen && (
+                                <>
+                                    <button
+                                        className="fixed inset-0 z-40"
+                                        aria-label="Close account menu"
+                                        onClick={() => setIsAccountMenuOpen(false)}
+                                    />
+                                    <div className="absolute right-0 bottom-14 z-50 w-56 bg-surface border border-border rounded-2xl shadow-2xl p-2 animate-in zoom-in-95 duration-150">
+                                        <button
+                                            onClick={() => {
+                                                setIsAccountMenuOpen(false)
+                                                navigate('/settings')
+                                            }}
+                                            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold text-text-primary hover:bg-surface-secondary transition-colors"
+                                        >
+                                            <SettingsIcon className="w-4 h-4" />
+                                            <span>Settings</span>
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsAccountMenuOpen(false)
+                                                setModalOpen(true)
+                                            }}
+                                            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold text-text-primary hover:bg-surface-secondary transition-colors"
+                                        >
+                                            <HelpCircle className="w-4 h-4" />
+                                            <span>Keyboard Shortcuts</span>
+                                        </button>
+                                        <div className="my-1 h-px bg-border/60" />
+                                        <button
+                                            onClick={() => {
+                                                setIsAccountMenuOpen(false)
+                                                handleSignOut()
+                                            }}
+                                            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-400 hover:bg-red-500/10 transition-colors"
+                                        >
+                                            <LogOut className="w-4 h-4" />
+                                            <span>Sign Out</span>
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                 )}
@@ -179,10 +202,7 @@ export default function Layout() {
             <div className="flex-1 flex flex-col min-w-0 min-h-0 h-full relative">
                 {/* Mobile Top Bar */}
                 <header className="tablet:hidden flex items-center justify-between px-5 h-14 bg-surface/70 backdrop-blur-md border-b border-border sticky top-0 z-40">
-                    <h1 className="text-xl font-black tracking-tightest text-text-primary inline-flex items-center gap-1.5">
-                        <Ghost className="w-4 h-4 text-accent" />
-                        Ghost
-                    </h1>
+                    <h1 className="text-xl font-black tracking-tightest text-text-primary">Ghost</h1>
                     <button
                         onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
                         className="p-2 hover:bg-surface-secondary rounded-xl text-text-muted transition-colors"

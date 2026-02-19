@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Plus, Filter, LayoutList, AlertCircle, ChevronDown, Home, MapPin, Zap, ZapOff, Target, Layers, ChevronsUpDown, Sparkles } from 'lucide-react'
+import { Plus, Filter, LayoutList, AlertCircle, ChevronDown, Home, MapPin, Zap, ZapOff, Target, Layers, ChevronsUpDown } from 'lucide-react'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { useTasks } from '../hooks/useTasks'
 import { useProjects } from '../hooks/useProjects'
@@ -184,7 +184,6 @@ export default function Tasks() {
                         onClick={() => setIsFiltersExpanded((v) => !v)}
                         className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-surface text-xs font-black uppercase tracking-wider text-text-muted hover:text-text-primary transition-colors"
                     >
-                        <Sparkles className="w-3 h-3 text-accent-warm" />
                         {isFiltersExpanded ? 'Simple' : 'Advanced'}
                     </button>
                 </div>
