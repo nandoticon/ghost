@@ -649,8 +649,8 @@ function PillGroup<T>({ label, value, options, onChange }: {
     onChange: (val: T | null) => void
 }) {
     return (
-        <div className="grid grid-cols-[100px,1fr] items-center gap-4">
-            <span className="text-[10px] uppercase font-bold tracking-widest text-text-muted">{label}</span>
+        <div className="space-y-3">
+            <span className="text-[10px] uppercase font-bold tracking-widest text-text-muted block">{label}</span>
             <div className="flex flex-wrap gap-2">
                 {options.map((opt) => (
                     <button
