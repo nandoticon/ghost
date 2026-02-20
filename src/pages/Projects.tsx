@@ -2,17 +2,18 @@ import { useState, useMemo } from 'react'
 import { Plus, Folder, ChevronDown, ChevronRight, MoreVertical, Filter } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useProjects } from '../hooks/useProjects'
-import { useTasks } from '../hooks/useTasks'
 import { useProjectCategories } from '../hooks/useProjectCategories'
+import { useProjectTaskStats } from '../hooks/useProjectTaskStats'
 import { ProjectForm } from '../components/ProjectForm'
 import { EmptyState } from '../components/EmptyState'
 import { useToast } from '../components/Toast'
 import { Project } from '../types'
+import { SyncStatusDot } from '../components/SyncStatusDot'
 
 export default function Projects() {
     const { projects, loading: projectsLoading, createProject, updateProject, deleteProject } = useProjects()
     const { categories, loading: categoriesLoading } = useProjectCategories()
-    const { tasks, loading: tasksLoading } = useTasks()
+    const { getStats, loading: statsLoading } = useProjectTaskStats()
     const { showToast } = useToast()
 
     const [isFormOpen, setIsFormOpen] = useState(false)
@@ -39,14 +40,6 @@ export default function Projects() {
         [categories]
     )
 
-    const getProjectStats = (projectId: string) => {
-        const projectTasks = tasks.filter(t => t.project_id === projectId)
-        const total = projectTasks.length
-        const completed = projectTasks.filter(t => t.completed).length
-        const progress = total > 0 ? (completed / total) * 100 : 0
-        return { total, completed, progress }
-    }
-
     const handleSave = async (projectData: Partial<Project>) => {
         try {
             if (editingProject) {
@@ -68,7 +61,7 @@ export default function Projects() {
         showToast(project.archived ? 'Project unarchived' : 'Project archived', 'success')
     }
 
-    if (projectsLoading || tasksLoading || categoriesLoading) {
+    if (projectsLoading || statsLoading || categoriesLoading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6">
                 <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin" />
@@ -131,7 +124,7 @@ export default function Projects() {
                             key={project.id}
                             project={project}
                             categoryName={project.category_id ? categoryMap.get(project.category_id) || null : null}
-                            stats={getProjectStats(project.id)}
+                            stats={getStats(project.id)}
                             onEdit={(p) => {
                                 setEditingProject(p)
                                 setIsFormOpen(true)
@@ -160,7 +153,7 @@ export default function Projects() {
                                     key={project.id}
                                     project={project}
                                     categoryName={project.category_id ? categoryMap.get(project.category_id) || null : null}
-                                    stats={getProjectStats(project.id)}
+                                    stats={getStats(project.id)}
                                     onEdit={(p) => {
                                         setEditingProject(p)
                                         setIsFormOpen(true)
@@ -211,6 +204,7 @@ function ProjectCard({
 }) {
     const navigate = useNavigate()
     const targetPath = `/projects/${project.short_id || project.id}`
+    const syncState = project.id.startsWith('temp-') ? 'syncing' : (project.sync_state || 'synced')
 
     return (
         <div
@@ -312,17 +306,20 @@ function ProjectCard({
                     </div>
 
                     {/* Visual Progress Bar */}
-                    <div className="h-2 2xl:h-2.5 w-full bg-surface-secondary rounded-full overflow-hidden border border-border/10 p-[1px]">
-                        <div
-                            className="h-full rounded-full transition-all duration-1000 ease-out relative group-hover:opacity-100 opacity-90"
-                            style={{
-                                width: `${stats.progress}%`,
-                                backgroundColor: project.color || '#7c6aff',
-                                boxShadow: `0 0 20px ${project.color}30`
-                            }}
-                        >
-                            <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent" />
+                    <div className="flex items-center gap-2">
+                        <div className="h-2 2xl:h-2.5 flex-1 bg-surface-secondary rounded-full overflow-hidden border border-border/10 p-[1px]">
+                            <div
+                                className="h-full rounded-full transition-all duration-1000 ease-out relative group-hover:opacity-100 opacity-90"
+                                style={{
+                                    width: `${stats.progress}%`,
+                                    backgroundColor: project.color || '#7c6aff',
+                                    boxShadow: `0 0 20px ${project.color}30`
+                                }}
+                            >
+                                <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent" />
+                            </div>
                         </div>
+                        <SyncStatusDot state={syncState} sizeClassName="w-1.5 h-1.5" className="shrink-0 px-0.5 py-0.5" />
                     </div>
                 </div>
 

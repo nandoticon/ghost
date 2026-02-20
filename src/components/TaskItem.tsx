@@ -23,6 +23,7 @@ import { Task } from '../types'
 import { cn } from '../lib/cn'
 import { format, isToday, isPast, startOfDay } from 'date-fns'
 import { useTimer } from '../context/TimerContext'
+import { SyncStatusDot } from './SyncStatusDot'
 
 interface TaskItemProps {
     task: Task
@@ -52,6 +53,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
     const isCompleted = task.completed
     const { activeSession, elapsedSeconds, toggleTimer, isSyncing } = useTimer()
     const isTimerActiveForTask = activeSession?.task_id === task.id
+    const syncState = task.id.startsWith('temp-') ? 'syncing' : (task.sync_state || 'synced')
 
     const formatElapsed = (seconds: number) => {
         const h = Math.floor(seconds / 3600)
@@ -179,6 +181,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
                 </div>
 
                 <div className="flex items-center flex-wrap gap-2 overflow-hidden">
+                    <SyncStatusDot state={syncState} sizeClassName="w-1.5 h-1.5" className="px-0.5 py-0.5" />
                     {/* Project Name (if exists) */}
                     {task.project && (
                         <>

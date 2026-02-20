@@ -237,7 +237,7 @@ export default function Layout() {
                 <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 tablet:p-6 xl:p-8 2xl:p-14 4k:p-16 pb-24 tablet:pb-10 relative">
                     <div
                         key={location.pathname}
-                        className="w-full max-w-full min-w-0 4k:max-w-[1600px] 4k:mx-auto animate-in fade-in slide-in-from-bottom-2 duration-200"
+                        className="w-full max-w-full min-w-0 4k:max-w-[1600px] 4k:mx-auto animate-in fade-in duration-200"
                     >
                         <Outlet />
                     </div>

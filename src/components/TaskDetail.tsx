@@ -28,7 +28,7 @@ interface TaskDetailProps {
 export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
     const { task, updateTaskField } = useTaskById(taskId)
     const { deleteTask, completeTask, createTask } = useTasks()
-    const { projects } = useProjects()
+    const { projects, createProject } = useProjects()
     const { subtasks, addSubtask, updateSubtask, deleteSubtask, reorderSubtasks } = useSubtasks(task?.id)
     const { comments } = useComments(task?.id)
     const { showToast } = useToast()
@@ -61,6 +61,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
     const [showRecurrencePicker, setShowRecurrencePicker] = useState(false)
     const [showStatusPicker, setShowStatusPicker] = useState(false)
     const [projectSearch, setProjectSearch] = useState('')
+    const [isCreatingProject, setIsCreatingProject] = useState(false)
     const statusPickerRef = useRef<HTMLButtonElement>(null)
 
     useEffect(() => {
@@ -214,6 +215,39 @@ Click save`
     if (!taskId) return null
 
     const filteredProjects = projects.filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase()))
+    const canCreateProject = projectSearch.trim().length > 0 && !projects.some(
+        p => p.name.toLowerCase() === projectSearch.trim().toLowerCase()
+    )
+
+    const createProjectFromSearch = async () => {
+        const name = projectSearch.trim()
+        if (!name || isCreatingProject) return
+
+        const existing = projects.find((p) => p.name.toLowerCase() === name.toLowerCase())
+        if (existing) {
+            setProjectId(existing.id)
+            handleFieldUpdate('project_id', existing.id)
+            setShowProjectPicker(false)
+            setProjectSearch('')
+            return
+        }
+
+        setIsCreatingProject(true)
+        try {
+            const created = await createProject({
+                name,
+                color: '#7c6aff',
+            })
+            if (created?.id) {
+                setProjectId(created.id)
+                handleFieldUpdate('project_id', created.id)
+                setShowProjectPicker(false)
+                setProjectSearch('')
+            }
+        } finally {
+            setIsCreatingProject(false)
+        }
+    }
 
     return (
         <div className="fixed inset-0 z-50 flex justify-end overflow-hidden">
@@ -610,10 +644,16 @@ Click save`
                                                 <input
                                                     autoFocus
                                                     type="text"
-                                                    placeholder="Search projects..."
+                                                    placeholder="Search or create project..."
                                                     className="bg-transparent border-none outline-none text-sm p-1 w-full text-text-primary"
                                                     value={projectSearch}
                                                     onChange={e => setProjectSearch(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault()
+                                                            void createProjectFromSearch()
+                                                        }
+                                                    }}
                                                 />
                                             </div>
                                             <div className="overflow-y-auto custom-scrollbar p-1">
@@ -639,6 +679,18 @@ Click save`
                                                     </button>
                                                 ))}
                                             </div>
+                                            {canCreateProject && (
+                                                <div className="p-2 border-t border-border/50">
+                                                    <button
+                                                        onClick={() => void createProjectFromSearch()}
+                                                        disabled={isCreatingProject}
+                                                        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors text-sm font-semibold disabled:opacity-50"
+                                                    >
+                                                        <Plus className="w-4 h-4" />
+                                                        <span>{isCreatingProject ? 'Creating...' : `Create "${projectSearch.trim()}"`}</span>
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     </>
                                 )}

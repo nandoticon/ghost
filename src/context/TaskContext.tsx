@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { Task } from '../types'
 import { useAuth } from '../hooks/useAuth'
 import { generateNextTask } from '../lib/recurrence'
+import { useRef } from 'react'
 
 interface TaskContextType {
     tasks: Task[]
@@ -21,6 +22,11 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     const [tasks, setTasks] = useState<Task[]>([])
     const [loading, setLoading] = useState(true)
     const { user } = useAuth()
+    const tasksRef = useRef<Task[]>([])
+
+    useEffect(() => {
+        tasksRef.current = tasks
+    }, [tasks])
 
     const fetchTasks = useCallback(async () => {
         if (!user) {
@@ -36,7 +42,17 @@ export function TaskProvider({ children }: { children: ReactNode }) {
                 .select(`
                     *,
                     project:projects(
-                        *,
+                        id,
+                        user_id,
+                        name,
+                        description,
+                        color,
+                        category_id,
+                        sort_order,
+                        archived,
+                        short_id,
+                        created_at,
+                        updated_at,
                         category:project_categories(id,name)
                     ),
                     subtasks(id, completed)
@@ -62,36 +78,48 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     const createTask = useCallback(async (task: Partial<Task>, isToday?: boolean) => {
         if (!user) return null
 
+        const currentTasks = tasksRef.current
+
         // Calculate max sort order from global tasks using client-side derivation
-        const activeTasks = tasks.filter(t => !t.completed)
-        const maxSortOrder = tasks.length > 0
-            ? Math.max(...tasks.map(t => t.sort_order || 0)) + 1
+        const activeTasks = currentTasks.filter(t => !t.completed)
+        const maxSortOrder = currentTasks.length > 0
+            ? Math.max(...currentTasks.map(t => t.sort_order || 0)) + 1
             : 0
 
         const maxSortOrderToday = isToday
             ? (activeTasks.filter(t => t.today).length > 0 ? Math.max(...activeTasks.filter(t => t.today).map(t => t.sort_order_today || 0)) + 1 : 0)
             : 0
 
-        const newTask = {
+        const baseTask = {
             ...task,
             user_id: user.id,
             sort_order: maxSortOrder,
             sort_order_today: maxSortOrderToday,
             completed: false,
-            created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
         }
+        const optimisticTask = { ...baseTask, sync_state: 'syncing' as const }
 
         const tempId = 'temp-' + Math.random()
-        setTasks(prev => [...prev, { ...newTask, id: tempId } as Task])
+        setTasks(prev => [...prev, { ...optimisticTask, id: tempId } as Task])
 
         const { data, error } = await supabase
             .from('tasks')
-            .insert([newTask])
+            .insert([baseTask])
             .select(`
                 *,
                 project:projects(
-                    *,
+                    id,
+                    user_id,
+                    name,
+                    description,
+                    color,
+                    category_id,
+                    sort_order,
+                    archived,
+                    short_id,
+                    created_at,
+                    updated_at,
                     category:project_categories(id,name)
                 ),
                 subtasks(id, completed)
@@ -100,24 +128,27 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
         if (error) {
             console.error('Error creating task:', error)
-            fetchTasks()
+            setTasks(prev => prev.map(t => t.id === tempId ? { ...t, sync_state: 'error' } : t))
             return null
         }
 
-        setTasks(prev => prev.map(t => t.id === tempId ? data : t))
+        setTasks(prev => prev.map(t => t.id === tempId ? { ...data, sync_state: 'synced' } : t))
         return data
-    }, [user, tasks, fetchTasks])
+    }, [user])
 
     const updateTask = useCallback(async (id: string, updates: Partial<Task>) => {
+        const snapshot = tasksRef.current
+
         // Sync logic for status/completed bridging
         const finalUpdates = { ...updates }
+        delete (finalUpdates as Partial<Task>).sync_state
         if (updates.status !== undefined && updates.completed === undefined) {
             finalUpdates.completed = updates.status === 'done'
         } else if (updates.completed !== undefined && updates.status === undefined) {
             finalUpdates.status = updates.completed ? 'done' : 'todo'
         }
 
-        setTasks(prev => prev.map(t => t.id === id ? { ...t, ...finalUpdates, updated_at: new Date().toISOString() } : t))
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, ...finalUpdates, updated_at: new Date().toISOString(), sync_state: 'syncing' } : t))
 
         const { error } = await supabase
             .from('tasks')
@@ -126,11 +157,14 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
         if (error) {
             console.error('Error updating task:', error)
-            fetchTasks()
+            setTasks(snapshot.map(t => t.id === id ? { ...t, sync_state: 'error' } : t))
+            return
         }
-    }, [fetchTasks])
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, sync_state: 'synced' } : t))
+    }, [])
 
     const deleteTask = useCallback(async (id: string) => {
+        const snapshot = tasksRef.current
         setTasks(prev => prev.filter(t => t.id !== id))
 
         const { error } = await supabase
@@ -140,16 +174,18 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
         if (error) {
             console.error('Error deleting task:', error)
-            fetchTasks()
+            setTasks(snapshot)
         }
-    }, [fetchTasks])
+    }, [])
 
     const completeTask = useCallback(async (id: string, completed: boolean) => {
-        const task = tasks.find(t => t.id === id)
+        const currentTasks = tasksRef.current
+        const task = currentTasks.find(t => t.id === id)
         if (!task) return { success: false }
+        const snapshot = currentTasks
 
         const newStatus = completed ? 'done' : 'todo'
-        setTasks(prev => prev.map(t => t.id === id ? { ...t, completed, status: newStatus, updated_at: new Date().toISOString() } : t))
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, completed, status: newStatus, updated_at: new Date().toISOString(), sync_state: 'syncing' } : t))
 
         const { error } = await supabase
             .from('tasks')
@@ -158,9 +194,11 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
         if (error) {
             console.error('Error completing task:', error)
-            fetchTasks()
+            setTasks(snapshot.map(t => t.id === id ? { ...t, sync_state: 'error' } : t))
             return { success: false }
         }
+
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, sync_state: 'synced' } : t))
 
         let nextOccurrenceCreated = false
         let nextOccurrenceDate: string | null = null
@@ -174,7 +212,17 @@ export function TaskProvider({ children }: { children: ReactNode }) {
                     .select(`
                         *,
                         project:projects(
-                            *,
+                            id,
+                            user_id,
+                            name,
+                            description,
+                            color,
+                            category_id,
+                            sort_order,
+                            archived,
+                            short_id,
+                            created_at,
+                            updated_at,
                             category:project_categories(id,name)
                         ),
                         subtasks(id, completed)
@@ -193,10 +241,11 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         }
 
         return { success: true, nextOccurrenceCreated, nextOccurrenceDate }
-    }, [tasks, fetchTasks, user])
+    }, [user])
 
     const reorderTasks = useCallback(async (orderedIds: string[], isToday?: boolean) => {
         const sortField = isToday ? 'sort_order_today' : 'sort_order'
+        const snapshot = tasksRef.current
 
         // Apply immediately to global state
         setTasks(prev => {
@@ -223,9 +272,9 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
         if (error) {
             console.error('Error reordering tasks:', error)
-            fetchTasks()
+            setTasks(snapshot)
         }
-    }, [fetchTasks])
+    }, [])
 
     return (
         <TaskContext.Provider

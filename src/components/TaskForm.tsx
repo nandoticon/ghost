@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
     X,
     ChevronDown,
+    Search,
+    Plus,
     Home,
     MapPin,
     Zap,
@@ -12,11 +14,11 @@ import {
     RefreshCw,
     Clock
 } from 'lucide-react'
-import { Task, Project } from '../types'
+import { Task } from '../types'
 import { cn } from '../lib/cn'
-import { supabase } from '../lib/supabase'
 import { DateTimePicker } from './DateTimePicker'
 import { StatusMenu, StatusOptions } from './StatusMenu'
+import { useProjects } from '../hooks/useProjects'
 
 interface TaskFormProps {
     task?: Task
@@ -49,18 +51,15 @@ export const TaskForm = ({
     const [status, setStatus] = useState<Task['status']>(task?.status || 'todo')
     const [estimatedEffort, setEstimatedEffort] = useState(task?.estimated_effort || 0)
 
-    const [projects, setProjects] = useState<Project[]>([])
+    const { projects, createProject } = useProjects()
     const [submitting, setSubmitting] = useState(false)
     const [showStatusPicker, setShowStatusPicker] = useState(false)
+    const [showProjectPicker, setShowProjectPicker] = useState(false)
+    const [projectQuery, setProjectQuery] = useState('')
+    const [isCreatingProject, setIsCreatingProject] = useState(false)
     const statusPickerRef = useRef<HTMLButtonElement>(null)
 
     useEffect(() => {
-        const fetchProjects = async () => {
-            const { data } = await supabase.from('projects').select('*').order('name')
-            if (data) setProjects(data)
-        }
-        fetchProjects()
-
         // Reset form if task changes
         if (task) {
             setTitle(task.title || '')
@@ -90,9 +89,43 @@ export const TaskForm = ({
             setStatus('todo')
             setEstimatedEffort(0)
         }
-    }, [task, isOpen, defaultProjectId])
+        setProjectQuery('')
+        setShowProjectPicker(false)
+    }, [task, isOpen, defaultProjectId, defaultToday])
 
     if (!isOpen) return null
+
+    const filteredProjects = projects.filter((p) =>
+        p.name.toLowerCase().includes(projectQuery.toLowerCase())
+    )
+
+    const createProjectFromQuery = async () => {
+        const name = projectQuery.trim()
+        if (!name || isCreatingProject) return
+
+        const existing = projects.find((p) => p.name.toLowerCase() === name.toLowerCase())
+        if (existing) {
+            setProjectId(existing.id)
+            setShowProjectPicker(false)
+            setProjectQuery('')
+            return
+        }
+
+        setIsCreatingProject(true)
+        try {
+            const created = await createProject({
+                name,
+                color: '#7c6aff',
+            })
+            if (created?.id) {
+                setProjectId(created.id)
+                setShowProjectPicker(false)
+                setProjectQuery('')
+            }
+        } finally {
+            setIsCreatingProject(false)
+        }
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -173,17 +206,84 @@ export const TaskForm = ({
                         <div className="space-y-2">
                             <label className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Project</label>
                             <div className="relative">
-                                <select
-                                    value={projectId}
-                                    onChange={(e) => setProjectId(e.target.value)}
-                                    className="w-full appearance-none bg-surface-secondary border border-border rounded-lg px-4 py-2.5 text-sm text-text-primary focus:border-accent focus:outline-none"
+                                <button
+                                    type="button"
+                                    onClick={() => setShowProjectPicker((v) => !v)}
+                                    className="w-full bg-surface-secondary border border-border rounded-lg px-4 py-2.5 text-sm text-text-primary focus:border-accent focus:outline-none flex items-center justify-between"
                                 >
-                                    <option value="" className="bg-surface text-text-primary">No Project</option>
-                                    {projects.map(p => (
-                                        <option key={p.id} value={p.id} className="bg-surface text-text-primary">{p.name}</option>
-                                    ))}
-                                </select>
-                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
+                                    <span className={!projectId ? "text-text-muted" : ""}>
+                                        {projectId ? projects.find((p) => p.id === projectId)?.name || 'Unknown Project' : 'No Project'}
+                                    </span>
+                                    <ChevronDown className="w-4 h-4 text-text-muted" />
+                                </button>
+                                {showProjectPicker && (
+                                    <>
+                                        <div className="fixed inset-0 z-40" onClick={() => setShowProjectPicker(false)} />
+                                        <div className="absolute top-12 left-0 right-0 max-h-72 overflow-hidden bg-surface border border-border/80 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] rounded-xl z-50 animate-in fade-in zoom-in-95 duration-200 flex flex-col">
+                                            <div className="p-2 border-b border-border/50 flex items-center gap-2 bg-surface/50">
+                                                <Search className="w-4 h-4 text-text-muted ml-2" />
+                                                <input
+                                                    autoFocus
+                                                    type="text"
+                                                    placeholder="Search or create project..."
+                                                    className="bg-transparent border-none outline-none text-sm p-1 w-full text-text-primary"
+                                                    value={projectQuery}
+                                                    onChange={(e) => setProjectQuery(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault()
+                                                            void createProjectFromQuery()
+                                                        }
+                                                    }}
+                                                />
+                                            </div>
+                                            <div className="overflow-y-auto p-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setProjectId('')
+                                                        setShowProjectPicker(false)
+                                                    }}
+                                                    className={cn(
+                                                        "w-full text-left px-3 py-2 text-sm rounded-lg transition-colors",
+                                                        !projectId ? "bg-accent/10 text-accent font-medium" : "text-text-muted hover:bg-surface-secondary"
+                                                    )}
+                                                >
+                                                    No Project
+                                                </button>
+                                                {filteredProjects.map((p) => (
+                                                    <button
+                                                        key={p.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setProjectId(p.id)
+                                                            setShowProjectPicker(false)
+                                                        }}
+                                                        className={cn(
+                                                            "w-full text-left px-3 py-2 text-sm rounded-lg transition-colors",
+                                                            projectId === p.id ? "bg-accent/10 text-accent font-medium" : "text-text-primary hover:bg-surface-secondary"
+                                                        )}
+                                                    >
+                                                        {p.name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {projectQuery.trim().length > 0 && !projects.some((p) => p.name.toLowerCase() === projectQuery.trim().toLowerCase()) && (
+                                                <div className="p-2 border-t border-border/50">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => void createProjectFromQuery()}
+                                                        disabled={isCreatingProject}
+                                                        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors text-sm font-semibold disabled:opacity-50"
+                                                    >
+                                                        <Plus className="w-4 h-4" />
+                                                        <span>{isCreatingProject ? 'Creating...' : `Create "${projectQuery.trim()}"`}</span>
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
 
