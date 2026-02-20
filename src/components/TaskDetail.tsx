@@ -23,7 +23,8 @@ import {
     RefreshCw,
     FolderKanban,
     SlidersHorizontal,
-    NotebookPen
+    NotebookPen,
+    MessageSquare
 } from 'lucide-react'
 import { Task } from '../types'
 import { useTasks } from '../hooks/useTasks'
@@ -63,6 +64,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
     const [recurrence, setRecurrence] = useState<'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly' | null>(null)
     const [recurrenceEndAt, setRecurrenceEndAt] = useState('')
     const [completed, setCompleted] = useState(false)
+    const [activeTab, setActiveTab] = useState<'notes' | 'subtasks' | 'comments'>('notes')
 
     const [showMenu, setShowMenu] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
@@ -128,7 +130,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
     if (!taskId) return null
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end md:items-stretch md:justify-end overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 lg:p-10 overflow-hidden">
             {/* Backdrop */}
             <div
                 className="absolute inset-0 bg-background/60 backdrop-blur-sm animate-in fade-in duration-300"
@@ -138,18 +140,13 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
             {/* Panel */}
             <div
                 className={cn(
-                    "relative flex flex-col bg-surface border-t md:border-t-0 md:border-l border-border h-[90vh] md:h-full w-full md:w-[440px] xl:w-[560px] shadow-2xl transition-transform duration-300 ease-out overflow-x-hidden",
-                    "animate-in slide-in-from-bottom md:slide-in-from-right",
-                    "rounded-t-[2.5rem] md:rounded-none"
+                    "relative flex flex-col bg-surface border border-border h-full max-h-[90vh] w-full max-w-5xl shadow-2xl overflow-hidden",
+                    "animate-in zoom-in-95 duration-200",
+                    "rounded-[2rem] md:rounded-3xl"
                 )}
             >
-                {/* Mobile Drag Handle */}
-                <div className="md:hidden flex justify-center py-4">
-                    <div className="w-12 h-1.5 bg-border rounded-full" />
-                </div>
-
-                {/* Header */}
-                <header className="flex items-center justify-between px-6 py-5 border-b border-border/50 sticky top-0 bg-surface/85 backdrop-blur-xl z-20">
+                {/* Header (Full Width) */}
+                <header className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-surface/85 backdrop-blur-xl z-20 shrink-0">
                     <div className="flex items-center space-x-3 flex-1 min-w-0">
                         <button
                             onClick={async () => {
@@ -183,7 +180,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                             value={title}
                             onChange={(e) => handleTitleChange(e.target.value)}
                             placeholder="Task title"
-                            className="bg-transparent text-lg font-bold text-text-primary outline-none w-full truncate focus:text-accent transition-colors"
+                            className="bg-transparent text-xl md:text-2xl font-bold text-text-primary outline-none w-full truncate focus:text-accent transition-colors"
                         />
                     </div>
 
@@ -232,22 +229,183 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                     </div>
                 </header>
 
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8 pb-12">
-                    {/* Recurrence Banner */}
-                    {recurrence && (
-                        <div className="flex items-center space-x-3 px-4 py-3 bg-accent/5 rounded-2xl border border-accent/20 animate-in fade-in slide-in-from-top-4 duration-500">
-                            <div className="p-2 bg-accent/10 rounded-xl">
-                                <RefreshCw className="w-4 h-4 text-accent animate-spin-slow" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="text-sm font-bold text-text-primary">Recurring Task</p>
-                                <p className="text-xs text-text-muted">This task repeats {recurrence}.</p>
+                {/* Two-Column Layout */}
+                <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
+                    {/* Left Column (Content & Tabs) */}
+                    <div className="flex-1 flex flex-col min-w-0 border-b md:border-b-0 md:border-r border-border/50 bg-surface">
+                        {/* Tab Bar */}
+                        <div className="flex items-center space-x-6 px-6 pt-4 border-b border-border/50 bg-surface/85 backdrop-blur z-10 sticky top-0 shrink-0">
+                            {[
+                                { id: 'notes', label: 'Notes', icon: NotebookPen },
+                                { id: 'subtasks', label: 'Subtasks', icon: Layers, count: subtasks.length },
+                                { id: 'comments', label: 'Comments', icon: MessageSquare }
+                            ].map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id as 'notes' | 'subtasks' | 'comments')}
+                                    className={cn(
+                                        "flex items-center space-x-2 pb-3 border-b-2 transition-colors",
+                                        activeTab === tab.id
+                                            ? "border-accent text-accent font-bold"
+                                            : "border-transparent text-text-muted hover:text-text-primary hover:border-border"
+                                    )}
+                                >
+                                    <tab.icon className="w-4 h-4" />
+                                    <span className="text-sm font-medium">{tab.label}</span>
+                                    {tab.count !== undefined && tab.count > 0 && (
+                                        <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-surface-secondary text-[10px] font-bold">
+                                            {tab.count}
+                                        </span>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Tab Content */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+                            {activeTab === 'notes' && (
+                                <div className="h-full animate-in fade-in duration-300">
+                                    <textarea
+                                        value={notes}
+                                        onChange={(e) => handleNotesChange(e.target.value)}
+                                        onKeyDown={(e) => (e.metaKey || e.ctrlKey) && e.key === 'Enter' && (e.target as HTMLTextAreaElement).blur()}
+                                        placeholder="Capture details, links, blockers, and the next concrete step for this task."
+                                        className="w-full h-full bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none resize-none min-h-[300px]"
+                                    />
+                                </div>
+                            )}
+
+                            {activeTab === 'subtasks' && (
+                                <div className="animate-in fade-in duration-300 max-w-2xl">
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between px-1 border-b border-border/30 pb-2">
+                                            <h3 className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Subtasks</h3>
+                                            {subtasks.length > 0 && (
+                                                <span className="text-[10px] font-bold text-accent">
+                                                    {subtasks.filter(s => s.completed).length}/{subtasks.length}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <DragDropContext onDragEnd={(result) => {
+                                            if (!result.destination) return
+                                            const items = Array.from(subtasks)
+                                            const [reorderedItem] = items.splice(result.source.index, 1)
+                                            items.splice(result.destination.index, 0, reorderedItem)
+                                            reorderSubtasks(items.map(i => i.id))
+                                        }}>
+                                            <Droppable droppableId="subtasks-list">
+                                                {(provided) => (
+                                                    <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-1">
+                                                        {subtasks.map((subtask, index) => (
+                                                            <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
+                                                                {(provided, snapshot) => (
+                                                                    <div
+                                                                        ref={provided.innerRef}
+                                                                        {...provided.draggableProps}
+                                                                        className={cn(
+                                                                            "flex items-center space-x-3 p-2 rounded-xl group/sub transition-colors",
+                                                                            snapshot.isDragging ? "bg-surface-secondary shadow-lg" : "hover:bg-surface-secondary/30"
+                                                                        )}
+                                                                    >
+                                                                        <div {...provided.dragHandleProps} className="text-text-muted opacity-0 group-hover/sub:opacity-40 transition-opacity cursor-grab">
+                                                                            <GripVertical className="w-3.5 h-3.5" />
+                                                                        </div>
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                updateSubtask(subtask.id, { completed: !subtask.completed })
+                                                                            }}
+                                                                            className="text-text-muted hover:text-accent transition-colors"
+                                                                        >
+                                                                            {subtask.completed ? <CheckCircle2 className="w-4 h-4 text-accent" /> : <Circle className="w-4 h-4" />}
+                                                                        </button>
+                                                                        <input
+                                                                            type="text"
+                                                                            value={subtask.title}
+                                                                            onChange={(e) => updateSubtask(subtask.id, { title: e.target.value })}
+                                                                            className={cn(
+                                                                                "flex-1 bg-transparent text-sm text-text-primary outline-none",
+                                                                                subtask.completed && "line-through text-text-muted"
+                                                                            )}
+                                                                        />
+                                                                        <button
+                                                                            onClick={() => deleteSubtask(subtask.id)}
+                                                                            className="p-1 text-text-muted hover:text-red-400 opacity-0 group-hover/sub:opacity-100 transition-opacity"
+                                                                        >
+                                                                            <X className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </Draggable>
+                                                        ))}
+                                                        {provided.placeholder}
+                                                    </div>
+                                                )}
+                                            </Droppable>
+                                        </DragDropContext>
+
+                                        <div className="flex items-center space-x-3 px-10 py-2">
+                                            <Plus className="w-3.5 h-3.5 text-text-muted opacity-40" />
+                                            <input
+                                                type="text"
+                                                placeholder="Add a subtask..."
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        const input = e.target as HTMLInputElement
+                                                        if (input.value.trim()) {
+                                                            addSubtask(input.value.trim())
+                                                            input.value = ''
+                                                        }
+                                                    }
+                                                }}
+                                                className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'comments' && taskId && (
+                                <div className="animate-in fade-in duration-300 max-w-2xl">
+                                    <Comments taskId={taskId} />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer / Saving Indicator */}
+                        <div className="px-6 py-3 border-t border-border/30 bg-surface-secondary/20 flex items-center justify-between shrink-0">
+                            <div className="flex items-center space-x-2">
+                                {isSaving ? (
+                                    <div className="flex items-center space-x-2">
+                                        <div className="w-2 h-2 bg-accent rounded-full animate-pulse" />
+                                        <span className="text-[10px] font-bold uppercase tracking-widest text-accent">Auto-saving...</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center space-x-2 text-text-muted">
+                                        <Check className="w-3 h-3" />
+                                        <span className="text-[10px] font-bold uppercase tracking-widest">Changes saved</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
-                    )}
+                    </div>
 
-                    <div className="space-y-4">
+                    {/* Right Column (Metadata) */}
+                    <div className="w-full md:w-[320px] lg:w-[380px] shrink-0 overflow-y-auto custom-scrollbar bg-surface/40 p-6 space-y-6">
+                        {/* Recurrence Banner */}
+                        {recurrence && (
+                            <div className="flex items-center space-x-3 px-4 py-3 bg-accent/5 rounded-2xl border border-accent/20 animate-in fade-in slide-in-from-top-4 duration-500">
+                                <div className="p-2 bg-accent/10 rounded-xl">
+                                    <RefreshCw className="w-4 h-4 text-accent animate-spin-slow" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-bold text-text-primary">Recurring Task</p>
+                                    <p className="text-xs text-text-muted">This task repeats {recurrence}.</p>
+                                </div>
+                            </div>
+                        )}
+
                         <SectionCard icon={<FolderKanban className="w-4 h-4 text-accent" />} title="Project">
                             <div className="relative group">
                                 <select
@@ -384,133 +542,6 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                 />
                             </div>
                         </SectionCard>
-                    </div>
-
-                    {/* Notes Section */}
-                    <div className="space-y-3 bg-surface-secondary/20 border border-border/50 rounded-2xl p-4">
-                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-muted ml-1 inline-flex items-center gap-2">
-                            <NotebookPen className="w-3.5 h-3.5" />
-                            Notes
-                        </label>
-                        <textarea
-                            value={notes}
-                            onChange={(e) => handleNotesChange(e.target.value)}
-                            onKeyDown={(e) => (e.metaKey || e.ctrlKey) && e.key === 'Enter' && (e.target as HTMLTextAreaElement).blur()}
-                            placeholder="Capture details, links, blockers, and the next concrete step for this task."
-                            className="w-full bg-surface-secondary/70 border border-border rounded-2xl p-4 text-sm text-text-primary placeholder:text-text-muted/90 focus:outline-none focus:border-accent/50 resize-none min-h-[140px] transition-all"
-                        />
-                    </div>
-
-                    {/* Subtasks Section */}
-                    <div className="space-y-4 pt-4 border-t border-border/30">
-                        <div className="flex items-center justify-between px-1">
-                            <h3 className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Subtasks</h3>
-                            {subtasks.length > 0 && (
-                                <span className="text-[10px] font-bold text-accent">
-                                    {subtasks.filter(s => s.completed).length}/{subtasks.length}
-                                </span>
-                            )}
-                        </div>
-
-                        <div className="space-y-2">
-                            <DragDropContext onDragEnd={(result) => {
-                                if (!result.destination) return
-                                const items = Array.from(subtasks)
-                                const [reorderedItem] = items.splice(result.source.index, 1)
-                                items.splice(result.destination.index, 0, reorderedItem)
-                                reorderSubtasks(items.map(i => i.id))
-                            }}>
-                                <Droppable droppableId="subtasks-list">
-                                    {(provided) => (
-                                        <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-1">
-                                            {subtasks.map((subtask, index) => (
-                                                <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
-                                                    {(provided, snapshot) => (
-                                                        <div
-                                                            ref={provided.innerRef}
-                                                            {...provided.draggableProps}
-                                                            className={cn(
-                                                                "flex items-center space-x-3 p-2 rounded-xl group/sub transition-colors",
-                                                                snapshot.isDragging ? "bg-surface-secondary shadow-lg" : "hover:bg-surface-secondary/30"
-                                                            )}
-                                                        >
-                                                            <div {...provided.dragHandleProps} className="text-text-muted opacity-0 group-hover/sub:opacity-40 transition-opacity cursor-grab">
-                                                                <GripVertical className="w-3.5 h-3.5" />
-                                                            </div>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation()
-                                                                    updateSubtask(subtask.id, { completed: !subtask.completed })
-                                                                }}
-                                                                className="text-text-muted hover:text-accent transition-colors"
-                                                            >
-                                                                {subtask.completed ? <CheckCircle2 className="w-4 h-4 text-accent" /> : <Circle className="w-4 h-4" />}
-                                                            </button>
-                                                            <input
-                                                                type="text"
-                                                                value={subtask.title}
-                                                                onChange={(e) => updateSubtask(subtask.id, { title: e.target.value })}
-                                                                className={cn(
-                                                                    "flex-1 bg-transparent text-sm text-text-primary outline-none",
-                                                                    subtask.completed && "line-through text-text-muted"
-                                                                )}
-                                                            />
-                                                            <button
-                                                                onClick={() => deleteSubtask(subtask.id)}
-                                                                className="p-1 text-text-muted hover:text-red-400 opacity-0 group-hover/sub:opacity-100 transition-opacity"
-                                                            >
-                                                                <X className="w-3.5 h-3.5" />
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </Draggable>
-                                            ))}
-                                            {provided.placeholder}
-                                        </div>
-                                    )}
-                                </Droppable>
-                            </DragDropContext>
-
-                            <div className="flex items-center space-x-3 px-10 py-2">
-                                <Plus className="w-3.5 h-3.5 text-text-muted opacity-40" />
-                                <input
-                                    type="text"
-                                    placeholder="Add a subtask..."
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            const input = e.target as HTMLInputElement
-                                            if (input.value.trim()) {
-                                                addSubtask(input.value.trim())
-                                                input.value = ''
-                                            }
-                                        }
-                                    }}
-                                    className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Comments Section */}
-                    <div className="pt-4 border-t border-border/30">
-                        {taskId && <Comments taskId={taskId} />}
-                    </div>
-                </div>
-
-                {/* Footer / Saving Indicator */}
-                <div className="px-6 py-3 border-t border-border/30 bg-surface-secondary/30 flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                        {isSaving ? (
-                            <div className="flex items-center space-x-2">
-                                <div className="w-2 h-2 bg-accent rounded-full animate-pulse" />
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-accent">Auto-saving...</span>
-                            </div>
-                        ) : (
-                            <div className="flex items-center space-x-2 text-text-muted">
-                                <Check className="w-3 h-3" />
-                                <span className="text-[10px] font-bold uppercase tracking-widest">Changes saved</span>
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>
