@@ -1,17 +1,16 @@
 import React, { useState } from 'react'
-import { MessageSquare, Send, Pencil, Trash2, X, Check } from 'lucide-react'
-import { format, formatDistanceToNow, differenceInDays } from 'date-fns'
+import { SlidersHorizontal, MessageSquare, Send, Pencil, Trash2, X, Check } from 'lucide-react'
+import { format } from 'date-fns'
 import { useComments } from '../hooks/useComments'
 import { Comment } from '../types'
 import { cn } from '../lib/cn'
 
 function formatCommentTime(dateStr: string): string {
     const date = new Date(dateStr)
-    const daysDiff = differenceInDays(new Date(), date)
-    if (daysDiff < 7) {
-        return formatDistanceToNow(date, { addSuffix: true })
-    }
-    return format(date, 'MMM d · p')
+    // Offset for GMT-3 is handled by browser local time if configured, 
+    // but the user specifically asked for GMT-3 representation.
+    // Using date-fns format to show exact date and time.
+    return format(date, 'dd/MM/yyyy HH:mm')
 }
 
 interface CommentsProps {
@@ -25,6 +24,21 @@ export const Comments: React.FC<CommentsProps> = ({ taskId }) => {
     const [editText, setEditText] = useState('')
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+    const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>(() => {
+        return (localStorage.getItem('ghost_comments_sort') as 'newest' | 'oldest') || 'oldest'
+    })
+
+    const toggleSortOrder = () => {
+        const nextOrder = sortOrder === 'newest' ? 'oldest' : 'newest'
+        setSortOrder(nextOrder)
+        localStorage.setItem('ghost_comments_sort', nextOrder)
+    }
+
+    const sortedComments = [...comments].sort((a, b) => {
+        const timeA = new Date(a.created_at).getTime()
+        const timeB = new Date(b.created_at).getTime()
+        return sortOrder === 'newest' ? timeB - timeA : timeA - timeB
+    })
 
     const handleAddComment = async (e?: React.FormEvent) => {
         e?.preventDefault()
@@ -57,10 +71,17 @@ export const Comments: React.FC<CommentsProps> = ({ taskId }) => {
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2 text-[10px] uppercase font-bold tracking-widest text-text-muted">
-                    <MessageSquare className="w-3 h-3" />
+                <div className="flex items-center space-x-2 text-[10px] uppercase font-black tracking-[0.2em] text-accent">
+                    <MessageSquare className="w-3.5 h-3.5" />
                     <span>Comments ({comments.length})</span>
                 </div>
+                <button
+                    onClick={toggleSortOrder}
+                    className="flex items-center space-x-1.5 px-2 py-1 rounded-lg hover:bg-surface-secondary text-[10px] font-black uppercase tracking-wider text-text-muted hover:text-text-primary transition-all"
+                >
+                    <SlidersHorizontal className="w-3 h-3" />
+                    <span>Sort: {sortOrder}</span>
+                </button>
             </div>
 
             <div className="space-y-4">
@@ -68,7 +89,7 @@ export const Comments: React.FC<CommentsProps> = ({ taskId }) => {
                     <p className="text-xs text-text-muted italic px-1">No comments yet. Start the conversation.</p>
                 )}
 
-                {comments.map((comment) => (
+                {sortedComments.map((comment) => (
                     <div key={comment.id} className="group relative space-y-1 animate-in fade-in duration-300">
                         <div className="flex items-start justify-between group-hover:bg-surface-secondary/50 -mx-2 px-2 py-1 rounded-lg transition-colors">
                             <div className="flex-1 min-w-0">
@@ -157,7 +178,7 @@ export const Comments: React.FC<CommentsProps> = ({ taskId }) => {
             {/* Add Comment */}
             <form onSubmit={handleAddComment} className="relative pt-4 border-t border-border/30">
                 <textarea
-                    placeholder="Write a comment... (Cmd+Enter to send)"
+                    placeholder="Write a comment... (Ctrl+Enter to send)"
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
                     onKeyDown={handleKeyDown}

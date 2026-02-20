@@ -220,7 +220,7 @@ function ProjectCard({
                 style={{ backgroundColor: project.color || '#7c6aff' }}
             />
 
-            <Link to={`/projects/${project.id}`} className="absolute inset-0 z-0 rounded-3xl" />
+            <Link to={`/projects/${project.short_id || project.id}`} className="absolute inset-0 z-0 rounded-3xl" />
 
             <div className="relative z-10 flex-1 flex flex-col space-y-7">
                 <div className="flex items-start justify-between min-h-[64px]">

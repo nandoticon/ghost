@@ -21,7 +21,10 @@ export function useTaskById(taskId: string | null) {
 
         setLoading(true)
         try {
-            const { data, error } = await supabase
+            // Determine if taskId is a UUID or a short_id
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-12a-f]{12}$/i.test(taskId)
+
+            let query = supabase
                 .from('tasks')
                 .select(`
                     *,
@@ -30,9 +33,15 @@ export function useTaskById(taskId: string | null) {
                         category:project_categories(id,name)
                     )
                 `)
-                .eq('id', taskId)
                 .eq('user_id', user.id)
-                .single()
+
+            if (isUuid) {
+                query = query.eq('id', taskId)
+            } else {
+                query = query.eq('short_id', taskId)
+            }
+
+            const { data, error } = await query.single()
 
             if (error) throw error
             setTask(data)
@@ -57,7 +66,7 @@ export function useTaskById(taskId: string | null) {
         const { error } = await supabase
             .from('tasks')
             .update({ ...updates, updated_at: new Date().toISOString() })
-            .eq('id', taskId)
+            .eq('id', task.id)
 
         if (error) {
             console.error('Error updating task:', error)

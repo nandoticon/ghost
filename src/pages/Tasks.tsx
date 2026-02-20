@@ -102,7 +102,7 @@ export default function Tasks() {
 
     const handleTaskClick = useCallback(() => { }, [])
 
-    const handleTitleClick = useCallback((t: Task) => setActiveTaskId(t.id), [setActiveTaskId])
+    const handleTitleClick = useCallback((t: Task) => setActiveTaskId(t.id, t.short_id), [setActiveTaskId])
 
     // Group by project logic for sticky headers
     const groupedTasks = useMemo(() => {

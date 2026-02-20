@@ -20,7 +20,7 @@ function highlightMatch(text: string, query: string): React.ReactNode {
 }
 
 interface SearchBarProps {
-    onTaskClick: (taskId: string) => void
+    onTaskClick: (taskId: string, shortId?: string | null) => void
 }
 
 export function SearchBar({ onTaskClick }: SearchBarProps) {
@@ -76,8 +76,8 @@ export function SearchBar({ onTaskClick }: SearchBarProps) {
         return () => clearTimeout(timer)
     }, [query])
 
-    const selectResult = (taskId: string) => {
-        onTaskClick(taskId)
+    const selectResult = (task: Task) => {
+        onTaskClick(task.id, task.short_id)
         setIsOpen(false)
         setQuery('')
         setSelectedIndex(-1)
@@ -105,7 +105,7 @@ export function SearchBar({ onTaskClick }: SearchBarProps) {
             case 'Enter':
                 e.preventDefault()
                 if (selectedIndex >= 0 && selectedIndex < results.length) {
-                    selectResult(results[selectedIndex].id)
+                    selectResult(results[selectedIndex])
                 }
                 break
             case 'Escape':
@@ -155,7 +155,7 @@ export function SearchBar({ onTaskClick }: SearchBarProps) {
                         results.map((task, index) => (
                             <button
                                 key={task.id}
-                                onClick={() => selectResult(task.id)}
+                                onClick={() => selectResult(task)}
                                 onMouseEnter={() => setSelectedIndex(index)}
                                 className={cn(
                                     "w-full text-left px-4 py-2 transition-colors",

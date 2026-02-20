@@ -83,7 +83,7 @@ export default function Today() {
 
     const handleTaskClick = useCallback(() => { }, [])
 
-    const handleTitleClick = useCallback((t: Task) => setActiveTaskId(t.id), [setActiveTaskId])
+    const handleTitleClick = useCallback((t: Task) => setActiveTaskId(t.id, t.short_id), [setActiveTaskId])
 
     return (
         <div className="w-full max-w-full mx-auto px-4 py-8 md:py-12 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">

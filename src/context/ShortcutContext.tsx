@@ -7,7 +7,7 @@ interface ShortcutContextType {
     isQuickCaptureOpen: boolean
     setQuickCaptureOpen: (open: boolean) => void
     activeTaskId: string | null
-    setActiveTaskId: (id: string | null) => void
+    setActiveTaskId: (id: string | null, shortId?: string | null) => void
 }
 
 const ShortcutContext = createContext<ShortcutContextType | undefined>(undefined)
@@ -28,12 +28,13 @@ export const ShortcutProvider: React.FC<{ children: ReactNode }> = ({ children }
     }, [])
 
     // Sync activeTaskId → URL
-    const setActiveTaskId = (id: string | null) => {
+    const setActiveTaskId = (id: string | null, shortId?: string | null) => {
         setActiveTaskIdState(id)
         setSearchParams(prev => {
             const next = new URLSearchParams(prev)
-            if (id) {
-                next.set('task', id)
+            const identifier = shortId || id
+            if (identifier) {
+                next.set('task', identifier)
             } else {
                 next.delete('task')
             }

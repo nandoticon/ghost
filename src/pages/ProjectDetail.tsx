@@ -31,17 +31,27 @@ export default function ProjectDetail() {
     const { projects, updateProject, deleteProject, loading: projectsLoading } = useProjects()
     const { categories } = useProjectCategories()
 
+    // Find current project
+    const project = useMemo(() => projects.find(p => p.short_id === id || p.id === id), [projects, id])
+    const projectCategoryName = useMemo(() => {
+        if (!project?.category_id) return null
+        return categories.find((category) => category.id === project.category_id)?.name || null
+    }, [categories, project?.category_id])
+
     // Filters for the task list
     const [filters, setFilters] = useState<TaskFilters>({
         status: 'all',
         location: null,
         energy: null,
         focus: null,
-        projectId: id, // Scoped to this project
+        projectId: project?.id || id, // Scoped to this project (UUID preferred)
         dateFilter: 'any'
     })
 
-    const { tasks, loading: tasksLoading, createTask, updateTask, completeTask, reorderTasks } = useTasks(filters)
+    const { tasks, loading: tasksLoading, createTask, updateTask, completeTask, reorderTasks } = useTasks({
+        ...filters,
+        projectId: project?.id || id // Fallback to id if project not yet loaded
+    })
     const { showToast } = useToast()
 
     // UI State
@@ -50,13 +60,6 @@ export default function ProjectDetail() {
     const [isTaskFormOpen, setIsTaskFormOpen] = useState(false)
     const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
     const [showMenu, setShowMenu] = useState(false)
-
-    // Find current project
-    const project = useMemo(() => projects.find(p => p.id === id), [projects, id])
-    const projectCategoryName = useMemo(() => {
-        if (!project?.category_id) return null
-        return categories.find((category) => category.id === project.category_id)?.name || null
-    }, [categories, project?.category_id])
 
     // Inline edit state
     const [editName, setEditName] = useState('')

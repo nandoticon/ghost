@@ -8,6 +8,7 @@ export interface Project {
     category?: Pick<ProjectCategory, 'id' | 'name'> | null;
     sort_order: number;
     archived: boolean;
+    short_id: string;
     created_at: string;
     updated_at: string;
 }
@@ -39,6 +40,7 @@ export interface Task {
     parent_task_id: string | null;
     sort_order: number;
     sort_order_today: number;
+    short_id: string;
     created_at: string;
     updated_at: string;
     project?: Project; // Included for joins
