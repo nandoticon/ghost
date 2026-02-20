@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Plus, Filter, LayoutList, AlertCircle, ChevronDown, Home, MapPin, Zap, ZapOff, Target, Layers, ChevronsUpDown } from 'lucide-react'
+import { Plus, Filter, LayoutList, LayoutDashboard, AlertCircle, ChevronDown, Home, MapPin, Zap, ZapOff, Target, Layers, ChevronsUpDown } from 'lucide-react'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { useTasks } from '../hooks/useTasks'
 import { useProjects } from '../hooks/useProjects'
 import { TaskItem } from '../components/TaskItem'
 import { TaskForm } from '../components/TaskForm'
+import { KanbanBoard } from '../components/KanbanBoard'
 import { EmptyState } from '../components/EmptyState'
 import { useToast } from '../components/Toast'
 import { Task, TaskFilters } from '../types'
@@ -35,6 +36,7 @@ export default function Tasks() {
 
     const [isFormOpen, setIsFormOpen] = useState(false)
     const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
+    const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list')
 
     // Persist filters
     useEffect(() => {
@@ -122,13 +124,37 @@ export default function Tasks() {
         <div className="w-full max-w-full mx-auto px-4 py-8 md:py-12 space-y-8 animate-in fade-in duration-500">
             <header className="flex items-center justify-between gap-4 flex-wrap">
                 <h1 className="text-4xl md:text-5xl xl:text-5xl 2xl:text-6xl font-black tracking-tightest title-gradient">Tasks</h1>
-                <button
-                    onClick={() => setIsFormOpen(true)}
-                    className="flex items-center space-x-2 px-5 py-2.5 2xl:px-6 2xl:py-3 bg-accent hover:bg-accent/90 text-white rounded-full text-sm 2xl:text-base font-bold transition-all active:scale-95"
-                >
-                    <Plus className="w-4 h-4 2xl:w-5 2xl:h-5" />
-                    <span>Add Task</span>
-                </button>
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center bg-surface-secondary/50 p-1 rounded-full border border-border/50">
+                        <button
+                            onClick={() => setViewMode('list')}
+                            className={cn(
+                                "p-2 rounded-full transition-all",
+                                viewMode === 'list' ? "bg-accent text-white shadow-sm" : "text-text-muted hover:text-text-primary hover:bg-surface"
+                            )}
+                            title="List View"
+                        >
+                            <LayoutList className="w-4 h-4 2xl:w-5 2xl:h-5" />
+                        </button>
+                        <button
+                            onClick={() => setViewMode('kanban')}
+                            className={cn(
+                                "p-2 rounded-full transition-all",
+                                viewMode === 'kanban' ? "bg-accent text-white shadow-sm" : "text-text-muted hover:text-text-primary hover:bg-surface"
+                            )}
+                            title="Kanban Board"
+                        >
+                            <LayoutDashboard className="w-4 h-4 2xl:w-5 2xl:h-5" />
+                        </button>
+                    </div>
+                    <button
+                        onClick={() => setIsFormOpen(true)}
+                        className="flex items-center space-x-2 px-5 py-2.5 2xl:px-6 2xl:py-3 bg-accent hover:bg-accent/90 text-white rounded-full text-sm 2xl:text-base font-bold transition-all active:scale-95"
+                    >
+                        <Plus className="w-4 h-4 2xl:w-5 2xl:h-5" />
+                        <span className="hidden sm:inline">Add Task</span>
+                    </button>
+                </div>
             </header>
 
             {/* Filter Bar */}
@@ -163,17 +189,17 @@ export default function Tasks() {
                 </div>
 
                 <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap no-scrollbar pb-1">
-                    <div className="min-w-[240px]">
+                    <div className="min-w-[320px]">
                         <FilterGroup
-                            options={['all', 'active', 'completed']}
+                            options={['all', 'todo', 'doing', 'waiting', 'done']}
                             value={filters.status ?? 'all'}
                             onChange={(val) => updateFilter({ status: val as TaskFilters['status'] })}
                         />
                     </div>
 
-                    <div className="min-w-[240px]">
+                    <div className="min-w-[280px]">
                         <FilterGroup
-                            options={['any', 'has_date', 'overdue']}
+                            options={['any', 'today', 'upcoming', 'overdue']}
                             value={filters.dateFilter ?? 'any'}
                             onChange={(val) => updateFilter({ dateFilter: val as TaskFilters['dateFilter'] })}
                         />
@@ -259,6 +285,11 @@ export default function Tasks() {
                         title={hasActiveFilters ? "No matching tasks" : "No tasks yet"}
                         description={hasActiveFilters ? "Try adjusting your filters to find what you're looking for." : "Be the master of your own destiny. Add a task to start."}
                     />
+                ) : viewMode === 'kanban' ? (
+                    <KanbanBoard onTaskClick={(id) => {
+                        const task = tasks.find(t => t.id === id)
+                        if (task) setActiveTaskId(task.id, task.short_id)
+                    }} />
                 ) : (
                     <DragDropContext onDragEnd={handleDragEnd}>
                         <Droppable droppableId="tasks-master-list" isDropDisabled={!isReorderingEnabled}>

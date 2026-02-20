@@ -246,7 +246,7 @@ function ProjectCard({
                                 e.preventDefault()
                                 onEdit(project)
                             }}
-                            className="p-2.5 2xl:p-3 hover:bg-surface-secondary rounded-2xl text-text-muted hover:text-text-primary transition-all active:scale-90"
+                            className="relative z-20 p-2.5 2xl:p-3 hover:bg-surface-secondary rounded-2xl text-text-muted hover:text-text-primary transition-all active:scale-90"
                         >
                             <MoreVertical className="w-5 h-5 2xl:w-6 2xl:h-6" />
                         </button>
@@ -320,7 +320,7 @@ function ProjectCard({
                             e.preventDefault()
                             onArchive()
                         }}
-                        className="mt-2 w-full py-2.5 2xl:py-3 text-xs 2xl:text-sm font-black uppercase tracking-widest text-accent border border-accent/20 rounded-2xl hover:bg-accent/10 transition-all font-heavy"
+                        className="relative z-20 mt-2 w-full py-2.5 2xl:py-3 text-xs 2xl:text-sm font-black uppercase tracking-widest text-accent border border-accent/20 rounded-2xl hover:bg-accent/10 transition-all font-heavy"
                     >
                         Unarchive
                     </button>

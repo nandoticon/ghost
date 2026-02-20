@@ -1,27 +1,32 @@
 import { useMemo, useState, useCallback } from 'react'
-import { Plus, ChevronDown, ChevronRight, LayoutList, CheckCircle2 } from 'lucide-react'
+import { Plus, ChevronDown, ChevronRight, LayoutList, CheckCircle2, Clock, Sparkles } from 'lucide-react'
 import { format } from 'date-fns'
+import confetti from 'canvas-confetti'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { useTasks } from '../hooks/useTasks'
 import { TaskItem } from '../components/TaskItem'
 import { TaskForm } from '../components/TaskForm'
+import { FocusMode } from '../components/FocusMode'
 import { EmptyState } from '../components/EmptyState'
 import { useToast } from '../components/Toast'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { Task } from '../types'
 import { useShortcutContext } from '../context/ShortcutContext'
 import { useAuth } from '../hooks/useAuth'
+import { SuggestTaskModal } from '../components/SuggestTaskModal'
 
 export default function Today() {
     const { user } = useAuth()
     const filters = useMemo(() => ({ today: true }), [])
-    const { tasks, loading, createTask, updateTask, completeTask, reorderTasks } = useTasks(filters)
+    const { tasks, loading, createTask, updateTask, completeTask, reorderTasks, snoozeTask } = useTasks(filters)
     const { showToast } = useToast()
     const { setActiveTaskId } = useShortcutContext()
 
     const [isFormOpen, setIsFormOpen] = useState(false)
+    const [isSuggestModalOpen, setIsSuggestModalOpen] = useState(false)
     const [isCompletedExpanded, setIsCompletedExpanded] = useState(false)
     const [showClearConfirm, setShowClearConfirm] = useState(false)
+    const [focusedTask, setFocusedTask] = useState<Task | null>(null)
 
     // Split tasks
     const remainingTasks = useMemo(() => tasks.filter(t => !t.completed), [tasks])
@@ -30,11 +35,27 @@ export default function Today() {
     const totalCount = tasks.length
     const completedCount = completedTasks.length
     const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
+
+    // Capacity Calculations
+    const dailyCapacityMins = 360 // 6 hours "deep/focused" capacity
+    const totalRemainingEffort = useMemo(() => remainingTasks.reduce((acc, t) => acc + (t.estimated_effort || 0), 0), [remainingTasks])
+    const totalCompletedEffort = useMemo(() => completedTasks.reduce((acc, t) => acc + (t.estimated_effort || 0), 0), [completedTasks])
+    const totalScheduledEffort = totalRemainingEffort + totalCompletedEffort
+    const capacityUsage = (totalScheduledEffort / dailyCapacityMins) * 100
+
+    const formatMins = (mins: number) => {
+        if (mins === 0) return '0m'
+        const h = Math.floor(mins / 60)
+        const m = mins % 60
+        return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`
+    }
+
     const displayName = useMemo(() => {
         const raw = user?.email?.split('@')[0] ?? 'there'
         const firstToken = raw.split(/[._-]/)[0] || 'there'
         return firstToken.charAt(0).toUpperCase() + firstToken.slice(1)
     }, [user?.email])
+
     const greeting = useMemo(() => {
         const hour = new Date().getHours()
         if (hour < 12) return `Good morning, ${displayName} ☀`
@@ -72,8 +93,21 @@ export default function Today() {
 
     const handleToggleComplete = useCallback(async (id: string, completed: boolean) => {
         const res = await completeTask(id, completed)
-        if (res.success && res.nextOccurrenceCreated) {
-            showToast(`Task completed · Next on ${res.nextOccurrenceDate ? format(new Date(res.nextOccurrenceDate), 'MMM d') : 'the future'}`, 'success')
+        if (res.success && completed) {
+            // Trigger celebration
+            confetti({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#FFD700', '#FFA500', '#FF4500', '#87CEEB', '#98FB98'],
+                zIndex: 1000
+            })
+
+            if (res.nextOccurrenceCreated) {
+                showToast(`Task completed · Next on ${res.nextOccurrenceDate ? format(new Date(res.nextOccurrenceDate), 'MMM d') : 'the future'}`, 'success')
+            } else {
+                showToast("Task crushed! 🏆", "success")
+            }
         }
     }, [completeTask, showToast])
 
@@ -82,7 +116,6 @@ export default function Today() {
     }, [updateTask])
 
     const handleTaskClick = useCallback(() => { }, [])
-
     const handleTitleClick = useCallback((t: Task) => setActiveTaskId(t.id, t.short_id), [setActiveTaskId])
 
     return (
@@ -98,16 +131,25 @@ export default function Today() {
                         {format(new Date(), 'EEEE, MMMM do')}
                     </p>
                 </div>
-                <button
-                    onClick={() => setIsFormOpen(true)}
-                    className="hidden md:flex items-center space-x-2 px-5 py-2.5 2xl:px-6 2xl:py-3 bg-accent hover:bg-accent/90 text-white rounded-full text-sm 2xl:text-base font-bold transition-all active:scale-95 shadow-lg shadow-accent/20"
-                >
-                    <Plus className="w-4 h-4 2xl:w-5 2xl:h-5" />
-                    <span>Add Task</span>
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => setIsSuggestModalOpen(true)}
+                        className="flex items-center space-x-2 px-5 py-2.5 2xl:px-6 2xl:py-3 bg-surface-secondary hover:bg-surface-secondary/80 border border-border/50 text-white rounded-full text-sm 2xl:text-base font-bold transition-all active:scale-95 shadow-lg shadow-black/10"
+                    >
+                        <Sparkles className="w-4 h-4 2xl:w-5 2xl:h-5 text-accent-warm" />
+                        <span className="hidden md:inline">Magic Suggestion</span>
+                    </button>
+                    <button
+                        onClick={() => setIsFormOpen(true)}
+                        className="hidden md:flex items-center space-x-2 px-5 py-2.5 2xl:px-6 2xl:py-3 bg-accent hover:bg-accent/90 text-white rounded-full text-sm 2xl:text-base font-bold transition-all active:scale-95 shadow-lg shadow-accent/20"
+                    >
+                        <Plus className="w-4 h-4 2xl:w-5 2xl:h-5" />
+                        <span>Add Task</span>
+                    </button>
+                </div>
             </header>
 
-            {/* Progress — always shown */}
+            {/* Progress/Capacity Bar */}
             <div className="space-y-3 bg-surface-secondary/25 border border-border/40 rounded-2xl p-4 md:p-5">
                 <div className="flex items-center justify-between text-xs 2xl:text-sm uppercase font-bold tracking-widest text-text-muted">
                     <span className="flex items-center gap-2">
@@ -137,13 +179,50 @@ export default function Today() {
                                 : 'linear-gradient(90deg, var(--color-accent), #a78bfa)'
                         }}
                     />
-                    {/* Shimmer overlay */}
                     {progress > 0 && progress < 100 && (
                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
                     )}
                 </div>
-            </div>
 
+                {/* Capacity Visualization */}
+                {totalScheduledEffort > 0 && (
+                    <div className="pt-4 mt-4 border-t border-border/20 space-y-3">
+                        <div className="flex items-center justify-between text-[10px] 2xl:text-xs uppercase font-bold tracking-widest text-text-muted">
+                            <span className="flex items-center gap-2">
+                                <Clock className="w-3 h-3 text-accent-warm" />
+                                Time Budget
+                            </span>
+                            <span className={capacityUsage > 100 ? 'text-red-400 font-black animate-pulse' : 'text-text-primary'}>
+                                {formatMins(totalScheduledEffort)} / {formatMins(dailyCapacityMins)}
+                            </span>
+                        </div>
+                        <div className="relative h-2 w-full bg-surface-secondary/50 rounded-full overflow-hidden flex">
+                            {/* Completed Effort */}
+                            <div
+                                className="h-full bg-accent-warm/40 transition-all duration-1000"
+                                style={{ width: `${Math.min(100, (totalCompletedEffort / dailyCapacityMins) * 100)}%` }}
+                            />
+                            {/* Remaining Effort */}
+                            <div
+                                className="h-full bg-accent/30 transition-all duration-1000 border-l border-white/10"
+                                style={{ width: `${Math.min(100 - (totalCompletedEffort / dailyCapacityMins) * 100, (totalRemainingEffort / dailyCapacityMins) * 100)}%` }}
+                            />
+                            {/* Over-capacity indicator */}
+                            {capacityUsage > 100 && (
+                                <div className="absolute top-0 right-0 bottom-0 w-1 bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.8)]" />
+                            )}
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] text-text-muted italic">
+                            {capacityUsage > 100 ? (
+                                <span className="text-red-400 font-medium">Over-capacity by {formatMins(totalScheduledEffort - dailyCapacityMins)}</span>
+                            ) : (
+                                <span>{formatMins(dailyCapacityMins - totalScheduledEffort)} remaining in your focus budget</span>
+                            )}
+                            <span className="opacity-60">Goal: 6h / day</span>
+                        </div>
+                    </div>
+                )}
+            </div>
 
             {/* Task Sections */}
             <div className="space-y-12">
@@ -173,6 +252,8 @@ export default function Today() {
                                                             task={task}
                                                             onToggleComplete={handleToggleComplete}
                                                             onToggleToday={handleToggleToday}
+                                                            onSnooze={snoozeTask}
+                                                            onFocus={setFocusedTask}
                                                             onClick={handleTaskClick}
                                                             onClickTitle={handleTitleClick}
                                                             dragHandleProps={provided.dragHandleProps}
@@ -210,9 +291,16 @@ export default function Today() {
                                 className="flex items-center space-x-2 text-text-muted hover:text-text-primary transition-colors group"
                             >
                                 {isCompletedExpanded ? <ChevronDown className="w-4 h-4 2xl:w-5 2xl:h-5" /> : <ChevronRight className="w-4 h-4 2xl:w-5 2xl:h-5" />}
-                                <span className="text-xs 2xl:text-sm font-bold uppercase tracking-widest">
-                                    Completed · {completedCount}
-                                </span>
+                                <div className="flex flex-col items-start">
+                                    <span className="text-xs 2xl:text-sm font-black uppercase tracking-widest text-accent-warm">
+                                        Daily Wins · {completedCount}
+                                    </span>
+                                    {isCompletedExpanded && (
+                                        <span className="text-[10px] 2xl:text-xs font-bold text-text-muted/60 lowercase italic">
+                                            {completedCount === 0 ? "Let's get some wins!" : `${completedCount} tasks crushed today! 🏆`}
+                                        </span>
+                                    )}
+                                </div>
                             </button>
 
                             {isCompletedExpanded && (
@@ -233,6 +321,7 @@ export default function Today() {
                                         task={task}
                                         onToggleComplete={handleToggleComplete}
                                         onToggleToday={handleToggleToday}
+                                        onFocus={setFocusedTask}
                                         onClick={handleTaskClick}
                                         onClickTitle={handleTitleClick}
                                         hideDragHandle
@@ -255,6 +344,7 @@ export default function Today() {
             {/* Form Modal (Create only) */}
             <TaskForm
                 isOpen={isFormOpen}
+                defaultToday={true}
                 onSave={handleSave}
                 onCancel={() => setIsFormOpen(false)}
             />
@@ -270,6 +360,21 @@ export default function Today() {
                         onClick: clearCompleted
                     }]}
                     onCancel={() => setShowClearConfirm(false)}
+                />
+            )}
+
+            {/* Suggest Task Modal */}
+            <SuggestTaskModal
+                isOpen={isSuggestModalOpen}
+                onClose={() => setIsSuggestModalOpen(false)}
+            />
+
+            {/* Ambient Focus Mode Overlay */}
+            {focusedTask && (
+                <FocusMode
+                    task={focusedTask}
+                    onClose={() => setFocusedTask(null)}
+                    onComplete={handleToggleComplete}
                 />
             )}
         </div>

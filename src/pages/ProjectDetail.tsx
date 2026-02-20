@@ -292,14 +292,14 @@ export default function ProjectDetail() {
                             label="All"
                         />
                         <FilterButton
-                            active={filters.status === 'active'}
-                            onClick={() => setFilters(f => ({ ...f, status: 'active' }))}
-                            label="Active"
+                            active={filters.status === 'todo'}
+                            onClick={() => setFilters(f => ({ ...f, status: 'todo' }))}
+                            label="To-Do"
                         />
                         <FilterButton
-                            active={filters.status === 'completed'}
-                            onClick={() => setFilters(f => ({ ...f, status: 'completed' }))}
-                            label="Completed"
+                            active={filters.status === 'done'}
+                            onClick={() => setFilters(f => ({ ...f, status: 'done' }))}
+                            label="Done"
                         />
                         <div className="w-px h-6 bg-border mx-1" />
                         <FilterButton

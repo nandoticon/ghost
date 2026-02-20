@@ -1,38 +1,22 @@
 import { useState, useEffect, useRef, FC } from 'react'
 import { supabase } from '../lib/supabase'
 import {
-    X,
-    MoreVertical,
-    Check,
-    Calendar,
-    Home,
-    MapPin,
-    Zap,
-    ZapOff,
-    Target,
-    Layers,
-    Star,
-    Trash2,
-    Copy,
-    ChevronDown,
-    Clock,
-    Plus,
-    CheckCircle2,
-    Circle,
-    GripVertical,
-    RefreshCw,
-    FolderKanban,
-    SlidersHorizontal,
-    NotebookPen
+    X, MoreVertical, Check, Calendar, Home, MapPin, Zap, ZapOff,
+    Target, Layers, Star, Trash2, Copy, ChevronDown, Plus,
+    CheckCircle2, Circle, Clock, GripVertical, RefreshCw, FolderKanban,
+    SlidersHorizontal, Search, Sparkles, Loader2
 } from 'lucide-react'
 import { Task } from '../types'
 import { useTasks } from '../hooks/useTasks'
 import { useTaskById } from '../hooks/useTaskById'
 import { useProjects } from '../hooks/useProjects'
 import { useSubtasks } from '../hooks/useSubtasks'
+import { useComments } from '../hooks/useComments'
 import { useToast } from './Toast'
 import { ConfirmModal } from './ConfirmModal'
 import { Comments } from './Comments'
+import { DateTimePicker } from './DateTimePicker'
+import { StatusMenu, StatusOptions } from './StatusMenu'
 import { cn } from '../lib/cn'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 
@@ -42,15 +26,14 @@ interface TaskDetailProps {
 }
 
 export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
-    // Direct single-task query — avoids loading all tasks just to find one
     const { task, updateTaskField } = useTaskById(taskId)
-    // Keep useTasks only for actions that affect the task list (delete, complete, create)
     const { deleteTask, completeTask, createTask } = useTasks()
     const { projects } = useProjects()
-    const { subtasks, addSubtask, updateSubtask, deleteSubtask, reorderSubtasks } = useSubtasks(taskId || undefined)
+    const { subtasks, addSubtask, updateSubtask, deleteSubtask, reorderSubtasks } = useSubtasks(task?.id)
+    const { comments } = useComments(task?.id)
     const { showToast } = useToast()
 
-    // Local state for inline editing
+    // Local state
     const [title, setTitle] = useState('')
     const [notes, setNotes] = useState('')
     const [projectId, setProjectId] = useState<string | null>(null)
@@ -63,14 +46,23 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
     const [recurrence, setRecurrence] = useState<'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly' | null>(null)
     const [recurrenceEndAt, setRecurrenceEndAt] = useState('')
     const [completed, setCompleted] = useState(false)
-    const [activeTab, setActiveTab] = useState<'overview' | 'subtasks'>('overview');
+    const [status, setStatus] = useState<Task['status']>('todo')
+    const [estimatedEffort, setEstimatedEffort] = useState<number | null>(0)
 
+    // UI state
     const [showMenu, setShowMenu] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [completionPulse, setCompletionPulse] = useState(false)
+    const [isGeneratingSubtasks, setIsGeneratingSubtasks] = useState(false)
 
-    // Handle initialization and external updates
+    // Custom Popover states
+    const [showProjectPicker, setShowProjectPicker] = useState(false)
+    const [showRecurrencePicker, setShowRecurrencePicker] = useState(false)
+    const [showStatusPicker, setShowStatusPicker] = useState(false)
+    const [projectSearch, setProjectSearch] = useState('')
+    const statusPickerRef = useRef<HTMLButtonElement>(null)
+
     useEffect(() => {
         if (task) {
             setTitle(task.title)
@@ -85,24 +77,33 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
             setRecurrence(task.recurrence)
             setRecurrenceEndAt(task.recurrence_end_at || '')
             setCompleted(task.completed)
+            setStatus(task.status)
+            setEstimatedEffort(task.estimated_effort || 0)
         }
     }, [task])
 
-    // Auto-save logic with debounce
     const timerRef = useRef<number | null>(null)
+    const pendingUpdatesRef = useRef<Partial<Task>>({})
 
     const triggerSave = (updates: Partial<Task>) => {
         if (!taskId) return
+
+        // Accumulate updates so we don't clobber rapid changes
+        pendingUpdatesRef.current = { ...pendingUpdatesRef.current, ...updates }
+
         setIsSaving(true)
         if (timerRef.current) clearTimeout(timerRef.current)
 
         timerRef.current = setTimeout(async () => {
-            await updateTaskField(updates)
+            const finalUpdates = { ...pendingUpdatesRef.current }
+            // Clear the accumulator before the async call to allow new updates to start fresh
+            pendingUpdatesRef.current = {}
+
+            await updateTaskField(finalUpdates)
             setIsSaving(false)
-        }, 500)
+        }, 600)
     }
 
-    // Explicit effect handlers for each field to avoid bulk-overwrite race conditions
     const handleTitleChange = (val: string) => {
         setTitle(val)
         triggerSave({ title: val.trim() || 'Untitled Task' })
@@ -117,36 +118,121 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
         triggerSave({ [field]: val })
     }
 
+    const generateSubtasks = async () => {
+        if (!title.trim() || !taskId) return
+
+        setIsGeneratingSubtasks(true)
+        try {
+            const context = [
+                `Status: ${status}`,
+                `Recommended energy: ${energy || 'Any'}`,
+                `Focus mode: ${focus || 'Standard'}`,
+                `Location context: ${location || 'Anywhere'}`,
+                `Marked as today's sprint: ${today ? 'Yes' : 'No'}`,
+                startAt ? `Start date: ${startAt}` : null,
+                endAt ? `Due date: ${endAt}` : null,
+                subtasks.length > 0 ? `Current subtasks (DO NOT DUPLICATE THESE): ${subtasks.map(s => s.title).join(', ')}` : null,
+                comments.length > 0 ? `Recent discussion/context: ${comments.slice(-5).map(c => c.body).join(' | ')}` : null
+            ].filter(Boolean).join('\n')
+
+            const prompt = `You are an ADHD coach that breaks down overwhelming tasks into bite-sized, incredibly actionable, and satisfyingly simple steps. 
+            
+TASK CONTEXT:
+${context}
+
+THE MAIN TASK IS: "${title}"
+USER'S ADDITIONAL NOTES: "${notes || 'No additional notes'}"
+
+GOAL:
+Generate 3-5 very specific, action-oriented subtasks for this. 
+CRITICAL RULES:
+1. They MUST be something I can do immediately without much thought.
+2. Don't make them too broad.
+3. DO NOT repeat any existing subtasks listed above.
+4. Consider the user's energy, focus, and recent comments to make the steps tailored.
+
+Format your response as a simple list separated by newlines, with NO formatting, bullets, or numbers. Just the raw text of the subtasks. For example:
+Find the folder
+Open the first document
+Write the title
+Click save`
+
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=AIzaSyA6CM4aSu-AMNgPbs3I8A_ljkX1Th4O8MU`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{ text: prompt }]
+                    }]
+                })
+            })
+
+            const data = await response.json()
+            if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+                const subtaskLines = data.candidates[0].content.parts[0].text
+                    .split('\n')
+                    .map((s: string) => s.trim().replace(/^[-*•]/, '').trim())
+                    .filter((s: string) => s.length > 0)
+
+                for (const st of subtaskLines) {
+                    await addSubtask(st)
+                }
+                showToast("Magic Breakdown complete! 🪄", "success")
+            } else {
+                showToast("Could not generate subtasks.", "error")
+            }
+        } catch (error) {
+            console.error(error)
+            showToast("Failed to connect to AI.", "error")
+        } finally {
+            setIsGeneratingSubtasks(false)
+        }
+    }
+
     // Keyboard Shortcuts
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose()
+            if (e.key === 'Escape') {
+                if (showProjectPicker) setShowProjectPicker(false)
+                else if (showRecurrencePicker) setShowRecurrencePicker(false)
+                else if (showStatusPicker) setShowStatusPicker(false)
+                else if (showMenu) setShowMenu(false)
+                else onClose()
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault()
+                if (taskId) {
+                    completeTask(taskId, !completed)
+                    onClose()
+                }
+            }
         }
         window.addEventListener('keydown', handleKeyDown)
         return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [onClose])
+    }, [onClose, showProjectPicker, showRecurrencePicker, showStatusPicker, showMenu, taskId, completed, completeTask])
 
     if (!taskId) return null
 
+    const filteredProjects = projects.filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase()))
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 lg:p-10 overflow-hidden">
+        <div className="fixed inset-0 z-50 flex justify-end overflow-hidden">
             {/* Backdrop */}
             <div
                 className="absolute inset-0 bg-background/60 backdrop-blur-sm animate-in fade-in duration-300"
                 onClick={onClose}
             />
 
-            {/* Panel */}
+            {/* Slide-over Panel */}
             <div
                 className={cn(
-                    "relative flex flex-col bg-surface border border-border h-full max-h-[90vh] w-full max-w-5xl shadow-2xl overflow-hidden",
-                    "animate-in zoom-in-95 duration-200",
-                    "rounded-[2rem] md:rounded-3xl"
+                    "relative flex flex-col bg-surface border-l border-border h-full w-full max-w-[900px] shadow-2xl overflow-hidden",
+                    "animate-in slide-in-from-right duration-300"
                 )}
             >
-                {/* Header (Full Width) */}
-                <header className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-surface/85 backdrop-blur-xl z-20 shrink-0">
-                    <div className="flex items-center space-x-3 flex-1 min-w-0">
+                {/* Header */}
+                <header className="flex items-center justify-between px-6 py-4 border-b border-transparent z-20 shrink-0">
+                    <div className="flex items-center space-x-3">
                         <button
                             onClick={async () => {
                                 if (!taskId) return
@@ -163,38 +249,45 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                 }
                             }}
                             className={cn(
-                                "relative w-7 h-7 rounded-xl border-2 flex items-center justify-center transition-all shrink-0",
-                                completed ? "bg-accent-warm border-accent-warm text-white" : "border-border hover:border-accent-warm"
+                                "relative w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all shrink-0",
+                                completed ? "bg-accent-warm border-accent-warm text-white" : "border-text-muted/40 hover:border-accent-warm"
                             )}
+                            title="Complete Task (Ctrl+Enter)"
                         >
                             {completionPulse && (
                                 <span
-                                    className="absolute inset-0 rounded-xl border-2 border-accent-warm/50 pointer-events-none"
+                                    className="absolute inset-0 rounded-md border-2 border-accent-warm/50 pointer-events-none"
                                     style={{ animation: 'ring-pulse 0.45s ease-out forwards' }}
                                 />
                             )}
-                            {completed && <Check className="w-4 h-4" />}
+                            {completed && <Check className="w-3.5 h-3.5" />}
                         </button>
-                        <input
-                            value={title}
-                            onChange={(e) => handleTitleChange(e.target.value)}
-                            placeholder="Task title"
-                            className="bg-transparent text-xl md:text-2xl font-bold text-text-primary outline-none w-full truncate focus:text-accent transition-colors"
-                        />
+                        <span className="text-xs font-mono text-text-muted/50 tracking-wider">
+                            {task?.short_id || taskId.substring(0, 8)}
+                        </span>
+
+                        {/* Saving Indicator */}
+                        <div className="ml-4 flex items-center h-4">
+                            {isSaving ? (
+                                <div className="w-1.5 h-1.5 bg-accent rounded-full animate-pulse" title="Saving..." />
+                            ) : (
+                                <div title="Saved"><Check className="w-3.5 h-3.5 text-text-muted/30" /></div>
+                            )}
+                        </div>
                     </div>
 
-                    <div className="flex items-center space-x-2 ml-4">
+                    <div className="flex items-center space-x-1">
                         <div className="relative">
                             <button
                                 onClick={() => setShowMenu(!showMenu)}
-                                className="p-2 hover:bg-surface-secondary rounded-xl text-text-muted hover:text-text-primary transition-colors"
+                                className="p-2 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors"
                             >
-                                <MoreVertical className="w-5 h-5" />
+                                <MoreVertical className="w-4 h-4" />
                             </button>
                             {showMenu && (
                                 <>
                                     <div className="fixed inset-0 z-[60]" onClick={() => setShowMenu(false)} />
-                                    <div className="absolute right-0 mt-2 w-48 bg-surface border border-border rounded-xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] z-[70] py-2 animate-in zoom-in-95 duration-200">
+                                    <div className="absolute right-0 mt-1 w-48 bg-surface border border-border rounded-xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] z-[70] py-1 animate-in fade-in zoom-in-95 duration-200">
                                         <button
                                             onClick={async () => {
                                                 if (task) {
@@ -202,9 +295,9 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                                     setShowMenu(false)
                                                 }
                                             }}
-                                            className="w-full flex items-center space-x-3 px-4 py-2.5 text-sm text-text-primary hover:bg-surface-secondary transition-colors"
+                                            className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-text-primary hover:bg-surface-secondary transition-colors"
                                         >
-                                            <Copy className="w-4 h-4" />
+                                            <Copy className="w-4 h-4 text-text-muted" />
                                             <span>Duplicate Task</span>
                                         </button>
                                         <div className="h-px bg-border/50 my-1" />
@@ -213,7 +306,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                                 setShowMenu(false)
                                                 setShowDeleteConfirm(true)
                                             }}
-                                            className="w-full flex items-center space-x-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-500/10 transition-colors"
+                                            className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-red-500 hover:bg-red-500/10 transition-colors"
                                         >
                                             <Trash2 className="w-4 h-4" />
                                             <span>Delete Task</span>
@@ -222,330 +315,447 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                 </>
                             )}
                         </div>
-                        <button onClick={onClose} className="p-2 hover:bg-surface-secondary rounded-xl text-text-muted hover:text-text-primary transition-colors">
-                            <X className="w-5 h-5" />
+                        <button onClick={onClose} className="p-2 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors">
+                            <X className="w-4 h-4" />
                         </button>
                     </div>
                 </header>
 
-                {/* Content Area */}
-                <div className="flex flex-1 flex-col overflow-hidden bg-surface">
-                    {/* Tab Bar (Full Width) */}
-                    <div className="flex items-center space-x-8 px-8 pt-4 border-b border-border/50 bg-surface/85 backdrop-blur z-20 shrink-0">
-                        {[
-                            { id: 'overview', label: 'Overview', icon: NotebookPen },
-                            { id: 'subtasks', label: 'Subtasks', icon: Layers, count: subtasks.length }
-                        ].map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id as 'overview' | 'subtasks')}
-                                className={cn(
-                                    "flex items-center space-x-2 pb-4 border-b-2 transition-all relative",
-                                    activeTab === tab.id
-                                        ? "border-accent text-accent font-bold"
-                                        : "border-transparent text-text-muted hover:text-text-primary hover:border-border/50"
-                                )}
-                            >
-                                <tab.icon className="w-4 h-4" />
-                                <span className="text-sm tracking-tight">{tab.label}</span>
-                                {tab.count !== undefined && tab.count > 0 && (
-                                    <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-accent/10 text-accent text-[10px] font-black">
-                                        {tab.count}
+                {/* Content Area - 2 Columns */}
+                <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
+
+                    {/* LEFTSIDE: Main Content */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-10 space-y-10">
+                        {/* Title & Description */}
+                        <div className="space-y-6">
+                            <textarea
+                                value={title}
+                                onChange={(e) => handleTitleChange(e.target.value)}
+                                placeholder="Task title"
+                                rows={1}
+                                className="bg-transparent text-3xl md:text-5xl font-black text-text-primary outline-none w-full resize-none focus:text-accent transition-colors py-2"
+                                onInput={(e) => {
+                                    const target = e.target as HTMLTextAreaElement;
+                                    target.style.height = 'auto';
+                                    target.style.height = target.scrollHeight + 'px';
+                                }}
+                            />
+
+                            <textarea
+                                value={notes}
+                                onChange={(e) => handleNotesChange(e.target.value)}
+                                placeholder="Add description, notes, or links..."
+                                className="w-full bg-transparent p-0 text-base md:text-lg text-text-primary placeholder:text-text-muted/50 focus:outline-none resize-none min-h-[100px] transition-all"
+                                onInput={(e) => {
+                                    const target = e.target as HTMLTextAreaElement;
+                                    target.style.height = 'auto';
+                                    target.style.height = target.scrollHeight + 'px';
+                                }}
+                            />
+                        </div>
+
+                        {/* Subtasks (Inline) */}
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+                                    <Layers className="w-4 h-4 text-accent" />
+                                    Subtasks
+                                </h3>
+                                {subtasks.length > 0 && (
+                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-accent/10 text-accent">
+                                        {subtasks.filter(s => s.completed).length}/{subtasks.length}
                                     </span>
                                 )}
-                            </button>
-                        ))}
-                    </div>
+                            </div>
 
-                    {/* Scrollable Content */}
-                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8">
-                        {activeTab === 'overview' && (
-                            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                {/* Description Header-like Section */}
-                                <div className="space-y-4">
-                                    <div className="flex items-center gap-2 text-text-muted">
-                                        <NotebookPen className="w-4 h-4" />
-                                        <h3 className="text-[10px] uppercase font-black tracking-[0.2em]">Description</h3>
-                                    </div>
-                                    <textarea
-                                        value={notes}
-                                        onChange={(e) => handleNotesChange(e.target.value)}
-                                        onKeyDown={(e) => (e.metaKey || e.ctrlKey) && e.key === 'Enter' && (e.target as HTMLTextAreaElement).blur()}
-                                        placeholder="Capture details, links, blockers, and the next concrete step for this task."
-                                        className="w-full bg-surface-secondary/30 border border-border/50 rounded-3xl p-6 text-sm md:text-base text-text-primary placeholder:text-text-muted/60 focus:outline-none focus:border-accent/50 focus:bg-surface-secondary/50 resize-none min-h-[160px] transition-all shadow-inner"
+                            <DragDropContext onDragEnd={(result) => {
+                                if (!result.destination) return
+                                const items = Array.from(subtasks)
+                                const [reorderedItem] = items.splice(result.source.index, 1)
+                                items.splice(result.destination.index, 0, reorderedItem)
+                                reorderSubtasks(items.map(i => i.id))
+                            }}>
+                                <Droppable droppableId="subtasks-list">
+                                    {(provided) => (
+                                        <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-1">
+                                            {subtasks.map((subtask, index) => (
+                                                <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
+                                                    {(provided, snapshot) => (
+                                                        <div
+                                                            ref={provided.innerRef}
+                                                            {...provided.draggableProps}
+                                                            className={cn(
+                                                                "flex items-center space-x-3 py-1.5 group/sub transition-all",
+                                                                snapshot.isDragging ? "bg-surface-secondary shadow-xl rounded-lg px-2" : ""
+                                                            )}
+                                                        >
+                                                            <div {...provided.dragHandleProps} className="text-text-muted opacity-0 group-hover/sub:opacity-40 transition-opacity cursor-grab hover:text-text-primary">
+                                                                <GripVertical className="w-3.5 h-3.5" />
+                                                            </div>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    updateSubtask(subtask.id, { completed: !subtask.completed })
+                                                                }}
+                                                                className="relative group transition-transform active:scale-90"
+                                                            >
+                                                                {subtask.completed ? <CheckCircle2 className="w-4 h-4 text-accent" /> : <Circle className="w-4 h-4 text-text-muted group-hover:text-accent" />}
+                                                            </button>
+                                                            <input
+                                                                type="text"
+                                                                value={subtask.title}
+                                                                onChange={(e) => updateSubtask(subtask.id, { title: e.target.value })}
+                                                                className={cn(
+                                                                    "flex-1 bg-transparent text-sm text-text-primary outline-none focus:border-b focus:border-border/50 transition-all",
+                                                                    subtask.completed && "line-through text-text-muted/60"
+                                                                )}
+                                                            />
+                                                            <button
+                                                                onClick={() => deleteSubtask(subtask.id)}
+                                                                className="p-1.5 text-text-muted hover:text-red-400 opacity-0 group-hover/sub:opacity-100 transition-all hover:bg-red-400/10 rounded-md"
+                                                            >
+                                                                <X className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </Draggable>
+                                            ))}
+                                            {provided.placeholder}
+                                        </div>
+                                    )}
+                                </Droppable>
+                            </DragDropContext>
+
+                            <div className="flex items-center space-x-3 py-1 pl-6 group">
+                                <Plus className="w-4 h-4 text-accent" />
+                                <div className="flex-1 flex items-center pr-2">
+                                    <input
+                                        type="text"
+                                        placeholder="Add subtask..."
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                const input = e.target as HTMLInputElement
+                                                if (input.value.trim()) {
+                                                    addSubtask(input.value.trim())
+                                                    input.value = ''
+                                                }
+                                            }
+                                        }}
+                                        className="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted/50 outline-none"
                                     />
+                                    <button
+                                        onClick={generateSubtasks}
+                                        disabled={isGeneratingSubtasks}
+                                        className={cn(
+                                            "items-center gap-1.5 px-3 py-1 bg-surface-secondary text-text-primary hover:text-white hover:bg-surface-secondary/80 border border-border/50 rounded-full text-[11px] font-bold tracking-wider uppercase transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-95",
+                                            isGeneratingSubtasks
+                                                ? "flex"
+                                                : subtasks.length === 0
+                                                    ? "flex md:hidden md:group-hover:flex"
+                                                    : "hidden group-hover:flex"
+                                        )}
+                                    >
+                                        {isGeneratingSubtasks ? (
+                                            <Loader2 className="w-3 h-3 animate-spin" />
+                                        ) : (
+                                            <Sparkles className="w-3 h-3 text-accent-warm" />
+                                        )}
+                                        {isGeneratingSubtasks ? 'Generating...' : 'Magic Breakdown'}
+                                    </button>
                                 </div>
+                            </div>
+                        </div>
 
-                                {/* Properties Responsive Grid */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {/* Context Pills */}
-                                    <SectionCard icon={<SlidersHorizontal className="w-4 h-4 text-accent" />} title="Context">
-                                        <div className="space-y-5">
-                                            <PillGroup
-                                                label="Location"
-                                                value={location}
-                                                options={[
-                                                    { value: 'home', icon: <Home className="w-3 h-3" />, label: 'Home' },
-                                                    { value: 'outside', icon: <MapPin className="w-3 h-3" />, label: 'Outside' }
-                                                ]}
-                                                onChange={(val) => handleFieldUpdate('location', val)}
-                                            />
-                                            <PillGroup
-                                                label="Energy"
-                                                value={energy}
-                                                options={[
-                                                    { value: 'high', icon: <Zap className="w-3 h-3" />, label: 'High' },
-                                                    { value: 'low', icon: <ZapOff className="w-3 h-3" />, label: 'Low' }
-                                                ]}
-                                                onChange={(val) => handleFieldUpdate('energy', val)}
-                                            />
-                                            <PillGroup
-                                                label="Focus"
-                                                value={focus}
-                                                options={[
-                                                    { value: 'immersion', icon: <Target className="w-3 h-3" />, label: 'Immersion' },
-                                                    { value: 'process', icon: <Layers className="w-3 h-3" />, label: 'Process' }
-                                                ]}
-                                                onChange={(val) => handleFieldUpdate('focus', val)}
-                                            />
-                                        </div>
-                                    </SectionCard>
-
-                                    {/* Project & Repeat */}
-                                    <div className="space-y-6">
-                                        <SectionCard icon={<FolderKanban className="w-4 h-4 text-accent" />} title="Project">
-                                            <div className="relative group">
-                                                <select
-                                                    value={projectId || ''}
-                                                    onChange={(e) => {
-                                                        const nextProjectId = e.target.value || null
-                                                        setProjectId(nextProjectId)
-                                                        handleFieldUpdate('project_id', nextProjectId)
-                                                    }}
-                                                    className="w-full bg-surface/50 border border-border/70 rounded-xl px-4 py-3 text-sm text-text-primary appearance-none focus:border-accent/50 outline-none transition-all pr-10 hover:bg-surface"
-                                                >
-                                                    <option value="">No Project</option>
-                                                    {projects.map(p => (
-                                                        <option key={p.id} value={p.id}>{p.name}</option>
-                                                    ))}
-                                                </select>
-                                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none group-hover:text-text-primary transition-colors" />
-                                            </div>
-                                        </SectionCard>
-
-                                        <SectionCard icon={<RefreshCw className="w-4 h-4 text-accent" />} title="Repeat">
-                                            <div className="space-y-4">
-                                                <div className="relative group">
-                                                    <select
-                                                        value={recurrence || ''}
-                                                        onChange={(e) => {
-                                                            const val = (e.target.value || null) as 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly' | null
-                                                            setRecurrence(val)
-                                                            handleFieldUpdate('recurrence', val)
-                                                        }}
-                                                        className="w-full bg-surface/50 border border-border/70 rounded-xl px-4 py-3 text-sm text-text-primary appearance-none focus:border-accent/50 outline-none transition-all pr-10 hover:bg-surface"
-                                                    >
-                                                        <option value="">No repeat</option>
-                                                        <option value="daily">Daily</option>
-                                                        <option value="weekdays">Weekdays</option>
-                                                        <option value="weekly">Weekly</option>
-                                                        <option value="monthly">Monthly</option>
-                                                        <option value="yearly">Yearly</option>
-                                                    </select>
-                                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none group-hover:text-text-primary transition-colors" />
-                                                </div>
-
-                                                {recurrence && (
-                                                    <div className="relative group animate-in fade-in slide-in-from-top-2 duration-300">
-                                                        <input
-                                                            type="date"
-                                                            value={recurrenceEndAt}
-                                                            onChange={(e) => {
-                                                                setRecurrenceEndAt(e.target.value)
-                                                                handleFieldUpdate('recurrence_end_at', e.target.value || null)
-                                                            }}
-                                                            className="w-full bg-surface/50 border border-border/70 rounded-xl px-4 py-3 text-xs text-text-primary focus:border-accent/50 outline-none transition-all"
-                                                        />
-                                                        {!recurrenceEndAt && <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] text-text-muted pointer-events-none uppercase font-bold">Ends Never</span>}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </SectionCard>
-                                    </div>
-
-                                    {/* Dates & Schedule */}
-                                    <SectionCard icon={<Calendar className="w-4 h-4 text-accent-warm" />} title="Schedule">
-                                        <div className="space-y-4">
-                                            <button
-                                                onClick={() => {
-                                                    const nextToday = !today
-                                                    setToday(nextToday)
-                                                    handleFieldUpdate('today', nextToday)
-                                                }}
-                                                className={cn(
-                                                    "flex items-center space-x-2 px-4 py-2 rounded-xl border transition-all w-full justify-center",
-                                                    today ? "bg-yellow-400/10 border-yellow-400/30 text-yellow-500 shadow-lg shadow-yellow-400/5" : "bg-surface/50 border-border/70 text-text-muted hover:text-text-primary hover:bg-surface"
-                                                )}
-                                            >
-                                                <Star className={cn("w-4 h-4", today && "fill-current")} />
-                                                <span className="text-xs font-bold uppercase tracking-wider">Today</span>
-                                            </button>
-
-                                            <div className="space-y-3">
-                                                <div className="relative group">
-                                                    <input
-                                                        type="datetime-local"
-                                                        value={startAt}
-                                                        onChange={(e) => {
-                                                            setStartAt(e.target.value)
-                                                            handleFieldUpdate('start_at', e.target.value || null)
-                                                        }}
-                                                        className="w-full bg-surface/50 border border-border/70 rounded-xl px-10 py-2.5 text-[11px] text-text-primary focus:border-accent/50 outline-none transition-all"
-                                                    />
-                                                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted group-hover:text-text-primary transition-colors" />
-                                                    {!startAt && <span className="absolute left-10 top-1/2 -translate-y-1/2 text-[10px] text-text-muted pointer-events-none">Start</span>}
-                                                </div>
-                                                <div className="relative group">
-                                                    <input
-                                                        type="datetime-local"
-                                                        value={endAt}
-                                                        onChange={(e) => {
-                                                            setEndAt(e.target.value)
-                                                            handleFieldUpdate('end_at', e.target.value || null)
-                                                        }}
-                                                        className="w-full bg-surface/50 border border-border/70 rounded-xl px-10 py-2.5 text-[11px] text-text-primary focus:border-accent/50 outline-none transition-all"
-                                                    />
-                                                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted group-hover:text-text-primary transition-colors" />
-                                                    {!endAt && <span className="absolute left-10 top-1/2 -translate-y-1/2 text-[10px] text-text-muted pointer-events-none">End</span>}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </SectionCard>
-                                </div>
-
-                                {taskId && (
-                                    <div className="pt-8 border-t border-border/30">
-                                        <Comments taskId={taskId} />
-                                    </div>
-                                )}
+                        {/* Comments */}
+                        {task?.id && (
+                            <div className="pt-8 border-t border-border/20">
+                                <Comments taskId={task.id} />
                             </div>
                         )}
+                    </div>
 
-                        {activeTab === 'subtasks' && (
-                            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 max-w-3xl mx-auto">
-                                <div className="space-y-6">
-                                    <div className="flex items-center justify-between px-2 border-b border-border/30 pb-4">
-                                        <div className="flex items-center gap-2">
-                                            <Layers className="w-4 h-4 text-accent" />
-                                            <h3 className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Subtasks</h3>
-                                        </div>
-                                        {subtasks.length > 0 && (
-                                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-accent/10 text-accent">
-                                                {subtasks.filter(s => s.completed).length}/{subtasks.length} COMPLETE
-                                            </span>
-                                        )}
-                                    </div>
+                    {/* RIGHTSIDE: Sidebar Metadata */}
+                    <div className="w-full md:w-[320px] lg:w-[380px] border-t md:border-t-0 md:border-l border-border/50 bg-surface/30 overflow-y-auto custom-scrollbar p-6 space-y-8">
 
-                                    <DragDropContext onDragEnd={(result) => {
-                                        if (!result.destination) return
-                                        const items = Array.from(subtasks)
-                                        const [reorderedItem] = items.splice(result.source.index, 1)
-                                        items.splice(result.destination.index, 0, reorderedItem)
-                                        reorderSubtasks(items.map(i => i.id))
-                                    }}>
-                                        <Droppable droppableId="subtasks-list">
-                                            {(provided) => (
-                                                <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
-                                                    {subtasks.map((subtask, index) => (
-                                                        <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
-                                                            {(provided, snapshot) => (
-                                                                <div
-                                                                    ref={provided.innerRef}
-                                                                    {...provided.draggableProps}
-                                                                    className={cn(
-                                                                        "flex items-center space-x-3 p-3 rounded-2xl group/sub transition-all",
-                                                                        snapshot.isDragging ? "bg-surface-secondary shadow-2xl scale-[1.02] border-accent/20 border" : "hover:bg-surface-secondary/50 border border-transparent hover:border-border/50"
-                                                                    )}
-                                                                >
-                                                                    <div {...provided.dragHandleProps} className="text-text-muted opacity-0 group-hover/sub:opacity-40 transition-opacity cursor-grab">
-                                                                        <GripVertical className="w-4 h-4" />
-                                                                    </div>
-                                                                    <button
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation()
-                                                                            updateSubtask(subtask.id, { completed: !subtask.completed })
-                                                                        }}
-                                                                        className="relative group transition-transform active:scale-90"
-                                                                    >
-                                                                        {subtask.completed ? <CheckCircle2 className="w-5 h-5 text-accent" /> : <Circle className="w-5 h-5 text-text-muted group-hover:text-accent" />}
-                                                                    </button>
-                                                                    <input
-                                                                        type="text"
-                                                                        value={subtask.title}
-                                                                        onChange={(e) => updateSubtask(subtask.id, { title: e.target.value })}
-                                                                        className={cn(
-                                                                            "flex-1 bg-transparent text-sm md:text-base text-text-primary outline-none",
-                                                                            subtask.completed && "line-through text-text-muted"
-                                                                        )}
-                                                                    />
-                                                                    <button
-                                                                        onClick={() => deleteSubtask(subtask.id)}
-                                                                        className="p-2 text-text-muted hover:text-red-400 opacity-0 group-hover/sub:opacity-100 transition-all hover:bg-red-400/10 rounded-lg"
-                                                                    >
-                                                                        <X className="w-4 h-4" />
-                                                                    </button>
-                                                                </div>
-                                                            )}
-                                                        </Draggable>
-                                                    ))}
-                                                    {provided.placeholder}
-                                                </div>
-                                            )}
-                                        </Droppable>
-                                    </DragDropContext>
+                        {/* Context Properties */}
+                        <div className="space-y-6">
+                            <h4 className="text-[10px] uppercase font-bold tracking-[0.2em] text-text-muted/80 flex items-center gap-2">
+                                <SlidersHorizontal className="w-3.5 h-3.5" /> Properties
+                            </h4>
 
-                                    <div className="flex items-center space-x-3 px-10 py-4 bg-surface-secondary/20 rounded-2xl border border-dashed border-border/50">
-                                        <Plus className="w-5 h-5 text-text-muted opacity-40" />
-                                        <input
-                                            type="text"
-                                            placeholder="Add a quick subtask..."
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    const input = e.target as HTMLInputElement
-                                                    if (input.value.trim()) {
-                                                        addSubtask(input.value.trim())
-                                                        input.value = ''
-                                                    }
-                                                }
+                            <div className="space-y-5">
+                                {/* Status Picker Selector */}
+                                <div className="space-y-1.5 pt-1">
+                                    <span className="text-xs font-bold text-text-muted/80 px-1 uppercase tracking-wider">Status</span>
+                                    <div className="relative">
+                                        <button
+                                            ref={statusPickerRef}
+                                            onClick={() => setShowStatusPicker(!showStatusPicker)}
+                                            className="w-full bg-surface-secondary/20 hover:bg-surface-secondary/50 border border-transparent hover:border-border/30 rounded-xl px-4 py-3 text-sm transition-all flex items-center justify-between group"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                {StatusOptions.find(opt => opt.value === status)?.icon && (() => {
+                                                    const Icon = StatusOptions.find(opt => opt.value === status)!.icon
+                                                    const color = StatusOptions.find(opt => opt.value === status)!.color
+                                                    const bg = StatusOptions.find(opt => opt.value === status)!.bg
+                                                    return (
+                                                        <div className={cn("p-1 rounded-md", bg)}>
+                                                            <Icon className={cn("w-3.5 h-3.5", color)} />
+                                                        </div>
+                                                    )
+                                                })()}
+                                                <span className={cn("font-medium", StatusOptions.find(opt => opt.value === status)?.color)}>
+                                                    {StatusOptions.find(opt => opt.value === status)?.label || 'To-do'}
+                                                </span>
+                                            </div>
+                                            <ChevronDown className="w-4 h-4 text-text-muted group-hover:text-text-primary transition-colors" />
+                                        </button>
+                                        <StatusMenu
+                                            isOpen={showStatusPicker}
+                                            onClose={() => setShowStatusPicker(false)}
+                                            triggerRef={statusPickerRef}
+                                            currentStatus={status}
+                                            onSelect={(newStatus) => {
+                                                const isDone = newStatus === 'done'
+                                                setStatus(newStatus)
+                                                setCompleted(isDone)
+                                                triggerSave({ status: newStatus, completed: isDone })
                                             }}
-                                            className="flex-1 bg-transparent text-sm md:text-base text-text-primary placeholder:text-text-muted outline-none"
                                         />
                                     </div>
                                 </div>
+
+                                <div className="h-px bg-border/20 w-full my-4" />
+
+                                <PillGroup
+                                    label="Location"
+                                    value={location}
+                                    options={[
+                                        { value: 'home', icon: <Home className="w-3.5 h-3.5" />, label: 'Home' },
+                                        { value: 'outside', icon: <MapPin className="w-3.5 h-3.5" />, label: 'Outside' }
+                                    ]}
+                                    onChange={(val) => handleFieldUpdate('location', val)}
+                                />
+                                <PillGroup
+                                    label="Energy"
+                                    value={energy}
+                                    options={[
+                                        { value: 'high', icon: <Zap className="w-3.5 h-3.5" />, label: 'High' },
+                                        { value: 'low', icon: <ZapOff className="w-3.5 h-3.5" />, label: 'Low' }
+                                    ]}
+                                    onChange={(val) => handleFieldUpdate('energy', val)}
+                                />
+                                <PillGroup
+                                    label="Focus"
+                                    value={focus}
+                                    options={[
+                                        { value: 'immersion', icon: <Target className="w-3.5 h-3.5" />, label: 'Immersion' },
+                                        { value: 'process', icon: <Layers className="w-3.5 h-3.5" />, label: 'Process' }
+                                    ]}
+                                    onChange={(val) => handleFieldUpdate('focus', val)}
+                                />
+
+                                <div className="space-y-2.5">
+                                    <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-text-primary block flex items-center gap-2">
+                                        <Clock className="w-3 h-3 text-accent-warm" /> Estimated Effort
+                                    </span>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {[5, 15, 30, 60, 120, 240].map((mins) => (
+                                            <button
+                                                key={mins}
+                                                onClick={() => {
+                                                    const newVal = estimatedEffort === mins ? 0 : mins
+                                                    setEstimatedEffort(newVal)
+                                                    handleFieldUpdate('estimated_effort', newVal)
+                                                }}
+                                                className={cn(
+                                                    "px-2.5 py-1 rounded-lg border text-[10px] font-bold transition-all",
+                                                    estimatedEffort === mins
+                                                        ? "bg-accent-warm/20 border-accent-warm/40 text-accent-warm"
+                                                        : "bg-surface/50 border-border/50 text-text-muted hover:text-text-primary hover:border-border"
+                                                )}
+                                            >
+                                                {mins < 60 ? `${mins}m` : `${mins / 60}h`}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
-                        )}
+                        </div>
+
+                        <div className="h-px bg-border/40 w-full" />
+
+                        {/* Project Picker (Custom Popover) */}
+                        <div className="space-y-3">
+                            <h4 className="text-[10px] uppercase font-bold tracking-[0.2em] text-text-muted/80 flex items-center gap-2">
+                                <FolderKanban className="w-3.5 h-3.5" /> Project
+                            </h4>
+                            <div className="relative">
+                                <button
+                                    onClick={() => setShowProjectPicker(!showProjectPicker)}
+                                    className="w-full bg-surface-secondary/20 hover:bg-surface-secondary/50 border border-transparent rounded-xl px-4 py-3 text-sm text-text-primary transition-all flex items-center justify-between group"
+                                >
+                                    <span className={!projectId ? "text-text-muted" : "font-semibold"}>
+                                        {projectId ? projects.find(p => p.id === projectId)?.name || 'Unknown Project' : 'Assign to project...'}
+                                    </span>
+                                    <ChevronDown className="w-4 h-4 text-text-muted group-hover:text-text-primary transition-colors" />
+                                </button>
+
+                                {showProjectPicker && (
+                                    <>
+                                        <div className="fixed inset-0 z-40" onClick={() => setShowProjectPicker(false)} />
+                                        <div className="absolute top-12 left-0 right-0 max-h-64 overflow-hidden bg-surface border border-border/80 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] rounded-xl z-50 animate-in fade-in zoom-in-95 duration-200 flex flex-col">
+                                            <div className="p-2 border-b border-border/50 flex items-center gap-2 bg-surface/50">
+                                                <Search className="w-4 h-4 text-text-muted ml-2" />
+                                                <input
+                                                    autoFocus
+                                                    type="text"
+                                                    placeholder="Search projects..."
+                                                    className="bg-transparent border-none outline-none text-sm p-1 w-full text-text-primary"
+                                                    value={projectSearch}
+                                                    onChange={e => setProjectSearch(e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="overflow-y-auto custom-scrollbar p-1">
+                                                <button
+                                                    onClick={() => { setProjectId(null); handleFieldUpdate('project_id', null); setShowProjectPicker(false) }}
+                                                    className={cn(
+                                                        "w-full text-left px-3 py-2 text-sm rounded-lg transition-colors flex items-center gap-2",
+                                                        !projectId ? "bg-accent/10 text-accent font-medium" : "text-text-muted hover:bg-surface-secondary"
+                                                    )}
+                                                >
+                                                    Inbox
+                                                </button>
+                                                {filteredProjects.map(p => (
+                                                    <button
+                                                        key={p.id}
+                                                        onClick={() => { setProjectId(p.id); handleFieldUpdate('project_id', p.id); setShowProjectPicker(false) }}
+                                                        className={cn(
+                                                            "w-full text-left px-3 py-2 text-sm rounded-lg transition-colors flex items-center gap-2",
+                                                            projectId === p.id ? "bg-accent/10 text-accent font-medium" : "text-text-primary hover:bg-surface-secondary"
+                                                        )}
+                                                    >
+                                                        {p.name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Recurrence Picker (Custom Popover) */}
+                        <div className="space-y-3">
+                            <h4 className="text-[10px] uppercase font-bold tracking-[0.2em] text-text-muted/80 flex items-center gap-2">
+                                <RefreshCw className="w-3.5 h-3.5" /> Repeat
+                            </h4>
+                            <div className="relative">
+                                <button
+                                    onClick={() => setShowRecurrencePicker(!showRecurrencePicker)}
+                                    className="w-full bg-surface-secondary/20 hover:bg-surface-secondary/50 border border-transparent rounded-xl px-4 py-3 text-sm text-text-primary transition-all flex items-center justify-between group"
+                                >
+                                    <span className={!recurrence ? "text-text-muted" : "font-semibold capitalize"}>
+                                        {recurrence || 'Does not repeat'}
+                                    </span>
+                                    <ChevronDown className="w-4 h-4 text-text-muted group-hover:text-text-primary transition-colors" />
+                                </button>
+
+                                {showRecurrencePicker && (
+                                    <>
+                                        <div className="fixed inset-0 z-40" onClick={() => setShowRecurrencePicker(false)} />
+                                        <div className="absolute top-12 left-0 right-0 bg-surface border border-border/80 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] rounded-xl z-50 animate-in fade-in zoom-in-95 duration-200 p-1">
+                                            {[
+                                                { val: null, label: 'Never' },
+                                                { val: 'daily', label: 'Daily' },
+                                                { val: 'weekdays', label: 'Weekdays' },
+                                                { val: 'weekly', label: 'Weekly' },
+                                                { val: 'monthly', label: 'Monthly' },
+                                                { val: 'yearly', label: 'Yearly' }
+                                            ].map(opt => (
+                                                <button
+                                                    key={opt.val || 'none'}
+                                                    onClick={() => {
+                                                        const val = opt.val as 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly' | null
+                                                        setRecurrence(val)
+                                                        handleFieldUpdate('recurrence', val)
+                                                        setShowRecurrencePicker(false)
+                                                    }}
+                                                    className={cn(
+                                                        "w-full text-left px-3 py-2.5 text-sm rounded-lg transition-colors",
+                                                        recurrence === opt.val ? "bg-accent/10 text-accent font-medium" : "text-text-primary hover:bg-surface-secondary"
+                                                    )}
+                                                >
+                                                    {opt.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
+
+                                {recurrence && (
+                                    <div className="mt-3 relative group animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <input
+                                            type="date"
+                                            value={recurrenceEndAt}
+                                            onChange={(e) => {
+                                                setRecurrenceEndAt(e.target.value)
+                                                handleFieldUpdate('recurrence_end_at', e.target.value || null)
+                                            }}
+                                            className="w-full bg-surface/50 hover:bg-surface/80 border border-border/50 hover:border-border rounded-xl px-4 py-3 pl-10 text-xs text-text-primary outline-none transition-all"
+                                        />
+                                        <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted pointer-events-none" />
+                                        {!recurrenceEndAt && <span className="absolute left-10 top-1/2 -translate-y-1/2 text-xs text-text-muted pointer-events-none font-medium">Ends Never</span>}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Schedule */}
+                        <div className="space-y-3">
+                            <h4 className="text-[10px] uppercase font-bold tracking-[0.2em] text-text-muted/80 flex items-center gap-2">
+                                <Calendar className="w-3.5 h-3.5" /> Schedule
+                            </h4>
+                            <div className="space-y-3">
+                                <button
+                                    onClick={() => {
+                                        const nextToday = !today
+                                        setToday(nextToday)
+                                        handleFieldUpdate('today', nextToday)
+                                    }}
+                                    className={cn(
+                                        "flex items-center space-x-2 px-4 py-2.5 rounded-xl border transition-all w-full justify-center",
+                                        today ? "bg-yellow-400/10 border-yellow-400/30 text-yellow-500 shadow-[0_0_15px_rgba(250,204,21,0.1)]" : "bg-transparent border-border/50 text-text-muted hover:text-text-primary hover:bg-surface-secondary/50"
+                                    )}
+                                >
+                                    <Star className={cn("w-4 h-4", today && "fill-current")} />
+                                    <span className="text-xs font-bold uppercase tracking-wider">Do Today</span>
+                                </button>
+
+                                <div className="space-y-2">
+                                    <DateTimePicker
+                                        value={startAt}
+                                        onChange={(val) => {
+                                            setStartAt(val)
+                                            handleFieldUpdate('start_at', val || null)
+                                        }}
+                                        placeholder="Start Date..."
+                                        className="bg-transparent hover:bg-surface-secondary/30 border-border/50 hover:border-border rounded-xl px-2 py-0.5"
+                                    />
+                                    <DateTimePicker
+                                        value={endAt}
+                                        onChange={(val) => {
+                                            setEndAt(val)
+                                            handleFieldUpdate('end_at', val || null)
+                                        }}
+                                        placeholder="Due Date..."
+                                        className="bg-transparent hover:bg-surface-secondary/30 border-border/50 hover:border-border rounded-xl px-2 py-0.5"
+                                    />
+                                </div>
+                            </div>
+                        </div>
 
                     </div>
-
-                    {/* Footer / Saving Indicator */}
-                    <footer className="px-8 py-4 border-t border-border/30 bg-surface-secondary/10 flex items-center justify-between shrink-0">
-                        <div className="flex items-center space-x-2">
-                            {isSaving ? (
-                                <div className="flex items-center space-x-2">
-                                    <div className="w-2 h-2 bg-accent rounded-full animate-pulse" />
-                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-accent">Auto-saving</span>
-                                </div>
-                            ) : (
-                                <div className="flex items-center space-x-2 text-text-muted/60">
-                                    <Check className="w-3 h-3" />
-                                    <span className="text-[10px] font-black uppercase tracking-[0.2em]">All Changes Saved</span>
-                                </div>
-                            )}
-                        </div>
-                        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-text-muted/40">
-                            Ghost System v2.0
-                        </div>
-                    </footer>
                 </div>
             </div>
 
@@ -628,20 +838,6 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
     )
 }
 
-function SectionCard({ icon, title, children }: { icon: React.ReactNode, title: string, children: React.ReactNode }) {
-    return (
-        <section className="bg-surface-secondary/20 border border-border/50 rounded-2xl p-4 space-y-3">
-            <header className="flex items-center gap-2">
-                <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-surface-secondary border border-border/70">
-                    {icon}
-                </span>
-                <h3 className="text-[11px] uppercase font-black tracking-widest text-text-muted">{title}</h3>
-            </header>
-            {children}
-        </section>
-    )
-}
-
 function PillGroup<T>({ label, value, options, onChange }: {
     label: string,
     value: T | null,
@@ -649,18 +845,18 @@ function PillGroup<T>({ label, value, options, onChange }: {
     onChange: (val: T | null) => void
 }) {
     return (
-        <div className="space-y-3">
-            <span className="text-[10px] uppercase font-bold tracking-widest text-text-muted block">{label}</span>
+        <div className="space-y-2.5">
+            <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-text-primary block">{label}</span>
             <div className="flex flex-wrap gap-2">
                 {options.map((opt) => (
                     <button
                         key={String(opt.value)}
                         onClick={() => onChange(value === opt.value ? null : opt.value)}
                         className={cn(
-                            "flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-[10px] font-bold uppercase tracking-wider transition-all",
+                            "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold tracking-wide transition-all",
                             value === opt.value
-                                ? "bg-accent border-accent text-white shadow-lg shadow-accent/10 scale-105"
-                                : "bg-surface-secondary border-border text-text-muted hover:text-white hover:border-text-muted"
+                                ? "bg-accent/10 border-accent/30 text-accent"
+                                : "bg-surface/50 border-border/50 text-text-muted hover:text-text-primary hover:border-border hover:bg-surface-secondary/40"
                         )}
                     >
                         {opt.icon}

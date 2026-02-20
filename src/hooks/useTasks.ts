@@ -1,4 +1,5 @@
 import { useMemo, useCallback } from 'react'
+import { addDays, isPast, isToday } from 'date-fns'
 import { Task, TaskFilters } from '../types'
 import { useGlobalTasks } from '../context/TaskContext'
 
@@ -41,16 +42,26 @@ export function useTasks(filters?: TaskFilters) {
             result = result.filter(t => t.focus === filters.focus)
         }
 
-        if (filters?.status === 'active') {
-            result = result.filter(t => !t.completed)
-        } else if (filters?.status === 'completed') {
-            result = result.filter(t => t.completed)
+        if (filters?.status && filters.status !== 'all') {
+            result = result.filter(t => t.status === filters.status)
         } else if (filters?.completed !== undefined) {
             result = result.filter(t => t.completed === filters.completed)
         }
 
-        if (filters?.dateFilter === 'has_date') {
+        if (filters?.dateFilter === 'any') {
             result = result.filter(t => t.start_at || t.end_at)
+        } else if (filters?.dateFilter === 'today') {
+            const todayStart = new Date()
+            todayStart.setHours(0, 0, 0, 0)
+            const todayEnd = new Date()
+            todayEnd.setHours(23, 59, 59, 999)
+            result = result.filter(t =>
+                (t.start_at && new Date(t.start_at) <= todayEnd && (!t.end_at || new Date(t.end_at) >= todayStart)) ||
+                (t.end_at && new Date(t.end_at) >= todayStart && new Date(t.end_at) <= todayEnd)
+            )
+        } else if (filters?.dateFilter === 'upcoming') {
+            const now = new Date().toISOString()
+            result = result.filter(t => !t.completed && t.start_at && t.start_at > now)
         } else if (filters?.dateFilter === 'overdue') {
             const now = new Date().toISOString()
             result = result.filter(t => !t.completed && t.end_at && t.end_at < now)
@@ -75,6 +86,30 @@ export function useTasks(filters?: TaskFilters) {
         return globalReorderTasks(orderedIds, filters?.today)
     }, [globalReorderTasks, filters?.today])
 
+    const snoozeTask = useCallback(async (id: string) => {
+        const task = globalTasks.find(t => t.id === id)
+        if (!task) return
+
+        const updates: Partial<Task> = { today: false }
+
+        // If dates exist and are for today or earlier, move them forward by 1 day
+        if (task.start_at) {
+            const start = new Date(task.start_at)
+            if (isToday(start) || isPast(start)) {
+                updates.start_at = addDays(start, 1).toISOString()
+            }
+        }
+
+        if (task.end_at) {
+            const end = new Date(task.end_at)
+            if (isToday(end) || isPast(end)) {
+                updates.end_at = addDays(end, 1).toISOString()
+            }
+        }
+
+        return updateTask(id, updates)
+    }, [globalTasks, updateTask])
+
     return {
         tasks: filteredTasks,
         loading,
@@ -83,6 +118,7 @@ export function useTasks(filters?: TaskFilters) {
         deleteTask,
         completeTask,
         reorderTasks,
+        snoozeTask,
         refresh
     }
 }

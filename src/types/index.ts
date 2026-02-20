@@ -28,6 +28,7 @@ export interface Task {
     title: string;
     notes: string | null;
     completed: boolean;
+    status: 'todo' | 'doing' | 'waiting' | 'done';
     today: boolean;
     project_id: string | null;
     start_at: string | null;
@@ -40,6 +41,7 @@ export interface Task {
     parent_task_id: string | null;
     sort_order: number;
     sort_order_today: number;
+    estimated_effort: number | null; // in minutes
     short_id: string;
     created_at: string;
     updated_at: string;
@@ -66,11 +68,11 @@ export interface Comment {
 
 export interface TaskFilters {
     location?: 'home' | 'outside' | null;
-    energy?: 'high' | 'low' | null;
-    focus?: 'immersion' | 'process' | null;
+    energy?: 'high' | 'medium' | 'low' | null;
+    focus?: 'deep' | 'shallow' | null;
     completed?: boolean;
     today?: boolean;
     projectId?: string | null;
-    status?: 'all' | 'active' | 'completed';
-    dateFilter?: 'any' | 'has_date' | 'overdue';
+    status?: 'all' | 'todo' | 'doing' | 'waiting' | 'done';
+    dateFilter?: 'any' | 'today' | 'upcoming' | 'overdue';
 }

@@ -109,11 +109,19 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     }, [user, tasks, fetchTasks])
 
     const updateTask = useCallback(async (id: string, updates: Partial<Task>) => {
-        setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates, updated_at: new Date().toISOString() } : t))
+        // Sync logic for status/completed bridging
+        const finalUpdates = { ...updates }
+        if (updates.status !== undefined && updates.completed === undefined) {
+            finalUpdates.completed = updates.status === 'done'
+        } else if (updates.completed !== undefined && updates.status === undefined) {
+            finalUpdates.status = updates.completed ? 'done' : 'todo'
+        }
+
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, ...finalUpdates, updated_at: new Date().toISOString() } : t))
 
         const { error } = await supabase
             .from('tasks')
-            .update({ ...updates, updated_at: new Date().toISOString() })
+            .update({ ...finalUpdates, updated_at: new Date().toISOString() })
             .eq('id', id)
 
         if (error) {
@@ -140,11 +148,12 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         const task = tasks.find(t => t.id === id)
         if (!task) return { success: false }
 
-        setTasks(prev => prev.map(t => t.id === id ? { ...t, completed, updated_at: new Date().toISOString() } : t))
+        const newStatus = completed ? 'done' : 'todo'
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, completed, status: newStatus, updated_at: new Date().toISOString() } : t))
 
         const { error } = await supabase
             .from('tasks')
-            .update({ completed, updated_at: new Date().toISOString() })
+            .update({ completed, status: newStatus, updated_at: new Date().toISOString() })
             .eq('id', id)
 
         if (error) {

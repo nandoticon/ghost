@@ -22,7 +22,7 @@ export function useTaskById(taskId: string | null) {
         setLoading(true)
         try {
             // Determine if taskId is a UUID or a short_id
-            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-12a-f]{12}$/i.test(taskId)
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId)
 
             let query = supabase
                 .from('tasks')
@@ -43,7 +43,14 @@ export function useTaskById(taskId: string | null) {
 
             const { data, error } = await query.single()
 
-            if (error) throw error
+            if (error) {
+                if (error.code === 'PGRST116') {
+                    // Not found (0 rows) is an expected case when navigating
+                    setTask(null)
+                    return
+                }
+                throw error
+            }
             setTask(data)
         } catch (error) {
             console.error('Error fetching task:', error)
@@ -60,12 +67,20 @@ export function useTaskById(taskId: string | null) {
     const updateTaskField = async (updates: Partial<Task>) => {
         if (!taskId || !task) return
 
+        // Sync logic for status/completed bridging
+        const finalUpdates = { ...updates }
+        if (updates.status !== undefined && (updates.completed === undefined)) {
+            finalUpdates.completed = updates.status === 'done'
+        } else if (updates.completed !== undefined && (updates.status === undefined)) {
+            finalUpdates.status = updates.completed ? 'done' : 'todo'
+        }
+
         // Optimistic update
-        setTask(prev => prev ? { ...prev, ...updates } : prev)
+        setTask(prev => prev ? { ...prev, ...finalUpdates } : prev)
 
         const { error } = await supabase
             .from('tasks')
-            .update({ ...updates, updated_at: new Date().toISOString() })
+            .update({ ...finalUpdates, updated_at: new Date().toISOString() })
             .eq('id', task.id)
 
         if (error) {

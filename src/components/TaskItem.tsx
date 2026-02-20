@@ -12,7 +12,10 @@ import {
     Layers,
     Clock,
     GripVertical,
-    RefreshCw
+    RefreshCw,
+    Loader2,
+    Moon,
+    Maximize2
 } from 'lucide-react'
 import { Task } from '../types'
 import { cn } from '../lib/cn'
@@ -22,6 +25,8 @@ interface TaskItemProps {
     task: Task
     onToggleComplete: (id: string, completed: boolean) => void
     onToggleToday: (id: string, today: boolean) => void
+    onSnooze?: (id: string) => void
+    onFocus?: (task: Task) => void
     onClick: (task: Task) => void
     onClickTitle?: (task: Task) => void
     dragHandleProps?: DraggableProvidedDragHandleProps | null
@@ -37,7 +42,9 @@ export const TaskItem = React.memo<TaskItemProps>(({
     onClickTitle,
     dragHandleProps,
     isDragging,
-    hideDragHandle = false
+    hideDragHandle = false,
+    onSnooze,
+    onFocus
 }) => {
     const isCompleted = task.completed
 
@@ -164,6 +171,18 @@ export const TaskItem = React.memo<TaskItemProps>(({
                         </>
                     )}
 
+                    {/* Status Badges */}
+                    {task.status === 'doing' && (
+                        <span className="flex items-center gap-1 text-[10px] 2xl:text-xs uppercase tracking-widest font-black text-blue-500 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full shrink-0">
+                            <Loader2 className="w-3 h-3 animate-spin hidden sm:block" /> Doing
+                        </span>
+                    )}
+                    {task.status === 'waiting' && (
+                        <span className="flex items-center gap-1 text-[10px] 2xl:text-xs uppercase tracking-widest font-black text-orange-500 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full shrink-0">
+                            <Clock className="w-3 h-3 hidden sm:block" /> Waiting
+                        </span>
+                    )}
+
                     {/* Context Pills */}
                     {getContextPills()}
 
@@ -186,21 +205,47 @@ export const TaskItem = React.memo<TaskItemProps>(({
                 </div>
             </div>
 
-            {/* Today Star */}
-            {!isCompleted && (
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation()
-                        onToggleToday(task.id, !task.today)
-                    }}
-                    className={cn(
-                        "shrink-0 transition-all p-2 rounded-xl",
-                        task.today ? "text-accent-warm" : "text-text-muted opacity-0 group-hover:opacity-100 hover:bg-surface-secondary"
-                    )}
-                >
-                    <Star className={cn("w-5 h-5 2xl:w-6 2xl:h-6", task.today && "fill-current")} />
-                </button>
-            )}
+            {/* Snooze and Today Star */}
+            <div className="flex items-center space-x-1 shrink-0">
+                {!isCompleted && onFocus && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            onFocus(task)
+                        }}
+                        className="text-text-muted opacity-0 group-hover:opacity-100 hover:text-accent hover:bg-surface-secondary transition-all p-2 rounded-xl"
+                        title="Focus Mode"
+                    >
+                        <Maximize2 className="w-5 h-5 2xl:w-6 2xl:h-6" />
+                    </button>
+                )}
+                {!isCompleted && onSnooze && task.today && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            onSnooze(task.id)
+                        }}
+                        className="text-text-muted opacity-0 group-hover:opacity-100 hover:text-blue-400 hover:bg-surface-secondary transition-all p-2 rounded-xl"
+                        title="Snooze to tomorrow"
+                    >
+                        <Moon className="w-5 h-5 2xl:w-6 2xl:h-6" />
+                    </button>
+                )}
+                {!isCompleted && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            onToggleToday(task.id, !task.today)
+                        }}
+                        className={cn(
+                            "transition-all p-2 rounded-xl",
+                            task.today ? "text-accent-warm" : "text-text-muted opacity-0 group-hover:opacity-100 hover:bg-surface-secondary"
+                        )}
+                    >
+                        <Star className={cn("w-5 h-5 2xl:w-6 2xl:h-6", task.today && "fill-current")} />
+                    </button>
+                )}
+            </div>
         </div>
     )
 })
