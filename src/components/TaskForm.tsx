@@ -86,7 +86,6 @@ export const TaskForm = ({
             setLocation(null)
             setEnergy(null)
             setFocus(null)
-            setRecurrence(null)
             setRecurrenceEndAt('')
             setStatus('todo')
             setEstimatedEffort(0)

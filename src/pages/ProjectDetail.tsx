@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
     ChevronLeft,
@@ -124,6 +124,24 @@ export default function ProjectDetail() {
             showToast('Failed to add task', 'error')
         }
     }
+
+    const handleToggleComplete = useCallback(async (taskId: string, completed: boolean) => {
+        const res = await completeTask(taskId, completed)
+        if (res.success && res.nextOccurrenceCreated) {
+            const dateStr = res.nextOccurrenceDate ? new Date(res.nextOccurrenceDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'the future'
+            showToast(`Task completed · Next on ${dateStr}`, 'success')
+        }
+    }, [completeTask, showToast])
+
+    const handleToggleToday = useCallback((taskId: string, today: boolean) => {
+        updateTask(taskId, { today })
+    }, [updateTask])
+
+    const handleTaskClick = useCallback(() => { }, [])
+
+    const handleTaskTitleClick = useCallback((t: Task) => {
+        setSelectedTaskId(t.id)
+    }, [])
 
     if (projectsLoading) {
         return (
@@ -333,16 +351,10 @@ export default function ProjectDetail() {
                                                     <div ref={provided.innerRef} {...provided.draggableProps}>
                                                         <TaskItem
                                                             task={task}
-                                                            onToggleComplete={async (id, completed) => {
-                                                                const res = await completeTask(id, completed)
-                                                                if (res.success && res.nextOccurrenceCreated) {
-                                                                    const dateStr = res.nextOccurrenceDate ? new Date(res.nextOccurrenceDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'the future'
-                                                                    showToast(`Task completed · Next on ${dateStr}`, 'success')
-                                                                }
-                                                            }}
-                                                            onToggleToday={(id, today) => updateTask(id, { today })}
-                                                            onClick={() => { }}
-                                                            onClickTitle={(t) => setSelectedTaskId(t.id)}
+                                                            onToggleComplete={handleToggleComplete}
+                                                            onToggleToday={handleToggleToday}
+                                                            onClick={handleTaskClick}
+                                                            onClickTitle={handleTaskTitleClick}
                                                             dragHandleProps={isReorderingEnabled ? provided.dragHandleProps : undefined}
                                                             isDragging={snapshot.isDragging}
                                                             hideDragHandle={!isReorderingEnabled}

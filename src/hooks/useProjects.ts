@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { Project } from '../types'
 import { useAuth } from './useAuth'
@@ -7,6 +7,12 @@ export function useProjects() {
     const [projects, setProjects] = useState<Project[]>([])
     const [loading, setLoading] = useState(true)
     const { user } = useAuth()
+
+    const projectsRef = useRef<Project[]>([])
+
+    useEffect(() => {
+        projectsRef.current = projects
+    }, [projects])
 
     const fetchProjects = useCallback(async () => {
         if (!user) {
@@ -35,11 +41,13 @@ export function useProjects() {
         fetchProjects()
     }, [fetchProjects])
 
-    const createProject = async (project: Partial<Project>) => {
+    const createProject = useCallback(async (project: Partial<Project>) => {
         if (!user) return
 
-        const maxSortOrder = projects.length > 0
-            ? Math.max(...projects.map(p => p.sort_order || 0)) + 1
+        const currentProjects = projectsRef.current
+
+        const maxSortOrder = currentProjects.length > 0
+            ? Math.max(...currentProjects.map(p => p.sort_order || 0)) + 1
             : 0
 
         const newProject = {
@@ -65,9 +73,9 @@ export function useProjects() {
 
         setProjects(prev => [...prev, data])
         return data
-    }
+    }, [user])
 
-    const updateProject = async (id: string, updates: Partial<Project>) => {
+    const updateProject = useCallback(async (id: string, updates: Partial<Project>) => {
         const { error } = await supabase
             .from('projects')
             .update({ ...updates, updated_at: new Date().toISOString() })
@@ -78,9 +86,9 @@ export function useProjects() {
         } else {
             setProjects(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p))
         }
-    }
+    }, [])
 
-    const deleteProject = async (id: string) => {
+    const deleteProject = useCallback(async (id: string) => {
         const { error } = await supabase
             .from('projects')
             .delete()
@@ -91,7 +99,7 @@ export function useProjects() {
         } else {
             setProjects(prev => prev.filter(p => p.id !== id))
         }
-    }
+    }, [])
 
     return {
         projects,
