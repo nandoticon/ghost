@@ -78,7 +78,7 @@ export default function ProjectDetail() {
             })
             showToast('Project updated', 'success')
             setIsEditingInline(false)
-        } catch (error) {
+        } catch (_error) {
             showToast('Failed to update project', 'error')
         }
     }
@@ -117,7 +117,7 @@ export default function ProjectDetail() {
             await createTask({ ...taskData, project_id: id })
             showToast('Task added to project', 'success')
             setIsTaskFormOpen(false)
-        } catch (error) {
+        } catch (_error) {
             showToast('Failed to add task', 'error')
         }
     }

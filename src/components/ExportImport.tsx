@@ -149,7 +149,7 @@ export function ExportImport() {
                     return
                 }
                 setImportPreview(json)
-            } catch (err) {
+            } catch (_err) {
                 showToast('Failed to parse JSON', 'error')
             }
         }

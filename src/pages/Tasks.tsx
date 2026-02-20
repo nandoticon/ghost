@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Plus, Filter, LayoutList, AlertCircle, ChevronDown, Home, MapPin, Zap, ZapOff, Target, Layers, ChevronsUpDown } from 'lucide-react'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { useTasks } from '../hooks/useTasks'
@@ -77,7 +77,7 @@ export default function Tasks() {
             await createTask(taskData)
             showToast('Task added successfully', 'success')
             setIsFormOpen(false)
-        } catch (error) {
+        } catch (_error) {
             showToast('Failed to add task', 'error')
         }
     }
@@ -87,6 +87,22 @@ export default function Tasks() {
     const updateFilter = (updates: Partial<TaskFilters>) => {
         setFilters(prev => ({ ...prev, ...updates }))
     }
+
+    const handleToggleComplete = useCallback(async (id: string, completed: boolean) => {
+        const res = await completeTask(id, completed)
+        if (res.success && res.nextOccurrenceCreated) {
+            const dateStr = res.nextOccurrenceDate ? new Date(res.nextOccurrenceDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'the future'
+            showToast(`Task completed · Next on ${dateStr}`, 'success')
+        }
+    }, [completeTask, showToast])
+
+    const handleToggleToday = useCallback((id: string, today: boolean) => {
+        updateTask(id, { today })
+    }, [updateTask])
+
+    const handleTaskClick = useCallback(() => { }, [])
+
+    const handleTitleClick = useCallback((t: Task) => setActiveTaskId(t.id), [setActiveTaskId])
 
     // Group by project logic for sticky headers
     const groupedTasks = useMemo(() => {
@@ -263,16 +279,10 @@ export default function Tasks() {
                                                             <div ref={provided.innerRef} {...provided.draggableProps}>
                                                                 <TaskItem
                                                                     task={task}
-                                                                    onToggleComplete={async (id, completed) => {
-                                                                        const res = await completeTask(id, completed)
-                                                                        if (res.success && res.nextOccurrenceCreated) {
-                                                                            const dateStr = res.nextOccurrenceDate ? new Date(res.nextOccurrenceDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'the future'
-                                                                            showToast(`Task completed · Next on ${dateStr}`, 'success')
-                                                                        }
-                                                                    }}
-                                                                    onToggleToday={(id, today) => updateTask(id, { today })}
-                                                                    onClick={() => { }}
-                                                                    onClickTitle={(t) => setActiveTaskId(t.id)}
+                                                                    onToggleComplete={handleToggleComplete}
+                                                                    onToggleToday={handleToggleToday}
+                                                                    onClick={handleTaskClick}
+                                                                    onClickTitle={handleTitleClick}
                                                                     dragHandleProps={isReorderingEnabled ? provided.dragHandleProps : undefined}
                                                                     isDragging={snapshot.isDragging}
                                                                     hideDragHandle={!isReorderingEnabled}

@@ -17,12 +17,6 @@ import {
 import { Task } from '../types'
 import { cn } from '../lib/cn'
 import { format, isToday, isPast, startOfDay } from 'date-fns'
-import { supabase } from '../lib/supabase'
-
-interface SubtaskStats {
-    total: number
-    completed: number
-}
 
 interface TaskItemProps {
     task: Task
@@ -188,7 +182,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
                     )}
 
                     {/* Subtask Progress */}
-                    <SubtaskProgress taskId={task.id} />
+                    <SubtaskProgress task={task} />
                 </div>
             </div>
 
@@ -211,43 +205,12 @@ export const TaskItem = React.memo<TaskItemProps>(({
     )
 })
 
-function SubtaskProgress({ taskId }: { taskId: string }) {
-    const [stats, setStats] = React.useState<SubtaskStats | null>(null)
+function SubtaskProgress({ task }: { task: Task }) {
+    if (!task.subtasks || task.subtasks.length === 0) return null
 
-    React.useEffect(() => {
-        if (taskId.startsWith('temp-')) return
-
-        const fetchStats = async () => {
-            const { data, error } = await supabase
-                .from('subtasks')
-                .select('completed')
-                .eq('task_id', taskId)
-
-            if (!error && data) {
-                setStats({
-                    total: data.length,
-                    completed: data.filter(s => s.completed).length
-                })
-            }
-        }
-
-        fetchStats()
-
-        const channel = supabase
-            .channel(`subtask_stats:${taskId}`)
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'subtasks', filter: `task_id=eq.${taskId}` },
-                fetchStats
-            )
-            .subscribe()
-
-        return () => { supabase.removeChannel(channel) }
-    }, [taskId])
-
-    if (!stats || stats.total === 0) return null
-
-    const percent = Math.round((stats.completed / stats.total) * 100)
+    const total = task.subtasks.length
+    const completed = task.subtasks.filter(s => s.completed).length
+    const percent = Math.round((completed / total) * 100)
 
     return (
         <div className="flex items-center space-x-2 text-xs 2xl:text-sm text-text-muted font-black uppercase tracking-widest bg-surface-secondary/40 px-2.5 py-1 rounded-full border border-border/20 shrink-0">
@@ -273,7 +236,7 @@ function SubtaskProgress({ taskId }: { taskId: string }) {
                     className="text-accent transition-all duration-500"
                 />
             </svg>
-            <span className="tabular-nums">{stats.completed}/{stats.total}</span>
+            <span className="tabular-nums">{completed}/{total}</span>
         </div>
     )
 }

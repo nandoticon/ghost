@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { Plus, ChevronDown, ChevronRight, LayoutList, CheckCircle2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
@@ -59,7 +59,7 @@ export default function Today() {
             await createTask({ ...taskData, today: true })
             showToast('Task created for today', 'success')
             setIsFormOpen(false)
-        } catch (error) {
+        } catch (_error) {
             showToast('Failed to create task', 'error')
         }
     }
@@ -69,6 +69,21 @@ export default function Today() {
         await Promise.all(updates)
         setShowClearConfirm(false)
     }
+
+    const handleToggleComplete = useCallback(async (id: string, completed: boolean) => {
+        const res = await completeTask(id, completed)
+        if (res.success && res.nextOccurrenceCreated) {
+            showToast(`Task completed · Next on ${res.nextOccurrenceDate ? format(new Date(res.nextOccurrenceDate), 'MMM d') : 'the future'}`, 'success')
+        }
+    }, [completeTask, showToast])
+
+    const handleToggleToday = useCallback((id: string, today: boolean) => {
+        updateTask(id, { today })
+    }, [updateTask])
+
+    const handleTaskClick = useCallback(() => { }, [])
+
+    const handleTitleClick = useCallback((t: Task) => setActiveTaskId(t.id), [setActiveTaskId])
 
     return (
         <div className="w-full max-w-full mx-auto px-4 py-8 md:py-12 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -156,15 +171,10 @@ export default function Today() {
                                                     <div ref={provided.innerRef} {...provided.draggableProps}>
                                                         <TaskItem
                                                             task={task}
-                                                            onToggleComplete={async (id, completed) => {
-                                                                const res = await completeTask(id, completed)
-                                                                if (res.success && res.nextOccurrenceCreated) {
-                                                                    showToast(`Task completed · Next on ${res.nextOccurrenceDate ? format(new Date(res.nextOccurrenceDate), 'MMM d') : 'the future'}`, 'success')
-                                                                }
-                                                            }}
-                                                            onToggleToday={(id, today) => updateTask(id, { today })}
-                                                            onClick={() => { }}
-                                                            onClickTitle={(t) => setActiveTaskId(t.id)}
+                                                            onToggleComplete={handleToggleComplete}
+                                                            onToggleToday={handleToggleToday}
+                                                            onClick={handleTaskClick}
+                                                            onClickTitle={handleTitleClick}
                                                             dragHandleProps={provided.dragHandleProps}
                                                             isDragging={snapshot.isDragging}
                                                         />
@@ -221,15 +231,10 @@ export default function Today() {
                                     <TaskItem
                                         key={task.id}
                                         task={task}
-                                        onToggleComplete={async (id, completed) => {
-                                            const res = await completeTask(id, completed)
-                                            if (res.success && res.nextOccurrenceCreated) {
-                                                showToast(`Task completed · Next on ${res.nextOccurrenceDate ? format(new Date(res.nextOccurrenceDate), 'MMM d') : 'the future'}`, 'success')
-                                            }
-                                        }}
-                                        onToggleToday={(id, today) => updateTask(id, { today })}
-                                        onClick={() => { }}
-                                        onClickTitle={(t) => setActiveTaskId(t.id)}
+                                        onToggleComplete={handleToggleComplete}
+                                        onToggleToday={handleToggleToday}
+                                        onClick={handleTaskClick}
+                                        onClickTitle={handleTitleClick}
                                         hideDragHandle
                                     />
                                 ))}

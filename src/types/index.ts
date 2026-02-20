@@ -42,6 +42,7 @@ export interface Task {
     created_at: string;
     updated_at: string;
     project?: Project; // Included for joins
+    subtasks?: Subtask[]; // Included for progress calculation without individual subscriptions
 }
 
 export interface Subtask {

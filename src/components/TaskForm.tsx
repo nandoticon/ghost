@@ -82,7 +82,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             setRecurrence(null)
             setRecurrenceEndAt('')
         }
-    }, [task, isOpen])
+    }, [task, isOpen, defaultProjectId])
 
     if (!isOpen) return null
 
