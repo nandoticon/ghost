@@ -1,5 +1,5 @@
 import { NavLink, useNavigate, Outlet, useLocation } from 'react-router-dom'
-import { Calendar, CheckSquare, Folder, LogOut, Search as SearchIcon, HelpCircle, Settings as SettingsIcon, Plus, Ghost, MoreHorizontal } from 'lucide-react'
+import { Calendar, CheckSquare, Folder, LogOut, Search as SearchIcon, HelpCircle, Settings as SettingsIcon, Plus, Ghost, MoreHorizontal, BarChart3 } from 'lucide-react'
 import { cn } from '../lib/cn'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
@@ -11,9 +11,11 @@ import { KeyboardShortcutsModal } from './KeyboardShortcutsModal'
 import { OfflineBanner } from './OfflineBanner'
 import { InstallPrompt } from './InstallPrompt'
 import { PWAUpdateNotification } from './PWAUpdateNotification'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useShortcutContext } from '../context/ShortcutContext'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+import { useTimer } from '../context/TimerContext'
+import { useToast } from './Toast'
 
 export default function Layout() {
     const { user } = useAuth()
@@ -31,11 +33,23 @@ export default function Layout() {
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
     const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
     const location = useLocation()
+    const { lastError } = useTimer()
+    const { showToast } = useToast()
+    const lastShownTimerError = useRef<string | null>(null)
+
+    useEffect(() => {
+        if (!lastError) return
+        if (lastShownTimerError.current === lastError) return
+
+        showToast(lastError, 'info', undefined, 3500)
+        lastShownTimerError.current = lastError
+    }, [lastError, showToast])
 
     const navItems = [
         { to: '/today', icon: Calendar, label: 'Today' },
         { to: '/tasks', icon: CheckSquare, label: 'Tasks' },
         { to: '/projects', icon: Folder, label: 'Projects' },
+        { to: '/analytics', icon: BarChart3, label: 'Analytics' },
     ]
 
     const handleSignOut = async () => {

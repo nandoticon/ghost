@@ -189,7 +189,7 @@ export default function Tasks() {
                 </div>
 
                 <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap no-scrollbar pb-1">
-                    <div className="min-w-[320px]">
+                    <div className="min-w-[290px]">
                         <FilterGroup
                             options={['all', 'todo', 'doing', 'waiting', 'done']}
                             value={filters.status ?? 'all'}
@@ -197,7 +197,7 @@ export default function Tasks() {
                         />
                     </div>
 
-                    <div className="min-w-[280px]">
+                    <div className="min-w-[250px]">
                         <FilterGroup
                             options={['any', 'today', 'upcoming', 'overdue']}
                             value={filters.dateFilter ?? 'any'}
@@ -205,7 +205,7 @@ export default function Tasks() {
                         />
                     </div>
 
-                    <div className="relative group/select min-w-[210px]">
+                    <div className="relative group/select min-w-[170px] w-[170px]">
                         <select
                             value={filters.projectId || ''}
                             onChange={(e) => updateFilter({ projectId: e.target.value || null })}
@@ -350,13 +350,13 @@ function FilterGroup<T extends string | null>({ options, value, onChange, icons 
     icons?: Record<string, React.ReactNode>
 }) {
     return (
-        <div className="flex flex-wrap items-center bg-surface border border-border/70 rounded-xl p-1 gap-1">
+        <div className="flex flex-nowrap items-center bg-surface border border-border/70 rounded-xl p-1 gap-1 overflow-x-auto no-scrollbar">
             {options.map((opt) => (
                 <button
                     key={String(opt)}
                     onClick={() => onChange(opt)}
                     className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs 2xl:text-sm font-bold uppercase tracking-wider transition-all",
+                        "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs 2xl:text-sm font-bold uppercase tracking-wider transition-all whitespace-nowrap",
                         value === opt ? "bg-accent text-white shadow-sm" : "text-text-muted hover:text-text-primary"
                     )}
                 >

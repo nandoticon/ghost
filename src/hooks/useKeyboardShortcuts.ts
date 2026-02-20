@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useShortcutContext } from '../context/ShortcutContext'
 import { useTasks } from './useTasks'
 import { supabase } from '../lib/supabase'
+import { useTimer } from '../context/TimerContext'
 
 export const useKeyboardShortcuts = () => {
     const navigate = useNavigate()
@@ -13,6 +14,7 @@ export const useKeyboardShortcuts = () => {
         setActiveTaskId
     } = useShortcutContext()
     const { completeTask, updateTask } = useTasks()
+    const { stopTimer } = useTimer()
 
     const gKeyPressed = useRef(false)
     const gTimeout = useRef<number | null>(null)
@@ -88,9 +90,19 @@ export const useKeyboardShortcuts = () => {
                 } else if (key === 'p') {
                     e.preventDefault()
                     navigate('/projects')
+                } else if (key === 'r' || key === 'y') {
+                    e.preventDefault()
+                    navigate('/analytics')
                 }
                 gKeyPressed.current = false
                 if (gTimeout.current) clearTimeout(gTimeout.current)
+                return
+            }
+
+            // Stop active timer globally
+            if (e.shiftKey && key === 's') {
+                e.preventDefault()
+                void stopTimer()
                 return
             }
 
@@ -122,5 +134,5 @@ export const useKeyboardShortcuts = () => {
             window.removeEventListener('keydown', handleKeyDown)
             if (gTimeout.current) clearTimeout(gTimeout.current)
         }
-    }, [navigate, setModalOpen, setQuickCaptureOpen, setActiveTaskId, activeTaskId, completeTask, updateTask])
+    }, [navigate, setModalOpen, setQuickCaptureOpen, setActiveTaskId, activeTaskId, completeTask, updateTask, stopTimer])
 }

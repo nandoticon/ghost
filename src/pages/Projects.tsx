@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Plus, Folder, ChevronDown, ChevronRight, MoreVertical, Filter } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useProjects } from '../hooks/useProjects'
 import { useTasks } from '../hooks/useTasks'
 import { useProjectCategories } from '../hooks/useProjectCategories'
@@ -209,8 +209,22 @@ function ProjectCard({
     onArchive: () => void,
     isArchived?: boolean
 }) {
+    const navigate = useNavigate()
+    const targetPath = `/projects/${project.short_id || project.id}`
+
     return (
-        <div className="group relative flex flex-col bg-surface border border-border/60 rounded-3xl p-7 2xl:p-9 hover:border-accent/40 transition-all hover:shadow-[0_32px_64px_-16px_rgba(0,0,0,0.4)] hover:-translate-y-2 overflow-hidden min-h-[320px] 2xl:min-h-[360px]">
+        <div
+            className="group relative flex flex-col bg-surface border border-border/60 rounded-3xl p-7 2xl:p-9 hover:border-accent/40 transition-all hover:shadow-[0_32px_64px_-16px_rgba(0,0,0,0.4)] hover:-translate-y-2 overflow-hidden min-h-[320px] 2xl:min-h-[360px] cursor-pointer"
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate(targetPath)}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    navigate(targetPath)
+                }
+            }}
+        >
             {/* Background noise texture */}
             <div className="surface-texture" />
 
@@ -219,8 +233,6 @@ function ProjectCard({
                 className="absolute top-0 left-0 right-0 h-2 2xl:h-2.5 opacity-80 group-hover:opacity-100 transition-opacity"
                 style={{ backgroundColor: project.color || '#7c6aff' }}
             />
-
-            <Link to={`/projects/${project.short_id || project.id}`} className="absolute inset-0 z-0 rounded-3xl" />
 
             <div className="relative z-10 flex-1 flex flex-col space-y-7">
                 <div className="flex items-start justify-between min-h-[64px]">
@@ -243,7 +255,7 @@ function ProjectCard({
                     <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                             onClick={(e) => {
-                                e.preventDefault()
+                                e.stopPropagation()
                                 onEdit(project)
                             }}
                             className="relative z-20 p-2.5 2xl:p-3 hover:bg-surface-secondary rounded-2xl text-text-muted hover:text-text-primary transition-all active:scale-90"
@@ -317,7 +329,7 @@ function ProjectCard({
                 {isArchived && (
                     <button
                         onClick={(e) => {
-                            e.preventDefault()
+                            e.stopPropagation()
                             onArchive()
                         }}
                         className="relative z-20 mt-2 w-full py-2.5 2xl:py-3 text-xs 2xl:text-sm font-black uppercase tracking-widest text-accent border border-accent/20 rounded-2xl hover:bg-accent/10 transition-all font-heavy"

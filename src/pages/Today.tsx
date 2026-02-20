@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import { Plus, ChevronDown, ChevronRight, LayoutList, CheckCircle2, Clock, Sparkles } from 'lucide-react'
 import { format } from 'date-fns'
 import confetti from 'canvas-confetti'
@@ -14,6 +14,8 @@ import { Task } from '../types'
 import { useShortcutContext } from '../context/ShortcutContext'
 import { useAuth } from '../hooks/useAuth'
 import { SuggestTaskModal } from '../components/SuggestTaskModal'
+import { useTimer } from '../context/TimerContext'
+import { listSessionsByRange } from '../lib/timeTracking'
 
 export default function Today() {
     const { user } = useAuth()
@@ -21,12 +23,14 @@ export default function Today() {
     const { tasks, loading, createTask, updateTask, completeTask, reorderTasks, snoozeTask } = useTasks(filters)
     const { showToast } = useToast()
     const { setActiveTaskId } = useShortcutContext()
+    const { activeSession, elapsedSeconds, stopTimer } = useTimer()
 
     const [isFormOpen, setIsFormOpen] = useState(false)
     const [isSuggestModalOpen, setIsSuggestModalOpen] = useState(false)
     const [isCompletedExpanded, setIsCompletedExpanded] = useState(false)
     const [showClearConfirm, setShowClearConfirm] = useState(false)
     const [focusedTask, setFocusedTask] = useState<Task | null>(null)
+    const [focusedTodaySeconds, setFocusedTodaySeconds] = useState(0)
 
     // Split tasks
     const remainingTasks = useMemo(() => tasks.filter(t => !t.completed), [tasks])
@@ -49,6 +53,43 @@ export default function Today() {
         const m = mins % 60
         return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`
     }
+
+    const formatHoursMins = (seconds: number) => {
+        const mins = Math.floor(seconds / 60)
+        return formatMins(mins)
+    }
+
+    const refreshFocusedToday = useCallback(async () => {
+        const now = new Date()
+        const start = new Date(now)
+        start.setHours(0, 0, 0, 0)
+
+        try {
+            const sessions = await listSessionsByRange({
+                from: start.toISOString(),
+                to: now.toISOString(),
+            })
+
+            const closedSeconds = sessions.reduce((acc, session) => {
+                if (session.ended_at && session.duration_seconds) {
+                    return acc + session.duration_seconds
+                }
+                return acc
+            }, 0)
+
+            const liveSeconds = activeSession && !activeSession.ended_at
+                ? elapsedSeconds
+                : 0
+
+            setFocusedTodaySeconds(closedSeconds + liveSeconds)
+        } catch {
+            setFocusedTodaySeconds(activeSession && !activeSession.ended_at ? elapsedSeconds : 0)
+        }
+    }, [activeSession, elapsedSeconds])
+
+    useEffect(() => {
+        void refreshFocusedToday()
+    }, [refreshFocusedToday])
 
     const displayName = useMemo(() => {
         const raw = user?.email?.split('@')[0] ?? 'there'
@@ -151,6 +192,20 @@ export default function Today() {
 
             {/* Progress/Capacity Bar */}
             <div className="space-y-3 bg-surface-secondary/25 border border-border/40 rounded-2xl p-4 md:p-5">
+                <div className="flex items-center justify-between gap-3 text-xs md:text-sm text-text-muted">
+                    <span className="font-bold uppercase tracking-widest">Focused today</span>
+                    <div className="flex items-center gap-3">
+                        <span className="text-text-primary font-black">{formatHoursMins(focusedTodaySeconds)}</span>
+                        {activeSession && (
+                            <button
+                                onClick={() => void stopTimer()}
+                                className="px-3 py-1 rounded-lg bg-emerald-400/10 border border-emerald-300/20 text-emerald-300 font-bold uppercase tracking-wider text-[10px] hover:bg-emerald-400/15 transition-colors"
+                            >
+                                Stop Active Timer
+                            </button>
+                        )}
+                    </div>
+                </div>
                 <div className="flex items-center justify-between text-xs 2xl:text-sm uppercase font-bold tracking-widest text-text-muted">
                     <span className="flex items-center gap-2">
                         {progress === 100 ? (

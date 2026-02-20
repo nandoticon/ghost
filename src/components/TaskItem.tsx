@@ -15,11 +15,14 @@ import {
     RefreshCw,
     Loader2,
     Moon,
-    Maximize2
+    Maximize2,
+    Pause,
+    Play
 } from 'lucide-react'
 import { Task } from '../types'
 import { cn } from '../lib/cn'
 import { format, isToday, isPast, startOfDay } from 'date-fns'
+import { useTimer } from '../context/TimerContext'
 
 interface TaskItemProps {
     task: Task
@@ -47,6 +50,20 @@ export const TaskItem = React.memo<TaskItemProps>(({
     onFocus
 }) => {
     const isCompleted = task.completed
+    const { activeSession, elapsedSeconds, toggleTimer, isSyncing } = useTimer()
+    const isTimerActiveForTask = activeSession?.task_id === task.id
+
+    const formatElapsed = (seconds: number) => {
+        const h = Math.floor(seconds / 3600)
+        const m = Math.floor((seconds % 3600) / 60)
+        const s = seconds % 60
+
+        const hh = String(h).padStart(2, '0')
+        const mm = String(m).padStart(2, '0')
+        const ss = String(s).padStart(2, '0')
+
+        return `${hh}:${mm}:${ss}`
+    }
 
     const getContextPills = () => {
         const pills = []
@@ -144,6 +161,11 @@ export const TaskItem = React.memo<TaskItemProps>(({
                     {task.recurrence && (
                         <RefreshCw className="w-3.5 h-3.5 text-text-muted shrink-0" />
                     )}
+                    {isTimerActiveForTask && (
+                        <span className="text-xs 2xl:text-sm uppercase font-black tracking-widest text-emerald-300 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-300/20 tabular-nums">
+                            {formatElapsed(elapsedSeconds)}
+                        </span>
+                    )}
                     {task.today && !isCompleted && (
                         <span className="text-xs 2xl:text-sm uppercase font-black tracking-widest text-accent-warm bg-accent-warm/10 px-2 py-0.5 rounded-full border border-accent-warm/10">
                             Today
@@ -217,6 +239,29 @@ export const TaskItem = React.memo<TaskItemProps>(({
                         title="Focus Mode"
                     >
                         <Maximize2 className="w-5 h-5 2xl:w-6 2xl:h-6" />
+                    </button>
+                )}
+                {!isCompleted && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            void toggleTimer(task.id, 'manual')
+                        }}
+                        disabled={isSyncing}
+                        className={cn(
+                            "transition-all p-2 rounded-xl",
+                            isTimerActiveForTask
+                                ? "text-emerald-300 bg-emerald-400/10 border border-emerald-300/20"
+                                : "text-text-muted opacity-0 group-hover:opacity-100 hover:text-emerald-300 hover:bg-surface-secondary",
+                            isSyncing && "opacity-60 cursor-not-allowed"
+                        )}
+                        title={isTimerActiveForTask ? "Stop timer" : "Start timer"}
+                    >
+                        {isTimerActiveForTask ? (
+                            <Pause className="w-5 h-5 2xl:w-6 2xl:h-6" />
+                        ) : (
+                            <Play className="w-5 h-5 2xl:w-6 2xl:h-6" />
+                        )}
                     </button>
                 )}
                 {!isCompleted && onSnooze && task.today && (

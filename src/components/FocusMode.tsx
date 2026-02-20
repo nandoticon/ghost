@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
-import { X, CheckCircle2, Clock, Zap, Target, Layers, Home, MapPin } from 'lucide-react'
+import { X, CheckCircle2, Clock, Zap, Target, Layers, Home, MapPin, Play, Pause } from 'lucide-react'
 import { Task } from '../types'
 import { cn } from '../lib/cn'
+import { useTimer } from '../context/TimerContext'
 
 interface FocusModeProps {
     task: Task
@@ -11,6 +12,8 @@ interface FocusModeProps {
 
 export const FocusMode: React.FC<FocusModeProps> = ({ task, onClose, onComplete }) => {
     const [currentTime, setCurrentTime] = useState(new Date())
+    const { activeSession, elapsedSeconds, toggleTimer, stopTimer, isSyncing } = useTimer()
+    const isTimerActiveForTask = activeSession?.task_id === task.id
 
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000)
@@ -25,6 +28,25 @@ export const FocusMode: React.FC<FocusModeProps> = ({ task, onClose, onComplete 
 
     const formatTime = (date: Date) => {
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+
+    const formatElapsed = (seconds: number) => {
+        const h = Math.floor(seconds / 3600)
+        const m = Math.floor((seconds % 3600) / 60)
+        const s = seconds % 60
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+    }
+
+    const handleComplete = async () => {
+        if (isTimerActiveForTask) {
+            const shouldStop = window.confirm('Stop timer and mark this task complete?')
+            if (shouldStop) {
+                await stopTimer()
+            }
+        }
+
+        onComplete(task.id, true)
+        onClose()
     }
 
     return (
@@ -112,11 +134,27 @@ export const FocusMode: React.FC<FocusModeProps> = ({ task, onClose, onComplete 
 
                 {/* Action Button */}
                 <div className="pt-12">
+                    <div className="flex items-center justify-center mb-5">
+                        <button
+                            onClick={() => void toggleTimer(task.id, 'focus_mode')}
+                            disabled={isSyncing}
+                            className={cn(
+                                "flex items-center gap-2 px-5 py-2.5 rounded-full border text-sm uppercase tracking-widest font-black transition-all",
+                                isTimerActiveForTask
+                                    ? "bg-emerald-400/10 border-emerald-300/25 text-emerald-300"
+                                    : "bg-white/5 border-white/15 text-white/70 hover:text-white hover:bg-white/10",
+                                isSyncing && "opacity-60 cursor-not-allowed"
+                            )}
+                        >
+                            {isTimerActiveForTask ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                            <span>{isTimerActiveForTask ? 'Stop Focus Timer' : 'Start Focus Timer'}</span>
+                            {isTimerActiveForTask && (
+                                <span className="tabular-nums text-emerald-200">{formatElapsed(elapsedSeconds)}</span>
+                            )}
+                        </button>
+                    </div>
                     <button
-                        onClick={() => {
-                            onComplete(task.id, true)
-                            onClose()
-                        }}
+                        onClick={() => void handleComplete()}
                         className="group relative flex items-center space-x-4 px-10 py-5 bg-accent hover:bg-accent/90 text-white rounded-full text-xl md:text-2xl font-black transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_rgba(var(--color-accent-rgb),0.3)]"
                     >
                         <CheckCircle2 className="w-6 h-6 md:w-8 md:h-8" />

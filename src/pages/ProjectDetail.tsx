@@ -94,7 +94,8 @@ export default function ProjectDetail() {
         const remaining = total - completed
         const now = new Date().toISOString()
         const overdue = projectTasks.filter(t => !t.completed && t.end_at && t.end_at < now).length
-        return { total, completed, remaining, overdue }
+        const progress = total > 0 ? (completed / total) * 100 : 0
+        return { total, completed, remaining, overdue, progress }
     }, [tasks])
 
     const isReorderingEnabled = useMemo(() => {
@@ -161,7 +162,7 @@ export default function ProjectDetail() {
     }
 
     return (
-        <div className="max-w-[720px] 4k:max-w-[900px] mx-auto px-4 py-8 md:py-12 space-y-8 animate-in fade-in duration-500">
+        <div className="w-full max-w-full mx-auto px-4 py-8 md:py-12 space-y-8 animate-in fade-in duration-500">
             {/* Navigation */}
             <nav className="flex items-center justify-between">
                 <Link
@@ -279,6 +280,22 @@ export default function ProjectDetail() {
                     <StatCard label="Remaining" value={stats.remaining} icon={<Target className="w-4 h-4" />} color="text-accent" />
                     <StatCard label="Overdue" value={stats.overdue} icon={<AlertCircle className="w-4 h-4" />} color="text-red-500" />
                 </div>
+
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs uppercase tracking-widest font-black">
+                        <span className="text-text-muted">Completion</span>
+                        <span className="text-text-primary tabular-nums">{Math.round(stats.progress)}%</span>
+                    </div>
+                    <div className="h-2.5 w-full bg-surface-secondary rounded-full overflow-hidden border border-border/20 p-[1px]">
+                        <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{
+                                width: `${stats.progress}%`,
+                                backgroundColor: project.color || '#7c6aff'
+                            }}
+                        />
+                    </div>
+                </div>
             </header>
 
             {/* Tasks Filter Bar */}
@@ -303,23 +320,25 @@ export default function ProjectDetail() {
                         </div>
                     </div>
 
-                    <div className="flex overflow-x-auto gap-2 no-scrollbar scroll-smooth">
-                        <FilterButton
-                            active={filters.status === 'all'}
-                            onClick={() => setFilters(f => ({ ...f, status: 'all' }))}
-                            label="All"
-                        />
-                        <FilterButton
-                            active={filters.status === 'todo'}
-                            onClick={() => setFilters(f => ({ ...f, status: 'todo' }))}
-                            label="To-Do"
-                        />
-                        <FilterButton
-                            active={filters.status === 'done'}
-                            onClick={() => setFilters(f => ({ ...f, status: 'done' }))}
-                            label="Done"
-                        />
-                        <div className="w-px h-6 bg-border mx-1" />
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <div className="min-w-[200px]">
+                            <select
+                                value={filters.status ?? 'all'}
+                                onChange={(e) =>
+                                    setFilters((f) => ({
+                                        ...f,
+                                        status: e.target.value as TaskFilters['status'],
+                                    }))
+                                }
+                                className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-xs font-black uppercase tracking-wider text-text-primary focus:border-accent/50 outline-none transition-all"
+                            >
+                                <option value="all">All</option>
+                                <option value="todo">To-Do</option>
+                                <option value="doing">Doing</option>
+                                <option value="waiting">Waiting</option>
+                                <option value="done">Complete</option>
+                            </select>
+                        </div>
                         <FilterButton
                             active={filters.dateFilter === 'overdue'}
                             onClick={() => setFilters(f => ({ ...f, dateFilter: f.dateFilter === 'overdue' ? 'any' : 'overdue' }))}
