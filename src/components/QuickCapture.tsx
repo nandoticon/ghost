@@ -55,15 +55,15 @@ export function QuickCapture({ isOpen, onClose }: QuickCaptureProps) {
     if (!isOpen) return null
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6">
+        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-6">
             <div
                 className="absolute inset-0 bg-background/80 backdrop-blur-sm animate-in fade-in duration-300"
                 onClick={onClose}
             />
 
-            <div className="relative w-full max-w-xl xl:max-w-2xl bg-surface border border-border rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
-                <form onSubmit={handleSave} className="p-6 xl:p-8 space-y-4 xl:space-y-5">
-                    <div className="flex items-center justify-between border-b border-border pb-4 mb-2">
+            <div className="relative w-full max-w-xl xl:max-w-2xl bg-surface border border-border rounded-t-2xl md:rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden max-h-[88dvh] md:max-h-[min(85dvh,760px)] flex flex-col">
+                <form onSubmit={handleSave} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 md:p-6 xl:p-8 space-y-4 xl:space-y-5">
+                    <div className="flex items-center justify-between border-b border-border pb-3 md:pb-4 mb-2">
                         <div className="flex items-center space-x-2 text-accent">
                             <Plus className="w-5 h-5" />
                             <h2 className="text-sm font-bold uppercase tracking-widest">Quick Capture</h2>
@@ -87,14 +87,14 @@ export function QuickCapture({ isOpen, onClose }: QuickCaptureProps) {
                         className="w-full bg-transparent text-xl font-medium text-text-primary placeholder-text-muted outline-none py-2"
                     />
 
-                    <div className="flex flex-wrap items-center gap-2 pt-2">
+                    <div className="flex flex-wrap items-center gap-2 pt-2 min-w-0">
                         {/* Project Selector */}
-                        <div className="relative group/select">
+                        <div className="relative group/select min-w-0 w-full sm:w-auto sm:max-w-[18rem]">
                             <select
                                 value={projectId || ''}
                                 onChange={(e) => setProjectId(e.target.value || null)}
                                 className={cn(
-                                    "pl-8 pr-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider border border-border bg-surface-secondary transition-all appearance-none cursor-pointer",
+                                    "w-full pl-8 pr-8 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider border border-border bg-surface-secondary transition-all appearance-none cursor-pointer truncate",
                                     projectId ? "border-accent/50 text-accent" : "text-text-muted hover:text-white"
                                 )}
                             >
@@ -133,11 +133,11 @@ export function QuickCapture({ isOpen, onClose }: QuickCaptureProps) {
                         </button>
                     </div>
 
-                    <div className="flex items-center justify-between pt-4 border-t border-border">
-                        <span className="text-xs text-text-muted font-medium italic">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-border">
+                        <span className="text-xs text-text-muted font-medium italic order-2 sm:order-1">
                             Press <kbd className="font-sans bg-surface-secondary px-1.5 py-0.5 rounded border border-border">Enter</kbd> to save
                         </span>
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center justify-end space-x-3 order-1 sm:order-2">
                             <button
                                 type="button"
                                 onClick={onClose}

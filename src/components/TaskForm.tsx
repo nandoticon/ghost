@@ -102,6 +102,22 @@ export const TaskForm = ({
         }
     }, [task, isOpen, defaultProjectId, defaultToday])
 
+    useEffect(() => {
+        if (!isOpen) return
+
+        const state = window.history.state ?? {}
+        window.history.pushState({ ...state, ghostOverlay: 'task-form' }, '')
+
+        const handlePopState = () => {
+            onCancel()
+        }
+
+        window.addEventListener('popstate', handlePopState)
+        return () => {
+            window.removeEventListener('popstate', handlePopState)
+        }
+    }, [isOpen, onCancel])
+
     if (!isOpen) return null
 
     const filteredProjects = projects.filter((p) =>
@@ -165,7 +181,7 @@ export const TaskForm = ({
     }
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 pb-[env(safe-area-inset-bottom)] md:p-6 transition-all animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] md:p-6 transition-all animate-in fade-in duration-200">
             <div
                 className="absolute inset-0 bg-background/75 backdrop-blur-md"
                 onClick={onCancel}
@@ -175,7 +191,7 @@ export const TaskForm = ({
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-accent to-accent-warm/70" />
-                <div className="flex items-center justify-between px-7 py-5 border-b border-border bg-surface/85 backdrop-blur sticky top-0 z-10">
+                <div className="flex items-center justify-between px-4 md:px-7 py-4 md:py-5 border-b border-border bg-surface/85 backdrop-blur sticky top-0 z-10">
                     <h2 className="text-lg font-bold tracking-tight text-text-primary">
                         {task ? 'Edit Task' : 'New Task'}
                     </h2>
@@ -187,7 +203,7 @@ export const TaskForm = ({
                     </button>
                 </div>
 
-                <form ref={formRef} onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-7 space-y-6">
+                <form ref={formRef} onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y p-4 md:p-7 space-y-6">
                     {/* Title - Auto Focused */}
                     <div className="space-y-1">
                         <input

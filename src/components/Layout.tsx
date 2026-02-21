@@ -246,7 +246,7 @@ export default function Layout() {
                 </header>
 
                 {/* Page Content — fluid width */}
-                <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 tablet:p-6 xl:p-8 2xl:p-14 4k:p-16 pb-[calc(6.25rem+env(safe-area-inset-bottom))] tablet:pb-10 relative">
+                <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 tablet:p-6 xl:p-8 2xl:p-14 4k:p-16 pb-[calc(7rem+env(safe-area-inset-bottom))] tablet:pb-10 relative">
                     <div
                         key={location.pathname}
                         className="w-full max-w-full min-w-0 4k:max-w-[1600px] 4k:mx-auto animate-in fade-in duration-200"
@@ -256,7 +256,7 @@ export default function Layout() {
                 </main>
 
                 {/* Bottom Nav — Mobile only */}
-                <nav className="tablet:hidden flex items-center bg-surface/95 backdrop-blur border-t border-border fixed bottom-0 left-0 right-0 z-50 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+                <nav className="tablet:hidden flex items-center bg-surface/95 backdrop-blur-md border-t border-border fixed inset-x-0 bottom-0 z-50 min-h-[4.25rem] pb-[max(env(safe-area-inset-bottom),0.35rem)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
                     {/* Left nav items */}
                     {navItems.slice(0, 1).map((item) => (
                         <NavLink

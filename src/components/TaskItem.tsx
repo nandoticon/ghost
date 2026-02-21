@@ -168,9 +168,9 @@ export const TaskItem = React.memo<TaskItemProps>(({
 
             {/* Title & Metadata */}
             <div className="flex-1 min-w-0 flex flex-col justify-center">
-                <div className="flex items-center space-x-2 mb-1">
+                <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mb-1 min-w-0">
                     <span className={cn(
-                        "text-[15px] 2xl:text-[17px] font-heavy tracking-tight transition-all duration-300",
+                        "text-[15px] 2xl:text-[17px] font-heavy tracking-tight transition-all duration-300 truncate max-w-full",
                         isCompleted
                             ? "line-through text-text-muted decoration-text-muted/60"
                             : "text-text-primary no-underline"
@@ -178,7 +178,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
                         {task.title}
                     </span>
                     {task.recurrence && (
-                        <RefreshCw className="w-3.5 h-3.5 text-text-muted shrink-0" />
+                        <RefreshCw className="hidden sm:block w-3.5 h-3.5 text-text-muted shrink-0" />
                     )}
                     {isTimerActiveForTask && (
                         <span className="text-xs 2xl:text-sm uppercase font-black tracking-widest text-emerald-300 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-300/20 tabular-nums">
@@ -202,11 +202,11 @@ export const TaskItem = React.memo<TaskItemProps>(({
                     {/* Project Name (if exists) */}
                     {task.project && (
                         <>
-                            <span className="text-xs 2xl:text-sm font-black uppercase tracking-widest text-text-muted/80">
+                            <span className="text-xs 2xl:text-sm font-black uppercase tracking-widest text-text-muted/80 truncate max-w-[9rem] sm:max-w-[16rem]">
                                 {task.project.name}
                             </span>
                             {task.project.category?.name && (
-                                <span className="text-xs 2xl:text-sm uppercase tracking-widest font-black text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-full">
+                                <span className="hidden sm:inline-flex text-xs 2xl:text-sm uppercase tracking-widest font-black text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-full">
                                     {task.project.category.name}
                                 </span>
                             )}
@@ -215,12 +215,12 @@ export const TaskItem = React.memo<TaskItemProps>(({
 
                     {/* Status Badges */}
                     {task.status === 'doing' && (
-                        <span className="flex items-center gap-1 text-[10px] 2xl:text-xs uppercase tracking-widest font-black text-blue-500 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full shrink-0">
+                        <span className="hidden sm:flex items-center gap-1 text-[10px] 2xl:text-xs uppercase tracking-widest font-black text-blue-500 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full shrink-0">
                             <Loader2 className="w-3 h-3 hidden sm:block" /> Doing
                         </span>
                     )}
                     {task.status === 'waiting' && (
-                        <span className="flex items-center gap-1 text-[10px] 2xl:text-xs uppercase tracking-widest font-black text-orange-500 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full shrink-0">
+                        <span className="hidden sm:flex items-center gap-1 text-[10px] 2xl:text-xs uppercase tracking-widest font-black text-orange-500 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full shrink-0">
                             <Clock className="w-3 h-3 hidden sm:block" /> Waiting
                         </span>
                     )}

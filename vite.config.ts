@@ -25,6 +25,11 @@ export default defineConfig({
             manifest: false, // using our own manifest.json
             workbox: {
                 globPatterns: ['**/*.{js,css,html,ico,png,webp,svg,woff2}'],
+                cleanupOutdatedCaches: true,
+                navigateFallbackDenylist: [
+                    /^\/assets\//,
+                    /\/[^/?]+\.[^/]+$/,
+                ],
                 runtimeCaching: [
                     {
                         urlPattern: /^https:\/\/nktxoaslnnxbzlalhcea\.supabase\.co\/rest\/.*/i,

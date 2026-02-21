@@ -275,8 +275,8 @@ Click save`
                 )}
             >
                 {/* Header */}
-                <header className="flex items-center justify-between px-6 pt-[calc(1rem+env(safe-area-inset-top))] pb-4 border-b border-transparent z-20 shrink-0">
-                    <div className="flex items-center space-x-3">
+                <header className="flex items-start justify-between gap-2 px-4 md:px-6 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 border-b border-transparent z-20 shrink-0">
+                    <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-wrap">
                         <button
                             onClick={async () => {
                                 if (!taskId) return
@@ -306,7 +306,7 @@ Click save`
                             )}
                             {completed && <Check className="w-3.5 h-3.5" />}
                         </button>
-                        <span className="text-xs font-mono text-text-muted/50 tracking-wider">
+                        <span className="text-[11px] md:text-xs font-mono text-text-muted/50 tracking-wider shrink-0">
                             {task?.short_id || taskId.substring(0, 8)}
                         </span>
                         {taskId && (
@@ -314,7 +314,7 @@ Click save`
                                 onClick={() => void toggleTimer(taskId, 'task_detail')}
                                 disabled={isTimerSyncing}
                                 className={cn(
-                                    "touch-target inline-flex items-center gap-1.5 px-2.5 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-all",
+                                    "touch-target inline-flex items-center gap-1.5 px-2 md:px-2.5 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-all shrink-0",
                                     isTimerActiveForTask
                                         ? "bg-emerald-400/10 border-emerald-300/25 text-emerald-300"
                                         : "bg-surface-secondary/60 border-border/60 text-text-muted hover:text-text-primary",
@@ -328,7 +328,7 @@ Click save`
                         )}
 
                         {/* Saving Indicator */}
-                        <div className="ml-4 flex items-center h-4">
+                        <div className="ml-1 md:ml-3 flex items-center h-4 shrink-0">
                             {isSaving ? (
                                 <div className="w-1.5 h-1.5 bg-accent rounded-full animate-pulse" title="Saving..." />
                             ) : (
@@ -337,7 +337,7 @@ Click save`
                         </div>
                     </div>
 
-                    <div className="flex items-center space-x-1">
+                    <div className="flex items-center space-x-0.5 md:space-x-1 shrink-0">
                         <div className="relative">
                             <button
                                 onClick={() => setShowMenu(!showMenu)}
