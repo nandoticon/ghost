@@ -3,6 +3,15 @@ import { Search, X, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { Task } from '../types'
 import { cn } from '../lib/cn'
+import { useAuth } from '../hooks/useAuth'
+
+type SearchResult = Pick<Task, 'id' | 'short_id' | 'title' | 'project_id'> & {
+    project?: {
+        id: string
+        name: string
+        color: string | null
+    } | null
+}
 
 function highlightMatch(text: string, query: string): React.ReactNode {
     if (!query.trim()) return text
@@ -24,12 +33,14 @@ interface SearchBarProps {
 }
 
 export function SearchBar({ onTaskClick }: SearchBarProps) {
+    const { user } = useAuth()
     const [query, setQuery] = useState('')
-    const [results, setResults] = useState<Task[]>([])
+    const [results, setResults] = useState<SearchResult[]>([])
     const [loading, setLoading] = useState(false)
     const [isOpen, setIsOpen] = useState(false)
     const [selectedIndex, setSelectedIndex] = useState(-1)
     const containerRef = useRef<HTMLDivElement>(null)
+    const requestIdRef = useRef(0)
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -42,8 +53,16 @@ export function SearchBar({ onTaskClick }: SearchBarProps) {
     }, [])
 
     useEffect(() => {
+        const trimmed = query.trim()
+        if (trimmed.length < 2 || !user) {
+            setResults([])
+            setIsOpen(false)
+            return
+        }
+
+        const requestId = ++requestIdRef.current
         const timer = setTimeout(async () => {
-            if (!query.trim()) {
+            if (!trimmed) {
                 setResults([])
                 return
             }
@@ -53,17 +72,35 @@ export function SearchBar({ onTaskClick }: SearchBarProps) {
                 const { data, error } = await supabase
                     .from('tasks')
                     .select(`
-                        *,
+                        id,
+                        short_id,
+                        title,
+                        project_id,
                         project:projects(
-                            *,
-                            category:project_categories(id,name)
+                            id,name,color
                         )
                     `)
-                    .ilike('title', `%${query}%`)
+                    .eq('user_id', user.id)
+                    .ilike('title', `%${trimmed}%`)
                     .limit(5)
 
                 if (error) throw error
-                setResults(data || [])
+                if (requestId !== requestIdRef.current) return
+                const normalized = (data || []).map((item) => {
+                    const projectValue = Array.isArray(item.project) ? item.project[0] : item.project
+                    return {
+                        id: item.id,
+                        short_id: item.short_id,
+                        title: item.title,
+                        project_id: item.project_id,
+                        project: projectValue ? {
+                            id: projectValue.id,
+                            name: projectValue.name,
+                            color: projectValue.color
+                        } : null
+                    } as SearchResult
+                })
+                setResults(normalized)
                 setIsOpen(true)
                 setSelectedIndex(-1)
             } catch (error) {
@@ -74,9 +111,9 @@ export function SearchBar({ onTaskClick }: SearchBarProps) {
         }, 300)
 
         return () => clearTimeout(timer)
-    }, [query])
+    }, [query, user])
 
-    const selectResult = (task: Task) => {
+    const selectResult = (task: SearchResult) => {
         onTaskClick(task.id, task.short_id)
         setIsOpen(false)
         setQuery('')

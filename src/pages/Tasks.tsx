@@ -322,10 +322,14 @@ export default function Tasks() {
                         description={hasActiveFilters ? "Try adjusting your filters to find what you're looking for." : "Be the master of your own destiny. Add a task to start."}
                     />
                 ) : viewMode === 'kanban' ? (
-                    <KanbanBoard onTaskClick={(id) => {
+                    <KanbanBoard
+                        tasks={tasks}
+                        onUpdateTask={updateTask}
+                        onTaskClick={(id) => {
                         const task = tasks.find(t => t.id === id)
                         if (task) setActiveTaskId(task.id, task.short_id)
-                    }} />
+                    }}
+                    />
                 ) : (
                     <DragDropContext onDragEnd={handleDragEnd}>
                         <Droppable droppableId="tasks-master-list" isDropDisabled={!isReorderingEnabled}>

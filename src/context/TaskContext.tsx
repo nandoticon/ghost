@@ -4,6 +4,41 @@ import { Task } from '../types'
 import { useAuth } from '../hooks/useAuth'
 import { generateNextTask } from '../lib/recurrence'
 
+const TASK_SELECT = `
+    id,
+    user_id,
+    title,
+    notes,
+    project_id,
+    today,
+    start_at,
+    end_at,
+    location,
+    energy,
+    focus,
+    recurrence,
+    recurrence_end_at,
+    parent_task_id,
+    status,
+    completed,
+    estimated_effort,
+    sort_order,
+    sort_order_today,
+    short_id,
+    created_at,
+    updated_at,
+    project:projects(
+        id,
+        name,
+        color,
+        category_id,
+        short_id,
+        archived,
+        category:project_categories(id,name)
+    ),
+    subtasks(id, completed)
+`
+
 interface TaskContextType {
     tasks: Task[]
     loading: boolean
@@ -35,21 +70,14 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         try {
             const { data, error } = await supabase
                 .from('tasks')
-                .select(`
-                    *,
-                    project:projects(
-                        *,
-                        category:project_categories(id,name)
-                    ),
-                    subtasks(id, completed)
-                `)
+                .select(TASK_SELECT)
                 .eq('user_id', user.id)
                 // Optionally we can order by created_at or sort_order here, 
                 // but client-side filtering/sorting will reorder anyway.
                 .order('sort_order', { ascending: true })
 
             if (error) throw error
-            setTasks(data || [])
+            setTasks((data || []) as unknown as Task[])
         } catch (error) {
             console.error('Error fetching global tasks:', error)
         } finally {
@@ -129,14 +157,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         const { data, error } = await supabase
             .from('tasks')
             .insert([newTask])
-            .select(`
-                *,
-                project:projects(
-                    *,
-                    category:project_categories(id,name)
-                ),
-                subtasks(id, completed)
-            `)
+            .select(TASK_SELECT)
             .single()
 
         if (error) {
@@ -145,8 +166,9 @@ export function TaskProvider({ children }: { children: ReactNode }) {
             return null
         }
 
-        setTasks(prev => prev.map(t => t.id === tempId ? data : t))
-        return data
+        const createdTask = data as unknown as Task
+        setTasks(prev => prev.map(t => t.id === tempId ? createdTask : t))
+        return createdTask
     }, [user, tasks, fetchTasks])
 
     const updateTask = useCallback(async (id: string, updates: Partial<Task>) => {
@@ -250,21 +272,14 @@ export function TaskProvider({ children }: { children: ReactNode }) {
                 const { data: nextTask, error: insertError } = await supabase
                     .from('tasks')
                     .insert([{ ...nextTaskData, user_id: user?.id }])
-                    .select(`
-                        *,
-                        project:projects(
-                            *,
-                            category:project_categories(id,name)
-                        ),
-                        subtasks(id, completed)
-                    `)
+                    .select(TASK_SELECT)
                     .single()
 
                 if (!insertError && nextTask) {
                     nextOccurrenceCreated = true
                     nextOccurrenceDate = nextTask.end_at
 
-                    setTasks(prev => [...prev, nextTask])
+                    setTasks(prev => [...prev, nextTask as unknown as Task])
                 } else {
                     console.error('Error creating next occurrence:', insertError)
                 }
@@ -277,13 +292,17 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     const reorderTasks = useCallback(async (orderedIds: string[], isToday?: boolean) => {
         const sortField = isToday ? 'sort_order_today' : 'sort_order'
         const previousTasks = [...tasks]
+        const previousOrderById = new Map(previousTasks.map(t => [t.id, t[sortField] || 0]))
+        const nextOrderById = new Map(orderedIds.map((id, index) => [id, index]))
+        const changedIds = orderedIds.filter((id, index) => (previousOrderById.get(id) ?? 0) !== index)
 
         // Apply immediately to global state
         setTasks(prev => {
             const newTasks = [...prev]
-            orderedIds.forEach((id, index) => {
+            changedIds.forEach((id) => {
+                const index = nextOrderById.get(id)
                 const taskIndex = newTasks.findIndex(t => t.id === id)
-                if (taskIndex !== -1) {
+                if (taskIndex !== -1 && index !== undefined) {
                     newTasks[taskIndex] = { ...newTasks[taskIndex], [sortField]: index }
                 }
             })
@@ -291,12 +310,14 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         })
 
         try {
-            const updates = orderedIds.map((id, index) =>
-                supabase
+            const updates = changedIds.map((id) => {
+                const index = nextOrderById.get(id)
+                if (index === undefined) return Promise.resolve({ error: null })
+                return supabase
                     .from('tasks')
                     .update({ [sortField]: index, updated_at: new Date().toISOString() })
                     .eq('id', id)
-            )
+            })
 
             const results = await Promise.all(updates)
             const error = results.find(r => r.error)

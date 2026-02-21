@@ -19,17 +19,23 @@ const Settings = lazy(() => import('./pages/Settings'))
 import { ShortcutProvider } from './context/ShortcutContext'
 import { TaskProvider } from './context/TaskContext'
 import { TimerProvider } from './context/TimerContext'
+import { AuthProvider } from './context/AuthContext'
+import { ProjectsProvider } from './hooks/useProjects'
+import { ProjectCategoriesProvider } from './hooks/useProjectCategories'
 
 function App() {
     return (
         <ThemeProvider>
-            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                <ShortcutProvider>
-                    <TimerProvider>
-                        <TaskProvider>
-                            <ToastProvider>
-                                <Suspense fallback={<div className="h-screen bg-background" />}>
-                                    <Routes>
+            <AuthProvider>
+                <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                    <ShortcutProvider>
+                        <ProjectsProvider>
+                            <ProjectCategoriesProvider>
+                                <TimerProvider>
+                                    <TaskProvider>
+                                        <ToastProvider>
+                                    <Suspense fallback={<div className="h-screen bg-background" />}>
+                                        <Routes>
                                         <Route path="/login" element={<Login />} />
 
 
@@ -94,13 +100,16 @@ function App() {
                                             />
                                             <Route path="*" element={<Navigate to="/today" replace />} />
                                         </Route>
-                                    </Routes>
-                                </Suspense>
-                            </ToastProvider>
-                        </TaskProvider>
-                    </TimerProvider>
-                </ShortcutProvider>
-            </BrowserRouter>
+                                        </Routes>
+                                    </Suspense>
+                                        </ToastProvider>
+                                    </TaskProvider>
+                                </TimerProvider>
+                            </ProjectCategoriesProvider>
+                        </ProjectsProvider>
+                    </ShortcutProvider>
+                </BrowserRouter>
+            </AuthProvider>
         </ThemeProvider>
     )
 }

@@ -131,6 +131,12 @@ export const useSubtasks = (taskId: string | undefined) => {
 
     const reorderSubtasks = async (orderedIds: string[]) => {
         const originalSubtasks = [...subtasks]
+        const nextOrderById = new Map(orderedIds.map((id, index) => [id, index]))
+        const changedIds = orderedIds.filter((id, index) => {
+            const current = subtasks.find(s => s.id === id)?.sort_order ?? 0
+            return current !== index
+        })
+
         const newSubtasks = orderedIds.map((id, index) => {
             const subtask = subtasks.find(s => s.id === id)
             return subtask ? { ...subtask, sort_order: index } : null
@@ -139,9 +145,11 @@ export const useSubtasks = (taskId: string | undefined) => {
         setSubtasks(newSubtasks)
 
         try {
-            const updates = orderedIds.map((id, index) =>
-                supabase.from('subtasks').update({ sort_order: index }).eq('id', id)
-            )
+            const updates = changedIds.map((id) => {
+                const index = nextOrderById.get(id)
+                if (index === undefined) return Promise.resolve({ error: null })
+                return supabase.from('subtasks').update({ sort_order: index }).eq('id', id)
+            })
             await Promise.all(updates)
         } catch (error) {
             console.error('Error reordering subtasks:', error)

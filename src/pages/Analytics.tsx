@@ -72,6 +72,7 @@ function getRangeFromPreset(preset: Preset, customFrom: string, customTo: string
 
 export default function Analytics() {
     const { tasks } = useGlobalTasks()
+    const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks])
 
     const [preset, setPreset] = useState<Preset>('7d')
     const [customFrom, setCustomFrom] = useState('')
@@ -131,13 +132,13 @@ export default function Analytics() {
         const acc: Record<string, number> = {}
 
         for (const [taskId, seconds] of Object.entries(secondsByTask)) {
-            const task = tasks.find((t) => t.id === taskId)
+            const task = taskById.get(taskId)
             const key = task?.project?.name ?? 'No Project'
             acc[key] = (acc[key] ?? 0) + seconds
         }
 
         return acc
-    }, [secondsByTask, tasks])
+    }, [secondsByTask, taskById])
 
     const mostFocusedProject = useMemo(() => {
         const entries = Object.entries(secondsByProject)
@@ -266,11 +267,11 @@ export default function Analytics() {
             .map(([taskId, seconds]) => ({
                 taskId,
                 seconds,
-                title: tasks.find((t) => t.id === taskId)?.title ?? 'Deleted task',
+                title: taskById.get(taskId)?.title ?? 'Deleted task',
             }))
             .sort((a, b) => b.seconds - a.seconds)
             .slice(0, 8)
-    }, [secondsByTask, tasks])
+    }, [secondsByTask, taskById])
 
     const topProjects = useMemo(() => {
         return Object.entries(secondsByProject)
@@ -286,9 +287,9 @@ export default function Analytics() {
                 id: s.id,
                 startedAt: new Date(s.started_at),
                 seconds: s.duration_seconds ?? 0,
-                taskTitle: tasks.find((t) => t.id === s.task_id)?.title ?? 'Deleted task',
+                taskTitle: taskById.get(s.task_id)?.title ?? 'Deleted task',
             }))
-    }, [closedSessions, tasks])
+    }, [closedSessions, taskById])
 
     const maxGrouped = Math.max(1, ...groupedBuckets.map((d) => d.seconds))
 

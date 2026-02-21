@@ -1,17 +1,16 @@
 import React, { useMemo } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { Task } from '../types'
-import { useTasks } from '../hooks/useTasks'
 import { cn } from '../lib/cn'
 import { StatusOptions } from './StatusMenu'
 
 interface KanbanBoardProps {
+    tasks: Task[]
+    onUpdateTask: (id: string, updates: Partial<Task>) => Promise<void>
     onTaskClick: (taskId: string) => void
 }
 
-export const KanbanBoard: React.FC<KanbanBoardProps> = ({ onTaskClick }) => {
-    const { tasks, updateTask } = useTasks()
-
+export const KanbanBoard: React.FC<KanbanBoardProps> = ({ tasks, onUpdateTask, onTaskClick }) => {
     // Group tasks by status
     const columns = useMemo(() => {
         const board: Record<Task['status'], Task[]> = {
@@ -49,7 +48,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ onTaskClick }) => {
         const isNowCompleted = newStatus === 'done'
 
         // Optimistically trigger the update that fires across the system
-        updateTask(draggableId, {
+        void onUpdateTask(draggableId, {
             status: newStatus,
             completed: isNowCompleted
         })

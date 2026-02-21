@@ -244,6 +244,8 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     }, [activeSession, nowMs])
 
     useEffect(() => {
+        if (!activeSession) return
+
         const timer = window.setInterval(() => {
             setNowMs(Date.now())
         }, 1000)
@@ -251,7 +253,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         return () => {
             window.clearInterval(timer)
         }
-    }, [])
+    }, [activeSession])
 
     useEffect(() => {
         if (!user) {
@@ -306,17 +308,21 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         window.addEventListener('online', onOnline)
         document.addEventListener('visibilitychange', onVisibility)
 
-        const syncInterval = window.setInterval(() => {
-            void refreshActiveTimer()
-            void flushQueue()
-        }, 30000)
+        let syncInterval: number | null = null
+        const hasPendingQueue = loadQueue().length > 0
+        if (activeSession || hasPendingQueue) {
+            syncInterval = window.setInterval(() => {
+                void refreshActiveTimer()
+                void flushQueue()
+            }, 30000)
+        }
 
         return () => {
             window.removeEventListener('online', onOnline)
             document.removeEventListener('visibilitychange', onVisibility)
-            window.clearInterval(syncInterval)
+            if (syncInterval) window.clearInterval(syncInterval)
         }
-    }, [refreshActiveTimer, flushQueue])
+    }, [activeSession, loadQueue, refreshActiveTimer, flushQueue])
 
     const value = useMemo<TimerContextType>(() => ({
         activeSession,

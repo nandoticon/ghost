@@ -48,12 +48,14 @@ export default defineConfig({
         })
     ],
     build: {
+        target: 'es2020',
         rollupOptions: {
             output: {
                 manualChunks: {
                     'react-vendor': ['react', 'react-dom', 'react-router-dom'],
                     'supabase-vendor': ['@supabase/supabase-js'],
-                    'ui-vendor': ['lucide-react', 'clsx', 'tailwind-merge', 'date-fns', '@hello-pangea/dnd']
+                    'ui-vendor': ['lucide-react', 'clsx', 'tailwind-merge', 'date-fns'],
+                    'dnd-vendor': ['@hello-pangea/dnd']
                 }
             }
         }

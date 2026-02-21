@@ -15,9 +15,6 @@ export function useTasks(filters?: TaskFilters) {
         refresh
     } = useGlobalTasks()
 
-    // Memoize stringified filters strictly for effect dependency checks if needed
-    const filtersString = JSON.stringify(filters)
-
     const filteredTasks = useMemo(() => {
         let result = [...globalTasks]
 
@@ -75,8 +72,17 @@ export function useTasks(filters?: TaskFilters) {
         }
 
         return result
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [globalTasks, filtersString])
+    }, [
+        globalTasks,
+        filters?.projectId,
+        filters?.today,
+        filters?.location,
+        filters?.energy,
+        filters?.focus,
+        filters?.status,
+        filters?.completed,
+        filters?.dateFilter
+    ])
 
     const createTask = useCallback((task: Partial<Task>) => {
         return globalCreateTask(task, filters?.today)

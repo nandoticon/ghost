@@ -31,15 +31,15 @@ export default function Projects() {
         [categories]
     )
 
-    const getProjectStats = (projectId: string) => {
+    const getProjectStats = useCallback((projectId: string) => {
         const projectTasks = tasks.filter(t => t.project_id === projectId)
         const total = projectTasks.length
         const completed = projectTasks.filter(t => t.completed).length
         const progress = total > 0 ? (completed / total) * 100 : 0
         return { total, completed, progress }
-    }
+    }, [tasks])
 
-    const processProjects = (projectList: Project[]) => {
+    const processProjects = useCallback((projectList: Project[]) => {
         const filtered = projectList.filter(p => !categoryFilterId || p.category_id === categoryFilterId)
 
         return [...filtered].sort((a, b) => {
@@ -53,10 +53,10 @@ export default function Projects() {
             if (sortBy === 'tasks') return statsB.total - statsA.total
             return 0
         })
-    }
+    }, [categoryFilterId, sortBy, getProjectStats])
 
-    const activeProjects = useMemo(() => processProjects(projects.filter(p => !p.archived)), [projects, categoryFilterId, sortBy, tasks])
-    const archivedProjects = useMemo(() => processProjects(projects.filter(p => p.archived)), [projects, categoryFilterId, sortBy, tasks])
+    const activeProjects = useMemo(() => processProjects(projects.filter(p => !p.archived)), [projects, processProjects])
+    const archivedProjects = useMemo(() => processProjects(projects.filter(p => p.archived)), [projects, processProjects])
 
     const handleSave = useCallback(async (projectData: Partial<Project>) => {
         try {

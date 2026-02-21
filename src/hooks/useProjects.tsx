@@ -1,18 +1,24 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { Project } from '../types'
 import { useAuth } from './useAuth'
 
-export function useProjects() {
+interface ProjectsContextType {
+    projects: Project[]
+    loading: boolean
+    createProject: (project: Partial<Project>) => Promise<Project | null>
+    updateProject: (id: string, updates: Partial<Project>) => Promise<void>
+    deleteProject: (id: string) => Promise<void>
+    refresh: () => Promise<void>
+}
+
+const ProjectsContext = createContext<ProjectsContextType | undefined>(undefined)
+
+export function ProjectsProvider({ children }: { children: ReactNode }) {
     const [projects, setProjects] = useState<Project[]>([])
     const [loading, setLoading] = useState(true)
     const { user } = useAuth()
-
-    const projectsRef = useRef<Project[]>([])
-
-    useEffect(() => {
-        projectsRef.current = projects
-    }, [projects])
 
     const fetchProjects = useCallback(async () => {
         if (!user) {
@@ -39,11 +45,11 @@ export function useProjects() {
     }, [user])
 
     useEffect(() => {
-        fetchProjects()
+        void fetchProjects()
     }, [fetchProjects])
 
-    const createProject = async (project: Partial<Project>) => {
-        if (!user) return
+    const createProject = useCallback(async (project: Partial<Project>) => {
+        if (!user) return null
         const tempId = crypto.randomUUID()
         const maxSortOrder = projects.length > 0
             ? Math.max(...projects.map(p => p.sort_order || 0)) + 1
@@ -62,7 +68,6 @@ export function useProjects() {
             updated_at: new Date().toISOString()
         } as Project
 
-        // Optimistic Update
         setProjects(prev => [...prev, optimisticProject])
 
         try {
@@ -79,20 +84,17 @@ export function useProjects() {
 
             if (error) throw error
 
-            // Swap temp ID with real one
             setProjects(prev => prev.map(p => p.id === tempId ? data : p))
             return data
         } catch (error) {
             console.error('Error creating project:', error)
-            setProjects(prev => prev.filter(p => p.id !== tempId)) // Rollback
+            setProjects(prev => prev.filter(p => p.id !== tempId))
             return null
         }
-    }
+    }, [user, projects])
 
-    const updateProject = async (id: string, updates: Partial<Project>) => {
+    const updateProject = useCallback(async (id: string, updates: Partial<Project>) => {
         const previousProjects = [...projects]
-
-        // Optimistic Update
         setProjects(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p))
 
         try {
@@ -104,14 +106,12 @@ export function useProjects() {
             if (error) throw error
         } catch (error) {
             console.error('Error updating project:', error)
-            setProjects(previousProjects) // Rollback
+            setProjects(previousProjects)
         }
-    }
+    }, [projects])
 
-    const deleteProject = async (id: string) => {
+    const deleteProject = useCallback(async (id: string) => {
         const previousProjects = [...projects]
-
-        // Optimistic Update
         setProjects(prev => prev.filter(p => p.id !== id))
 
         try {
@@ -123,16 +123,26 @@ export function useProjects() {
             if (error) throw error
         } catch (error) {
             console.error('Error deleting project:', error)
-            setProjects(previousProjects) // Rollback
+            setProjects(previousProjects)
         }
-    }
+    }, [projects])
 
-    return {
+    const value = useMemo<ProjectsContextType>(() => ({
         projects,
         loading,
         createProject,
         updateProject,
         deleteProject,
         refresh: fetchProjects
+    }), [projects, loading, createProject, updateProject, deleteProject, fetchProjects])
+
+    return <ProjectsContext.Provider value={value}>{children}</ProjectsContext.Provider>
+}
+
+export function useProjects() {
+    const context = useContext(ProjectsContext)
+    if (!context) {
+        throw new Error('useProjects must be used within a ProjectsProvider')
     }
+    return context
 }

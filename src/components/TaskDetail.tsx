@@ -135,67 +135,35 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
 
         setIsGeneratingSubtasks(true)
         try {
-            const context = [
-                `Status: ${status}`,
-                `Recommended energy: ${energy || 'Any'}`,
-                `Focus mode: ${focus || 'Standard'}`,
-                `Location context: ${location || 'Anywhere'}`,
-                `Marked as today's sprint: ${today ? 'Yes' : 'No'}`,
-                startAt ? `Start date: ${startAt}` : null,
-                endAt ? `Due date: ${endAt}` : null,
-                subtasks.length > 0 ? `Current subtasks (DO NOT DUPLICATE THESE): ${subtasks.map(s => s.title).join(', ')}` : null,
-                comments.length > 0 ? `Recent discussion/context: ${comments.slice(-5).map(c => c.body).join(' | ')}` : null
-            ].filter(Boolean).join('\n')
+            const existing = new Set(subtasks.map(s => s.title.trim().toLowerCase()))
+            const contextText = [title, notes, comments.slice(-3).map(c => c.body).join(' ')].filter(Boolean).join(' ')
+            const actionPrefix = energy === 'low' ? 'Do a tiny step:' : 'Do this next:'
 
-            const prompt = `You are an ADHD coach that breaks down overwhelming tasks into bite-sized, incredibly actionable, and satisfyingly simple steps. 
-            
-TASK CONTEXT:
-${context}
+            const candidates = [
+                `${actionPrefix} define the outcome for "${title}" in one sentence`,
+                `${actionPrefix} list the first 3 concrete actions`,
+                `${actionPrefix} do the easiest first action now`,
+                `${actionPrefix} complete one 10-minute pass and capture blockers`,
+                `${actionPrefix} decide the very next follow-up step`,
+                'Scan notes/context and pull out key constraints',
+                'Set a clear done definition for this task',
+                'Execute one focused mini-sprint and log progress'
+            ]
 
-THE MAIN TASK IS: "${title}"
-USER'S ADDITIONAL NOTES: "${notes || 'No additional notes'}"
+            const generated = candidates
+                .map((line) => line.replace(/\s+/g, ' ').trim())
+                .filter((line) => line.length > 0 && !existing.has(line.toLowerCase()))
+                .slice(0, contextText.length > 0 ? 5 : 3)
 
-GOAL:
-Generate 3-5 very specific, action-oriented subtasks for this. 
-CRITICAL RULES:
-1. They MUST be something I can do immediately without much thought.
-2. Don't make them too broad.
-3. DO NOT repeat any existing subtasks listed above.
-4. Consider the user's energy, focus, and recent comments to make the steps tailored.
-
-Format your response as a simple list separated by newlines, with NO formatting, bullets, or numbers. Just the raw text of the subtasks. For example:
-Find the folder
-Open the first document
-Write the title
-Click save`
-
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=AIzaSyA6CM4aSu-AMNgPbs3I8A_ljkX1Th4O8MU`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [{ text: prompt }]
-                    }]
-                })
-            })
-
-            const data = await response.json()
-            if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
-                const subtaskLines = data.candidates[0].content.parts[0].text
-                    .split('\n')
-                    .map((s: string) => s.trim().replace(/^[-*•]/, '').trim())
-                    .filter((s: string) => s.length > 0)
-
-                for (const st of subtaskLines) {
-                    await addSubtask(st)
-                }
-                showToast("Magic Breakdown complete! 🪄", "success")
+            if (generated.length === 0) {
+                showToast('No new subtasks to add.', 'info')
             } else {
-                showToast("Could not generate subtasks.", "error")
+                await Promise.all(generated.map((st) => addSubtask(st)))
+                showToast('Magic breakdown complete.', 'success')
             }
         } catch (error) {
             console.error(error)
-            showToast("Failed to connect to AI.", "error")
+            showToast('Failed to generate subtasks.', 'error')
         } finally {
             setIsGeneratingSubtasks(false)
         }

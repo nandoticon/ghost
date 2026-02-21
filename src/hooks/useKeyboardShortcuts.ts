@@ -1,8 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useShortcutContext } from '../context/ShortcutContext'
-import { useTasks } from './useTasks'
-import { supabase } from '../lib/supabase'
+import { useGlobalTasks } from '../context/TaskContext'
 import { useTimer } from '../context/TimerContext'
 
 export const useKeyboardShortcuts = () => {
@@ -13,7 +12,7 @@ export const useKeyboardShortcuts = () => {
         activeTaskId,
         setActiveTaskId
     } = useShortcutContext()
-    const { completeTask, updateTask } = useTasks()
+    const { tasks, completeTask, updateTask } = useGlobalTasks()
     const { stopTimer } = useTimer()
 
     const gKeyPressed = useRef(false)
@@ -113,18 +112,12 @@ export const useKeyboardShortcuts = () => {
                     // TaskDetail is open, focus its first input if possible
                 } else if (key === 'x') {
                     e.preventDefault()
-                    // Toggle complete
-                    supabase.from('tasks').select('completed').eq('id', activeTaskId).single()
-                        .then(({ data }) => {
-                            if (data) completeTask(activeTaskId, !data.completed)
-                        })
+                    const task = tasks.find(t => t.id === activeTaskId)
+                    if (task) void completeTask(activeTaskId, !task.completed)
                 } else if (key === 't') {
                     e.preventDefault()
-                    // Toggle today
-                    supabase.from('tasks').select('today').eq('id', activeTaskId).single()
-                        .then(({ data }) => {
-                            if (data) updateTask(activeTaskId, { today: !data.today })
-                        })
+                    const task = tasks.find(t => t.id === activeTaskId)
+                    if (task) void updateTask(activeTaskId, { today: !task.today })
                 }
             }
         }
@@ -134,5 +127,5 @@ export const useKeyboardShortcuts = () => {
             window.removeEventListener('keydown', handleKeyDown)
             if (gTimeout.current) clearTimeout(gTimeout.current)
         }
-    }, [navigate, setModalOpen, setQuickCaptureOpen, setActiveTaskId, activeTaskId, completeTask, updateTask, stopTimer])
+    }, [navigate, setModalOpen, setQuickCaptureOpen, setActiveTaskId, activeTaskId, tasks, completeTask, updateTask, stopTimer])
 }
