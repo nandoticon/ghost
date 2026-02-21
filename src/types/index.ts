@@ -11,6 +11,7 @@ export interface Project {
     short_id: string;
     created_at: string;
     updated_at: string;
+    sync_state?: 'syncing' | 'synced' | 'error';
 }
 
 export interface ProjectCategory {
@@ -45,6 +46,7 @@ export interface Task {
     short_id: string;
     created_at: string;
     updated_at: string;
+    sync_state?: 'syncing' | 'synced' | 'error';
     project?: Project; // Included for joins
     subtasks?: Subtask[]; // Included for progress calculation without individual subscriptions
 }

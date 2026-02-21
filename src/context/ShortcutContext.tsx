@@ -14,32 +14,62 @@ const ShortcutContext = createContext<ShortcutContextType | undefined>(undefined
 
 export const ShortcutProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [isModalOpen, setModalOpen] = useState(false)
-    const [isQuickCaptureOpen, setQuickCaptureOpen] = useState(false)
+    const [isQuickCaptureOpenState, setQuickCaptureOpenState] = useState(false)
     const [activeTaskId, setActiveTaskIdState] = useState<string | null>(null)
     const [searchParams, setSearchParams] = useSearchParams()
 
-    // On mount: read ?task= from URL and open the panel
+    // Keep URL params and in-memory overlay state in sync (supports browser back/forward).
     useEffect(() => {
         const taskParam = searchParams.get('task')
-        if (taskParam) {
-            setActiveTaskIdState(taskParam)
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+        const quickCaptureParam = searchParams.get('quick') === '1'
 
-    // Sync activeTaskId → URL
-    const setActiveTaskId = (id: string | null, shortId?: string | null) => {
-        setActiveTaskIdState(id)
-        setSearchParams(prev => {
+        setActiveTaskIdState((prev) => (prev === taskParam ? prev : taskParam))
+        setQuickCaptureOpenState((prev) => (prev === quickCaptureParam ? prev : quickCaptureParam))
+    }, [searchParams])
+
+    const setQuickCaptureOpen = (open: boolean) => {
+        if (open === isQuickCaptureOpenState && (searchParams.get('quick') === '1') === open) {
+            return
+        }
+        setQuickCaptureOpenState(open)
+        setSearchParams((prev) => {
             const next = new URLSearchParams(prev)
-            const identifier = shortId || id
+            if (open) {
+                next.set('quick', '1')
+            } else {
+                next.delete('quick')
+            }
+            return next
+        }, { replace: !open })
+    }
+
+    const setTaskSearchParam = (identifier: string | null) => {
+        const currentIdentifier = searchParams.get('task')
+
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev)
             if (identifier) {
                 next.set('task', identifier)
             } else {
                 next.delete('task')
             }
             return next
-        }, { replace: true })
+        }, {
+            replace: Boolean(identifier && currentIdentifier),
+        })
+    }
+
+    // Sync activeTaskId -> URL
+    const setActiveTaskId = (id: string | null, shortId?: string | null) => {
+        if (id === activeTaskId && (shortId || id) === searchParams.get('task')) {
+            return
+        }
+        setActiveTaskIdState(id)
+        const identifier = shortId || id
+        if (identifier === searchParams.get('task')) {
+            return
+        }
+        setTaskSearchParam(identifier)
     }
 
     return (
@@ -47,7 +77,7 @@ export const ShortcutProvider: React.FC<{ children: ReactNode }> = ({ children }
             value={{
                 isModalOpen,
                 setModalOpen,
-                isQuickCaptureOpen,
+                isQuickCaptureOpen: isQuickCaptureOpenState,
                 setQuickCaptureOpen,
                 activeTaskId,
                 setActiveTaskId

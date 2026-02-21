@@ -90,7 +90,7 @@ export default function Login() {
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full rounded border border-border bg-surface px-4 py-2 text-sm text-text-primary focus:border-accent focus:outline-none transition-colors"
+                                className="w-full rounded border border-border bg-surface px-4 py-2 text-base md:text-sm text-text-primary focus:border-accent focus:outline-none transition-colors"
                                 required
                             />
                         </div>
@@ -103,7 +103,7 @@ export default function Login() {
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full rounded border border-border bg-surface px-4 py-2 text-sm text-text-primary focus:border-accent focus:outline-none transition-colors"
+                                className="w-full rounded border border-border bg-surface px-4 py-2 text-base md:text-sm text-text-primary focus:border-accent focus:outline-none transition-colors"
                                 required
                             />
                             <div className="flex justify-end pt-1">
@@ -164,7 +164,7 @@ export default function Login() {
                                         type="email"
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
-                                        className="w-full rounded border border-border bg-surface px-4 py-2 text-sm text-text-primary focus:border-accent focus:outline-none transition-colors"
+                                        className="w-full rounded border border-border bg-surface px-4 py-2 text-base md:text-sm text-text-primary focus:border-accent focus:outline-none transition-colors"
                                         required
                                         autoFocus
                                     />

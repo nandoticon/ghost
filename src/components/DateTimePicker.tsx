@@ -24,13 +24,17 @@ interface DateTimePickerProps {
     onChange: (value: string) => void
     placeholder?: string
     className?: string
+    type?: 'date' | 'datetime-local'
+    ariaLabel?: string
 }
 
 export const DateTimePicker: React.FC<DateTimePickerProps> = ({
     value,
     onChange,
     placeholder = 'Set Date',
-    className
+    className,
+    type = 'datetime-local',
+    ariaLabel
 }) => {
     const [isOpen, setIsOpen] = useState(false)
     const [currentMonth, setCurrentMonth] = useState(new Date())
@@ -94,7 +98,7 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
         if (selectedDate) {
             const result = setMinutes(setHours(selectedDate, tempTime.hours), tempTime.minutes)
             // Use local-preserving format instead of toISOString() to avoid timezone jumps
-            onChange(format(result, "yyyy-MM-dd'T'HH:mm:ss"))
+            onChange(format(result, type === 'date' ? "yyyy-MM-dd" : "yyyy-MM-dd'T'HH:mm:ss"))
         }
         setIsOpen(false)
     }
@@ -116,7 +120,7 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
     const endDate = endOfWeek(monthEnd)
     const calendarDays = eachDayOfInterval({ start: startDate, end: endDate })
 
-    const formattedValue = value ? format(parseISO(value), "MMM d, yyyy h:mm a") : ''
+    const formattedValue = value ? format(parseISO(value), type === 'date' ? "MMM d, yyyy" : "MMM d, yyyy h:mm a") : ''
 
     return (
         <div className="relative w-full">
@@ -127,6 +131,9 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
                     "relative flex items-center w-full bg-surface-secondary/50 border border-border/50 rounded-xl text-sm text-text-primary focus-within:border-accent focus-within:ring-1 focus-within:ring-accent/20 transition-all group hover:border-border hover:bg-surface-secondary cursor-pointer",
                     className
                 )}
+                role="button"
+                tabIndex={0}
+                aria-label={ariaLabel ?? placeholder}
             >
                 <CalendarIcon className="absolute left-3.5 w-4 h-4 text-text-muted group-hover:text-accent transition-colors" />
 
@@ -153,7 +160,7 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
                 <div
                     ref={popoverRef}
                     className={cn(
-                        "absolute left-0 right-0 md:left-auto md:right-0 md:w-[320px] bg-surface border border-border/80 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] rounded-2xl z-50 animate-in fade-in zoom-in-95 duration-200 overflow-hidden flex flex-col",
+                        "absolute left-0 right-0 md:left-auto md:right-0 md:w-[320px] bg-surface border border-border/80 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] rounded-2xl z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden flex flex-col",
                         popoverPlacement === 'top' ? "bottom-14 mb-2 origin-bottom" : "top-14 mt-2 origin-top"
                     )}
                 >
@@ -163,10 +170,10 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
                             {format(currentMonth, 'MMMM yyyy')}
                         </span>
                         <div className="flex items-center gap-1">
-                            <button onClick={prevMonth} className="p-1.5 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors">
+                            <button type="button" onClick={prevMonth} className="p-1.5 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors">
                                 <ChevronLeft className="w-4 h-4" />
                             </button>
-                            <button onClick={nextMonth} className="p-1.5 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors">
+                            <button type="button" onClick={nextMonth} className="p-1.5 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors">
                                 <ChevronRight className="w-4 h-4" />
                             </button>
                         </div>
@@ -189,6 +196,7 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
                             return (
                                 <button
                                     key={idx}
+                                    type="button"
                                     onClick={() => handleDateClick(day)}
                                     className={cn(
                                         "h-9 w-full rounded-lg flex items-center justify-center text-xs font-bold transition-all",
@@ -204,39 +212,41 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
                         })}
                     </div>
 
-                    {/* Time Picker */}
-                    <div className="p-4 border-t border-border/50 bg-surface-secondary/10 space-y-3">
-                        <div className="flex items-center gap-2 text-[10px] font-black text-text-muted uppercase tracking-widest">
-                            <Clock className="w-3.5 h-3.5" /> Time (Defaults to 8 AM)
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <div className="flex-1 flex items-center gap-1.5 bg-surface-secondary border border-border/50 rounded-xl px-3 py-2">
-                                <select
-                                    className="bg-transparent text-sm font-bold text-text-primary outline-none appearance-none cursor-pointer w-full text-center"
-                                    value={tempTime.hours}
-                                    onChange={(e) => setTempTime(prev => ({ ...prev, hours: parseInt(e.target.value) }))}
-                                >
-                                    {Array.from({ length: 24 }).map((_, i) => (
-                                        <option key={i} value={i} className="bg-surface text-text-primary">
-                                            {i.toString().padStart(2, '0')}
-                                        </option>
-                                    ))}
-                                </select>
-                                <span className="text-text-muted font-bold">:</span>
-                                <select
-                                    className="bg-transparent text-sm font-bold text-text-primary outline-none appearance-none cursor-pointer w-full text-center"
-                                    value={tempTime.minutes}
-                                    onChange={(e) => setTempTime(prev => ({ ...prev, minutes: parseInt(e.target.value) }))}
-                                >
-                                    {Array.from({ length: 12 }).map((_, i) => (
-                                        <option key={i * 5} value={i * 5} className="bg-surface text-text-primary">
-                                            {(i * 5).toString().padStart(2, '0')}
-                                        </option>
-                                    ))}
-                                </select>
+                    {/* Time Picker - Hidden if type is 'date' */}
+                    {type !== 'date' && (
+                        <div className="p-4 border-t border-border/50 bg-surface-secondary/10 space-y-3">
+                            <div className="flex items-center gap-2 text-[10px] font-black text-text-muted uppercase tracking-widest">
+                                <Clock className="w-3.5 h-3.5" /> Time (Defaults to 8 AM)
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="flex-1 flex items-center gap-1.5 bg-surface-secondary border border-border/50 rounded-xl px-3 py-2">
+                                    <select
+                                        className="bg-transparent text-sm font-bold text-text-primary outline-none appearance-none cursor-pointer w-full text-center"
+                                        value={tempTime.hours}
+                                        onChange={(e) => setTempTime(prev => ({ ...prev, hours: parseInt(e.target.value) }))}
+                                    >
+                                        {Array.from({ length: 24 }).map((_, i) => (
+                                            <option key={i} value={i} className="bg-surface text-text-primary">
+                                                {i.toString().padStart(2, '0')}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <span className="text-text-muted font-bold">:</span>
+                                    <select
+                                        className="bg-transparent text-sm font-bold text-text-primary outline-none appearance-none cursor-pointer w-full text-center"
+                                        value={tempTime.minutes}
+                                        onChange={(e) => setTempTime(prev => ({ ...prev, minutes: parseInt(e.target.value) }))}
+                                    >
+                                        {Array.from({ length: 12 }).map((_, i) => (
+                                            <option key={i * 5} value={i * 5} className="bg-surface text-text-primary">
+                                                {(i * 5).toString().padStart(2, '0')}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* Footer Actions */}
                     <div className="p-4 border-t border-border/50 bg-surface-secondary/30 flex items-center gap-2">

@@ -1,5 +1,6 @@
 import { AlertTriangle, X } from 'lucide-react'
 import { cn } from '../lib/cn'
+import { useModalA11y } from '../hooks/useModalA11y'
 
 interface ConfirmOption {
     label: string
@@ -22,15 +23,27 @@ interface ConfirmModalProps {
 
 export function ConfirmModal({ title, description, options, onCancel, onClose, isOpen }: ConfirmModalProps) {
     const handleClose = onCancel ?? onClose ?? (() => undefined)
+    const isVisible = isOpen !== false
+    const { modalRef } = useModalA11y<HTMLDivElement>({
+        isOpen: isVisible,
+        onClose: handleClose,
+        lockBodyScroll: false,
+        trapFocus: true,
+    })
 
     // If isOpen is explicitly provided, use it as a gate
-    if (isOpen === false) return null
+    if (!isVisible) return null
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div
+                ref={modalRef}
                 className="relative w-full max-w-sm bg-surface border border-border rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200"
                 onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="confirm-modal-title"
+                tabIndex={-1}
             >
                 {/* Header */}
                 <div className="flex items-start justify-between p-6 pb-4">
@@ -39,13 +52,14 @@ export function ConfirmModal({ title, description, options, onCancel, onClose, i
                             <AlertTriangle className="w-5 h-5 text-red-500" />
                         </div>
                         <div>
-                            <h2 className="text-base font-bold text-text-primary">{title}</h2>
+                            <h2 id="confirm-modal-title" className="text-base font-bold text-text-primary">{title}</h2>
                             <p className="text-sm text-text-muted mt-0.5">{description}</p>
                         </div>
                     </div>
                     <button
                         onClick={handleClose}
-                        className="p-1.5 hover:bg-surface-secondary rounded-lg transition-colors text-text-muted hover:text-text-primary shrink-0 ml-2"
+                        className="touch-target p-1.5 hover:bg-surface-secondary rounded-lg transition-colors text-text-muted hover:text-text-primary shrink-0 ml-2"
+                        aria-label="Close confirmation"
                     >
                         <X className="w-4 h-4" />
                     </button>
@@ -66,7 +80,7 @@ export function ConfirmModal({ title, description, options, onCancel, onClose, i
                         >
                             <span className="text-sm font-semibold">{opt.label}</span>
                             {opt.description && (
-                                <span className="text-xs text-text-muted mt-0.5">{opt.description}</span>
+                                <span className="text-sm text-text-muted mt-0.5">{opt.description}</span>
                             )}
                         </button>
                     ))}

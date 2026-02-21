@@ -157,7 +157,7 @@ export default function Tasks() {
     }, [tasks, filters.projectId, projects])
 
     return (
-        <div className="w-full max-w-full mx-auto px-4 pt-2 pb-8 tablet:pt-4 tablet:pb-12 space-y-8 animate-in fade-in duration-500">
+        <div className="w-full max-w-full mx-auto px-4 pt-4 pb-12 space-y-8 animate-in fade-in duration-500">
             <header className="flex items-center justify-between gap-4 flex-wrap">
                 <h1 className="text-4xl md:text-5xl xl:text-5xl 2xl:text-6xl font-black tracking-tightest title-gradient">Tasks</h1>
                 <div className="flex items-center gap-3">
@@ -225,7 +225,7 @@ export default function Tasks() {
                 </div>
 
                 <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap no-scrollbar pb-1">
-                    <div className="min-w-[320px]">
+                    <div className="min-w-[290px]">
                         <FilterGroup
                             options={['all', 'todo', 'doing', 'waiting', 'done']}
                             value={filters.status ?? 'all'}
@@ -233,7 +233,7 @@ export default function Tasks() {
                         />
                     </div>
 
-                    <div className="min-w-[280px]">
+                    <div className="min-w-[250px]">
                         <FilterGroup
                             options={['any', 'today', 'upcoming', 'overdue']}
                             value={filters.dateFilter ?? 'any'}
@@ -241,7 +241,7 @@ export default function Tasks() {
                         />
                     </div>
 
-                    <div className="relative group/select min-w-[210px]">
+                    <div className="relative group/select min-w-[170px] w-[170px]">
                         <select
                             value={filters.projectId || ''}
                             onChange={(e) => updateFilter({ projectId: e.target.value || null })}
@@ -267,7 +267,7 @@ export default function Tasks() {
                 </div>
 
                 {isFiltersExpanded && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3 2xl:gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 2xl:gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
                         <FilterSection label="Location">
                             <FilterGroup
                                 options={[null, 'home', 'outside']}
@@ -471,13 +471,13 @@ function FilterGroup<T extends string | null>({ options, value, onChange, icons 
     icons?: Record<string, React.ReactNode>
 }) {
     return (
-        <div className="flex flex-wrap items-center bg-surface border border-border/70 rounded-xl p-1 gap-1">
+        <div className="flex flex-nowrap items-center bg-surface border border-border/70 rounded-xl p-1 gap-1 overflow-x-auto no-scrollbar">
             {options.map((opt) => (
                 <button
                     key={String(opt)}
                     onClick={() => onChange(opt)}
                     className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs 2xl:text-sm font-bold uppercase tracking-wider transition-all",
+                        "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs 2xl:text-sm font-bold uppercase tracking-wider transition-all whitespace-nowrap",
                         value === opt ? "bg-accent text-white shadow-sm" : "text-text-muted hover:text-text-primary"
                     )}
                 >

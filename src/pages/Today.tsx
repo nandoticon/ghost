@@ -1,5 +1,5 @@
-import { useMemo, useState, useCallback } from 'react'
-import { Plus, ChevronDown, ChevronRight, LayoutList, CheckCircle2, Clock, Sparkles } from 'lucide-react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
+import { Plus, ChevronDown, ChevronRight, ChevronUp, LayoutList, CheckCircle2, Clock, Sparkles } from 'lucide-react'
 import { format } from 'date-fns'
 import confetti from 'canvas-confetti'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
@@ -13,22 +13,60 @@ import { ConfirmModal } from '../components/ConfirmModal'
 import { Task } from '../types'
 import { useShortcutContext } from '../context/ShortcutContext'
 import { useAuth } from '../hooks/useAuth'
+import { supabase } from '../lib/supabase'
 import { SuggestTaskModal } from '../components/SuggestTaskModal'
 import { useProfile } from '../hooks/useProfile'
+import { useTimer } from '../context/TimerContext'
+import { listSessionsByRange } from '../lib/timeTracking'
+import { cn } from '../lib/cn'
+
+const DAILY_BUDGET_OPTIONS_HOURS = [2, 4, 6, 8, 10, 12] as const
+const DEFAULT_DAILY_BUDGET_HOURS = 6
+const FOCUS_PANEL_MODES = ['collapsed', 'detailed'] as const
+type FocusPanelMode = (typeof FOCUS_PANEL_MODES)[number]
+const DEFAULT_FOCUS_PANEL_MODE: FocusPanelMode = 'collapsed'
+
+function getDailyBudgetStorageKey(userId?: string): string {
+    return `ghost.daily_budget_hours:${userId ?? 'default'}`
+}
+
+function getFocusPanelModeStorageKey(userId?: string): string {
+    return `ghost.focus_panel_mode:${userId ?? 'default'}`
+}
+
+function parseDailyBudgetHours(value: unknown): number | null {
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed)) return null
+    if (!DAILY_BUDGET_OPTIONS_HOURS.includes(parsed as (typeof DAILY_BUDGET_OPTIONS_HOURS)[number])) return null
+    return parsed
+}
+
+function parseFocusPanelMode(value: unknown): FocusPanelMode | null {
+    if (typeof value !== 'string') return null
+    if (value === 'compact') return 'detailed' // backward compatibility for older stored value
+    if (!FOCUS_PANEL_MODES.includes(value as FocusPanelMode)) return null
+    return value as FocusPanelMode
+}
 
 export default function Today() {
     const { user, loading: authLoading } = useAuth()
+    const userId = user?.id
     const filters = useMemo(() => ({ today: true }), [])
     const { tasks, loading, createTask, updateTask, completeTask, reorderTasks, snoozeTask } = useTasks(filters)
     const { showToast } = useToast()
     const { setActiveTaskId } = useShortcutContext()
     const { profile } = useProfile()
+    const { activeSession, elapsedSeconds, stopTimer } = useTimer()
 
     const [isFormOpen, setIsFormOpen] = useState(false)
     const [isSuggestModalOpen, setIsSuggestModalOpen] = useState(false)
     const [isCompletedExpanded, setIsCompletedExpanded] = useState(false)
     const [showClearConfirm, setShowClearConfirm] = useState(false)
     const [focusedTask, setFocusedTask] = useState<Task | null>(null)
+    const [focusedTodaySeconds, setFocusedTodaySeconds] = useState(0)
+    const [dailyBudgetHours, setDailyBudgetHours] = useState<number>(DEFAULT_DAILY_BUDGET_HOURS)
+    const [focusPanelMode, setFocusPanelMode] = useState<FocusPanelMode>(DEFAULT_FOCUS_PANEL_MODE)
+    const [preferencesHydrated, setPreferencesHydrated] = useState(false)
 
     // Split tasks
     const remainingTasks = useMemo(() => tasks.filter(t => !t.completed), [tasks])
@@ -39,11 +77,13 @@ export default function Today() {
     const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
 
     // Capacity Calculations
-    const dailyCapacityMins = 360 // 6 hours "deep/focused" capacity
+    const dailyCapacityMins = dailyBudgetHours * 60
     const totalRemainingEffort = useMemo(() => remainingTasks.reduce((acc, t) => acc + (t.estimated_effort || 0), 0), [remainingTasks])
     const totalCompletedEffort = useMemo(() => completedTasks.reduce((acc, t) => acc + (t.estimated_effort || 0), 0), [completedTasks])
     const totalScheduledEffort = totalRemainingEffort + totalCompletedEffort
     const capacityUsage = (totalScheduledEffort / dailyCapacityMins) * 100
+    const focusedTodayMins = Math.floor(focusedTodaySeconds / 60)
+    const focusedBudgetUsage = (focusedTodayMins / dailyCapacityMins) * 100
 
     const formatMins = (mins: number) => {
         if (mins === 0) return '0m'
@@ -51,6 +91,118 @@ export default function Today() {
         const m = mins % 60
         return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`
     }
+
+    const formatHoursMins = (seconds: number) => {
+        const mins = Math.floor(seconds / 60)
+        return formatMins(mins)
+    }
+
+    const refreshFocusedToday = useCallback(async () => {
+        const now = new Date()
+        const start = new Date(now)
+        start.setHours(0, 0, 0, 0)
+
+        try {
+            const sessions = await listSessionsByRange({
+                from: start.toISOString(),
+                to: now.toISOString(),
+            })
+
+            const closedSeconds = sessions.reduce((acc, session) => {
+                if (session.ended_at && session.duration_seconds) {
+                    return acc + session.duration_seconds
+                }
+                return acc
+            }, 0)
+
+            const liveSeconds = activeSession && !activeSession.ended_at
+                ? elapsedSeconds
+                : 0
+
+            setFocusedTodaySeconds(closedSeconds + liveSeconds)
+        } catch {
+            setFocusedTodaySeconds(activeSession && !activeSession.ended_at ? elapsedSeconds : 0)
+        }
+    }, [activeSession, elapsedSeconds])
+
+    useEffect(() => {
+        void refreshFocusedToday()
+    }, [refreshFocusedToday])
+
+    useEffect(() => {
+        let cancelled = false
+
+        const hydrateTodayPreferences = async () => {
+            const budgetStorageKey = getDailyBudgetStorageKey(userId)
+            const panelStorageKey = getFocusPanelModeStorageKey(userId)
+            const localBudgetFallback = parseDailyBudgetHours(localStorage.getItem(budgetStorageKey))
+            const localPanelFallback = parseFocusPanelMode(localStorage.getItem(panelStorageKey))
+
+            if (!userId) {
+                if (!cancelled) {
+                    setDailyBudgetHours(localBudgetFallback ?? DEFAULT_DAILY_BUDGET_HOURS)
+                    setFocusPanelMode(localPanelFallback ?? DEFAULT_FOCUS_PANEL_MODE)
+                    setPreferencesHydrated(true)
+                }
+                return
+            }
+
+            const { data } = await supabase.auth.getUser()
+            const remoteBudget = parseDailyBudgetHours(data.user?.user_metadata?.daily_budget_hours)
+            const remotePanelMode = parseFocusPanelMode(data.user?.user_metadata?.today_focus_panel_mode)
+
+            const resolvedBudget = remoteBudget ?? localBudgetFallback ?? DEFAULT_DAILY_BUDGET_HOURS
+            const resolvedPanelMode = remotePanelMode ?? localPanelFallback ?? DEFAULT_FOCUS_PANEL_MODE
+
+            if (!cancelled) {
+                setDailyBudgetHours(resolvedBudget)
+                setFocusPanelMode(resolvedPanelMode)
+                setPreferencesHydrated(true)
+            }
+        }
+
+        setPreferencesHydrated(false)
+        void hydrateTodayPreferences()
+
+        return () => {
+            cancelled = true
+        }
+    }, [userId])
+
+    useEffect(() => {
+        if (!preferencesHydrated) return
+
+        const budgetStorageKey = getDailyBudgetStorageKey(userId)
+        const panelStorageKey = getFocusPanelModeStorageKey(userId)
+        localStorage.setItem(budgetStorageKey, String(dailyBudgetHours))
+        localStorage.setItem(panelStorageKey, focusPanelMode)
+    }, [dailyBudgetHours, focusPanelMode, userId, preferencesHydrated])
+
+    useEffect(() => {
+        if (!preferencesHydrated || !user) return
+
+        const currentRemoteBudget = parseDailyBudgetHours(user.user_metadata?.daily_budget_hours)
+        const currentRemotePanelMode = parseFocusPanelMode(user.user_metadata?.today_focus_panel_mode)
+        if (currentRemoteBudget === dailyBudgetHours && currentRemotePanelMode === focusPanelMode) return
+
+        const timeoutId = window.setTimeout(async () => {
+            const { error } = await supabase.auth.updateUser({
+                data: {
+                    ...user.user_metadata,
+                    daily_budget_hours: dailyBudgetHours,
+                    today_focus_panel_mode: focusPanelMode,
+                },
+            })
+
+            if (error) {
+                console.error('Failed to sync Today preferences to account metadata:', error)
+            }
+        }, 250)
+
+        return () => {
+            window.clearTimeout(timeoutId)
+        }
+    }, [preferencesHydrated, dailyBudgetHours, focusPanelMode, user])
 
     const displayName = useMemo(() => {
         if (profile?.full_name) {
@@ -122,9 +274,11 @@ export default function Today() {
 
     const handleTaskClick = useCallback(() => { }, [])
     const handleTitleClick = useCallback((t: Task) => setActiveTaskId(t.id, t.short_id), [setActiveTaskId])
+    const isFocusPanelCollapsed = focusPanelMode === 'collapsed'
+    const isFocusPanelDetailed = focusPanelMode === 'detailed'
 
     return (
-        <div className="w-full max-w-full mx-auto px-4 pt-2 pb-8 tablet:pt-4 tablet:pb-12 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="w-full max-w-full mx-auto px-4 pt-4 pb-12 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* Header */}
             <header className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="space-y-1">
@@ -159,77 +313,175 @@ export default function Today() {
             </header>
 
             {/* Progress/Capacity Bar */}
-            <div className="space-y-3 bg-surface-secondary/25 border border-border/40 rounded-2xl p-4 md:p-5">
-                <div className="flex items-center justify-between text-xs 2xl:text-sm uppercase font-bold tracking-widest text-text-muted">
-                    <span className="flex items-center gap-2">
-                        {progress === 100 ? (
-                            <span className="text-accent-warm inline-flex items-center gap-1.5">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                All done!
-                            </span>
-                        ) : (
-                            <span>Progress</span>
+            <div className={isFocusPanelCollapsed ? "space-y-2.5 bg-surface-secondary/20 border border-border/40 rounded-2xl p-3.5" : "space-y-2.5 bg-surface-secondary/20 border border-border/40 rounded-2xl p-3.5 md:p-4"}>
+                <div className="flex items-center justify-between gap-2 text-sm md:text-xs text-text-muted min-w-0">
+                    <div className="flex items-center justify-between md:justify-start md:gap-2 min-w-0">
+                        <div className="flex items-center gap-2">
+                            <span className="font-bold uppercase tracking-widest">Focused today</span>
+                            <button
+                                onClick={() => setFocusPanelMode(isFocusPanelCollapsed ? 'detailed' : 'collapsed')}
+                                className="touch-target inline-flex items-center justify-center rounded-lg hover:bg-surface-secondary/60 text-text-muted hover:text-text-primary transition-colors"
+                                title={isFocusPanelCollapsed ? 'Expand focus panel' : 'Collapse focus panel'}
+                                aria-label={isFocusPanelCollapsed ? 'Expand focus panel' : 'Collapse focus panel'}
+                            >
+                                {isFocusPanelCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                            </button>
+                        </div>
+                        {isFocusPanelCollapsed && (
+                            <span className="md:hidden text-text-primary font-black text-base">{formatHoursMins(focusedTodaySeconds)}</span>
                         )}
-                    </span>
-                    <span className={progress === 100 ? 'text-accent-warm font-black' : ''}>
-                        {Math.round(progress)}% · {completedCount} of {totalCount}
-                    </span>
-                </div>
-                <p className={progress === 100 ? "text-xs md:text-sm text-accent-warm font-semibold" : "text-xs md:text-sm text-text-muted"}>
-                    {progress === 100 ? 'Everything scheduled for today is complete.' : `${remainingTasks.length} task${remainingTasks.length !== 1 ? 's' : ''} left to finish.`}
-                </p>
-                <div className="relative h-3 2xl:h-3.5 w-full bg-surface-secondary rounded-full overflow-hidden">
-                    <div
-                        className="h-full rounded-full transition-all duration-1000 ease-out"
-                        style={{
-                            width: `${progress}%`,
-                            background: progress === 100
-                                ? 'linear-gradient(90deg, #f59e0b, #fbbf24)'
-                                : 'linear-gradient(90deg, var(--color-accent), #a78bfa)'
-                        }}
-                    />
-                    {progress > 0 && progress < 100 && (
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
-                    )}
+                    </div>
+                    <div className="w-[4.5rem] shrink-0">
+                        <select
+                            value={dailyBudgetHours}
+                            onChange={(e) => setDailyBudgetHours(Number(e.target.value))}
+                            className="touch-target h-10 w-full px-2 py-1 rounded-lg border border-border/60 bg-surface text-text-primary font-black uppercase tracking-wider text-base md:text-xs focus:outline-none focus:border-accent"
+                            aria-label="Select daily time budget"
+                        >
+                            {DAILY_BUDGET_OPTIONS_HOURS.map((hours) => (
+                                <option key={hours} value={hours}>
+                                    {hours}h
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
 
-                {/* Capacity Visualization */}
-                {totalScheduledEffort > 0 && (
-                    <div className="pt-4 mt-4 border-t border-border/20 space-y-3">
-                        <div className="flex items-center justify-between text-[10px] 2xl:text-xs uppercase font-bold tracking-widest text-text-muted">
-                            <span className="flex items-center gap-2">
-                                <Clock className="w-3 h-3 text-accent-warm" />
-                                Time Budget
-                            </span>
-                            <span className={capacityUsage > 100 ? 'text-red-400 font-black animate-pulse' : 'text-text-primary'}>
+                {isFocusPanelCollapsed ? (
+                    <div className="grid grid-cols-3 gap-2 text-sm md:text-xs min-w-0">
+                        <div className="rounded-lg border border-border/40 bg-surface/40 px-2.5 py-2">
+                            <p className="text-sm md:text-xs uppercase tracking-wider text-text-muted">Focused</p>
+                            <p className="text-text-primary font-black">{formatHoursMins(focusedTodaySeconds)}</p>
+                        </div>
+                        <div className="rounded-lg border border-border/40 bg-surface/40 px-2.5 py-2">
+                            <p className="text-sm md:text-xs uppercase tracking-wider text-text-muted">Done</p>
+                            <p className={cn("font-black", progress === 100 ? 'text-accent-warm' : 'text-text-primary')}>
+                                {Math.round(progress)}%
+                            </p>
+                        </div>
+                        <div className="rounded-lg border border-border/40 bg-surface/40 px-2.5 py-2">
+                            <p className="text-sm md:text-xs uppercase tracking-wider text-text-muted">Budget</p>
+                            <p className={cn("font-black truncate", capacityUsage > 100 ? 'text-red-400' : 'text-text-primary')}>
                                 {formatMins(totalScheduledEffort)} / {formatMins(dailyCapacityMins)}
-                            </span>
-                        </div>
-                        <div className="relative h-2 w-full bg-surface-secondary/50 rounded-full overflow-hidden flex">
-                            {/* Completed Effort */}
-                            <div
-                                className="h-full bg-accent-warm/40 transition-all duration-1000"
-                                style={{ width: `${Math.min(100, (totalCompletedEffort / dailyCapacityMins) * 100)}%` }}
-                            />
-                            {/* Remaining Effort */}
-                            <div
-                                className="h-full bg-accent/30 transition-all duration-1000 border-l border-white/10"
-                                style={{ width: `${Math.min(100 - (totalCompletedEffort / dailyCapacityMins) * 100, (totalRemainingEffort / dailyCapacityMins) * 100)}%` }}
-                            />
-                            {/* Over-capacity indicator */}
-                            {capacityUsage > 100 && (
-                                <div className="absolute top-0 right-0 bottom-0 w-1 bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.8)]" />
-                            )}
-                        </div>
-                        <div className="flex justify-between items-center text-[10px] text-text-muted italic">
-                            {capacityUsage > 100 ? (
-                                <span className="text-red-400 font-medium">Over-capacity by {formatMins(totalScheduledEffort - dailyCapacityMins)}</span>
-                            ) : (
-                                <span>{formatMins(dailyCapacityMins - totalScheduledEffort)} remaining in your focus budget</span>
-                            )}
-                            <span className="opacity-60">Goal: 6h / day</span>
+                            </p>
                         </div>
                     </div>
+                ) : (
+                    <>
+                        <div className="flex items-center justify-between text-sm md:text-xs 2xl:text-sm uppercase font-bold tracking-widest text-text-muted">
+                            <span className="flex items-center gap-2">
+                                {progress === 100 ? (
+                                    <span className="text-accent-warm inline-flex items-center gap-1.5">
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        All done!
+                                    </span>
+                                ) : (
+                                    <span>Progress</span>
+                                )}
+                            </span>
+                            <div className="flex items-center gap-3">
+                                <span className={progress === 100 ? 'text-accent-warm font-black' : ''}>
+                                    {Math.round(progress)}% · {completedCount} of {totalCount}
+                                </span>
+                                <span className="text-text-primary font-black text-sm md:text-base">{formatHoursMins(focusedTodaySeconds)}</span>
+                                {activeSession && isFocusPanelDetailed && (
+                                    <button
+                                        onClick={() => void stopTimer()}
+                                        className="touch-target px-3 py-1 rounded-lg bg-emerald-400/10 border border-emerald-300/20 text-emerald-300 font-bold uppercase tracking-wider text-sm md:text-xs hover:bg-emerald-400/15 transition-colors"
+                                    >
+                                        Stop Active Timer
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                        {isFocusPanelDetailed && (
+                            <p className={progress === 100 ? "text-sm md:text-xs text-accent-warm font-semibold" : "text-sm md:text-xs text-text-muted"}>
+                                {progress === 100 ? 'Everything scheduled for today is complete.' : `${remainingTasks.length} task${remainingTasks.length !== 1 ? 's' : ''} left to finish.`}
+                            </p>
+                        )}
+                        <div className="relative h-2.5 w-full bg-surface-secondary rounded-full overflow-hidden">
+                            <div
+                                className="h-full rounded-full transition-all duration-1000 ease-out"
+                                style={{
+                                    width: `${progress}%`,
+                                    background: progress === 100
+                                        ? 'linear-gradient(90deg, #f59e0b, #fbbf24)'
+                                        : 'linear-gradient(90deg, var(--color-accent), #a78bfa)'
+                                }}
+                            />
+                            {progress > 0 && progress < 100 && (
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
+                            )}
+                        </div>
+
+                        {/* Focused Time Visualization */}
+                        <div className="pt-2 mt-1 border-t border-border/20 space-y-2">
+                            <div className="flex items-center justify-between text-sm md:text-xs uppercase font-bold tracking-widest text-text-muted">
+                                <span className="flex items-center gap-2">
+                                    <Clock className="w-3 h-3 text-emerald-300" />
+                                    Focused Time
+                                </span>
+                                <span className={focusedBudgetUsage > 100 ? 'text-emerald-200 font-black' : 'text-text-primary'}>
+                                    {formatMins(focusedTodayMins)} / {formatMins(dailyCapacityMins)}
+                                </span>
+                            </div>
+                            <div className="relative h-1.5 w-full bg-surface-secondary/50 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-emerald-300/70 transition-all duration-700"
+                                    style={{ width: `${Math.min(100, focusedBudgetUsage)}%` }}
+                                />
+                                {focusedBudgetUsage > 100 && (
+                                    <div className="absolute top-0 right-0 bottom-0 w-1 bg-emerald-300 shadow-[0_0_8px_rgba(110,231,183,0.8)]" />
+                                )}
+                            </div>
+                            <div className="flex justify-between items-center text-sm md:text-xs text-text-muted italic">
+                                {focusedBudgetUsage > 100 ? (
+                                    <span className="text-emerald-300 font-medium">You exceeded your focus budget today.</span>
+                                ) : (
+                                    <span>{formatMins(Math.max(0, dailyCapacityMins - focusedTodayMins))} left in today’s focus budget</span>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Planned Capacity Visualization */}
+                        {isFocusPanelDetailed && totalScheduledEffort > 0 && (
+                            <div className="pt-2 mt-1 border-t border-border/20 space-y-2">
+                                <div className="flex items-center justify-between text-sm md:text-xs uppercase font-bold tracking-widest text-text-muted">
+                                    <span className="flex items-center gap-2">
+                                        <Clock className="w-3 h-3 text-accent-warm" />
+                                        Planned Load
+                                    </span>
+                                    <span className={capacityUsage > 100 ? 'text-red-400 font-black animate-pulse' : 'text-text-primary'}>
+                                        {formatMins(totalScheduledEffort)} / {formatMins(dailyCapacityMins)}
+                                    </span>
+                                </div>
+                                <div className="relative h-1.5 w-full bg-surface-secondary/50 rounded-full overflow-hidden flex">
+                                    {/* Completed Effort */}
+                                    <div
+                                        className="h-full bg-accent-warm/40 transition-all duration-1000"
+                                        style={{ width: `${Math.min(100, (totalCompletedEffort / dailyCapacityMins) * 100)}%` }}
+                                    />
+                                    {/* Remaining Effort */}
+                                    <div
+                                        className="h-full bg-accent/30 transition-all duration-1000 border-l border-white/10"
+                                        style={{ width: `${Math.min(100 - (totalCompletedEffort / dailyCapacityMins) * 100, (totalRemainingEffort / dailyCapacityMins) * 100)}%` }}
+                                    />
+                                    {/* Over-capacity indicator */}
+                                    {capacityUsage > 100 && (
+                                        <div className="absolute top-0 right-0 bottom-0 w-1 bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.8)]" />
+                                    )}
+                                </div>
+                                <div className="flex justify-between items-center text-sm md:text-xs text-text-muted italic">
+                                    {capacityUsage > 100 ? (
+                                        <span className="text-red-400 font-medium">Over-capacity by {formatMins(totalScheduledEffort - dailyCapacityMins)}</span>
+                                    ) : (
+                                        <span>{formatMins(dailyCapacityMins - totalScheduledEffort)} remaining in your focus budget</span>
+                                    )}
+                                    <span className="opacity-60">Goal: {dailyBudgetHours}h / day</span>
+                                </div>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
 
@@ -301,11 +553,11 @@ export default function Today() {
                             >
                                 {isCompletedExpanded ? <ChevronDown className="w-4 h-4 2xl:w-5 2xl:h-5" /> : <ChevronRight className="w-4 h-4 2xl:w-5 2xl:h-5" />}
                                 <div className="flex flex-col items-start">
-                                    <span className="text-xs 2xl:text-sm font-black uppercase tracking-widest text-accent-warm">
+                                    <span className="text-sm md:text-xs 2xl:text-sm font-black uppercase tracking-widest text-accent-warm">
                                         Daily Wins · {completedCount}
                                     </span>
                                     {isCompletedExpanded && (
-                                        <span className="text-[10px] 2xl:text-xs font-bold text-text-muted/60 lowercase italic">
+                                        <span className="text-xs 2xl:text-xs font-bold text-text-muted/70 lowercase italic">
                                             {completedCount === 0 ? "Let's get some wins!" : `${completedCount} tasks crushed today! 🏆`}
                                         </span>
                                     )}
@@ -315,7 +567,7 @@ export default function Today() {
                             {isCompletedExpanded && (
                                 <button
                                     onClick={() => setShowClearConfirm(true)}
-                                    className="text-xs 2xl:text-sm uppercase font-bold tracking-widest text-text-muted hover:text-red-400 transition-colors"
+                                    className="touch-target text-sm md:text-xs 2xl:text-sm uppercase font-bold tracking-widest text-text-muted hover:text-red-400 transition-colors"
                                 >
                                     Clear all
                                 </button>
@@ -341,14 +593,6 @@ export default function Today() {
                     </div>
                 )}
             </div>
-
-            {/* Mobile FAB */}
-            <button
-                onClick={() => setIsFormOpen(true)}
-                className="md:hidden fixed bottom-24 right-6 w-14 h-14 bg-accent text-white rounded-full flex items-center justify-center shadow-2xl shadow-accent/40 active:scale-95 transition-all z-40"
-            >
-                <Plus className="w-6 h-6" />
-            </button>
 
             {/* Form Modal (Create only) */}
             <TaskForm

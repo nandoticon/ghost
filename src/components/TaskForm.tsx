@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
     X,
     ChevronDown,
+    Search,
+    Plus,
     Home,
     MapPin,
     Zap,
@@ -12,11 +14,12 @@ import {
     RefreshCw,
     Clock
 } from 'lucide-react'
-import { Task, Project } from '../types'
+import { Task } from '../types'
 import { cn } from '../lib/cn'
-import { supabase } from '../lib/supabase'
 import { DateTimePicker } from './DateTimePicker'
 import { StatusMenu, StatusOptions } from './StatusMenu'
+import { useProjects } from '../hooks/useProjects'
+import { useModalA11y } from '../hooks/useModalA11y'
 
 interface TaskFormProps {
     task?: Task
@@ -49,18 +52,17 @@ export const TaskForm = ({
     const [status, setStatus] = useState<Task['status']>(task?.status || 'todo')
     const [estimatedEffort, setEstimatedEffort] = useState(task?.estimated_effort || 0)
 
-    const [projects, setProjects] = useState<Project[]>([])
+    const { projects, createProject } = useProjects()
     const [submitting, setSubmitting] = useState(false)
     const [showStatusPicker, setShowStatusPicker] = useState(false)
+    const [showProjectPicker, setShowProjectPicker] = useState(false)
+    const [projectQuery, setProjectQuery] = useState('')
+    const [isCreatingProject, setIsCreatingProject] = useState(false)
     const statusPickerRef = useRef<HTMLButtonElement>(null)
+    const formRef = useRef<HTMLFormElement>(null)
+    const titleInputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
-        const fetchProjects = async () => {
-            const { data } = await supabase.from('projects').select('*').order('name')
-            if (data) setProjects(data)
-        }
-        fetchProjects()
-
         // Reset form if task changes
         if (task) {
             setTitle(task.title || '')
@@ -86,14 +88,78 @@ export const TaskForm = ({
             setLocation(null)
             setEnergy(null)
             setFocus(null)
-            setRecurrence(null)
             setRecurrenceEndAt('')
             setStatus('todo')
             setEstimatedEffort(0)
         }
-    }, [task, isOpen, defaultProjectId])
+        setProjectQuery('')
+        setShowProjectPicker(false)
+
+        if (isOpen) {
+            window.setTimeout(() => {
+                if (formRef.current) formRef.current.scrollTop = 0
+                titleInputRef.current?.focus()
+            }, 40)
+        }
+    }, [task, isOpen, defaultProjectId, defaultToday])
+
+    useEffect(() => {
+        if (!isOpen) return
+
+        const state = window.history.state ?? {}
+        window.history.pushState({ ...state, ghostOverlay: 'task-form' }, '')
+
+        const handlePopState = () => {
+            onCancel()
+        }
+
+        window.addEventListener('popstate', handlePopState)
+        return () => {
+            window.removeEventListener('popstate', handlePopState)
+        }
+    }, [isOpen, onCancel])
+
+    const { modalRef } = useModalA11y<HTMLDivElement>({
+        isOpen,
+        onClose: onCancel,
+        initialFocusRef: titleInputRef,
+        lockBodyScroll: true,
+        trapFocus: true,
+    })
 
     if (!isOpen) return null
+
+    const filteredProjects = projects.filter((p) =>
+        p.name.toLowerCase().includes(projectQuery.toLowerCase())
+    )
+
+    const createProjectFromQuery = async () => {
+        const name = projectQuery.trim()
+        if (!name || isCreatingProject) return
+
+        const existing = projects.find((p) => p.name.toLowerCase() === name.toLowerCase())
+        if (existing) {
+            setProjectId(existing.id)
+            setShowProjectPicker(false)
+            setProjectQuery('')
+            return
+        }
+
+        setIsCreatingProject(true)
+        try {
+            const created = await createProject({
+                name,
+                color: '#7c6aff',
+            })
+            if (created?.id) {
+                setProjectId(created.id)
+                setShowProjectPicker(false)
+                setProjectQuery('')
+            }
+        } finally {
+            setIsCreatingProject(false)
+        }
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -124,33 +190,39 @@ export const TaskForm = ({
     }
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-6 transition-all animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] md:p-6 transition-all animate-in fade-in duration-200">
             <div
                 className="absolute inset-0 bg-background/75 backdrop-blur-md"
                 onClick={onCancel}
             />
             <div
-                className="relative w-full max-w-xl 4k:max-w-2xl bg-surface border-t md:border border-border rounded-t-[2rem] md:rounded-2xl shadow-2xl overflow-hidden flex flex-col md:max-h-[85vh] animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-300"
+                ref={modalRef}
+                className="relative w-full max-w-xl 4k:max-w-2xl bg-surface border-t md:border border-border rounded-t-[2rem] md:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] md:max-h-[85vh] animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-300"
                 onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="task-form-title"
+                tabIndex={-1}
             >
                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-accent to-accent-warm/70" />
-                <div className="flex items-center justify-between px-7 py-5 border-b border-border bg-surface/85 backdrop-blur sticky top-0 z-10">
-                    <h2 className="text-lg font-bold tracking-tight text-text-primary">
+                <div className="flex items-center justify-between px-4 md:px-7 py-4 md:py-5 border-b border-border bg-surface/85 backdrop-blur sticky top-0 z-10">
+                    <h2 id="task-form-title" className="text-lg font-bold tracking-tight text-text-primary">
                         {task ? 'Edit Task' : 'New Task'}
                     </h2>
                     <button
                         onClick={onCancel}
-                        className="p-1 rounded-full hover:bg-surface-secondary transition-colors"
+                        className="touch-target flex items-center justify-center p-1 rounded-full hover:bg-surface-secondary transition-colors"
+                        aria-label="Close task form"
                     >
                         <X className="w-5 h-5 text-text-muted" />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-7 space-y-6">
+                <form ref={formRef} onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y p-4 md:p-7 space-y-6">
                     {/* Title - Auto Focused */}
                     <div className="space-y-1">
                         <input
-                            autoFocus
+                            ref={titleInputRef}
                             placeholder="What needs to be done?"
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
@@ -165,32 +237,99 @@ export const TaskForm = ({
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             rows={3}
-                            className="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none resize-none px-0"
+                            className="w-full bg-transparent text-base md:text-sm text-text-primary placeholder:text-text-muted focus:outline-none resize-none px-0"
                         />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Project Selector */}
                         <div className="space-y-2">
-                            <label className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Project</label>
+                            <label className="text-sm md:text-xs uppercase font-bold tracking-widest text-text-muted">Project</label>
                             <div className="relative">
-                                <select
-                                    value={projectId}
-                                    onChange={(e) => setProjectId(e.target.value)}
-                                    className="w-full appearance-none bg-surface-secondary border border-border rounded-lg px-4 py-2.5 text-sm text-text-primary focus:border-accent focus:outline-none"
+                                <button
+                                    type="button"
+                                    onClick={() => setShowProjectPicker((v) => !v)}
+                                    className="w-full bg-surface-secondary border border-border rounded-lg px-4 py-2.5 text-sm text-text-primary focus:border-accent focus:outline-none flex items-center justify-between"
                                 >
-                                    <option value="" className="bg-surface text-text-primary">No Project</option>
-                                    {projects.map(p => (
-                                        <option key={p.id} value={p.id} className="bg-surface text-text-primary">{p.name}</option>
-                                    ))}
-                                </select>
-                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
+                                    <span className={!projectId ? "text-text-muted" : ""}>
+                                        {projectId ? projects.find((p) => p.id === projectId)?.name || 'Unknown Project' : 'No Project'}
+                                    </span>
+                                    <ChevronDown className="w-4 h-4 text-text-muted" />
+                                </button>
+                                {showProjectPicker && (
+                                    <>
+                                        <div className="fixed inset-0 z-40" onClick={() => setShowProjectPicker(false)} />
+                                        <div className="absolute top-12 left-0 right-0 max-h-72 overflow-hidden bg-surface border border-border/80 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] rounded-xl z-50 animate-in fade-in zoom-in-95 duration-200 flex flex-col">
+                                            <div className="p-2 border-b border-border/50 flex items-center gap-2 bg-surface/50">
+                                                <Search className="w-4 h-4 text-text-muted ml-2" />
+                                                <input
+                                                    autoFocus
+                                                    type="text"
+                                                    placeholder="Search or create project..."
+                                                    className="bg-transparent border-none outline-none text-sm p-1 w-full text-text-primary"
+                                                    value={projectQuery}
+                                                    onChange={(e) => setProjectQuery(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault()
+                                                            void createProjectFromQuery()
+                                                        }
+                                                    }}
+                                                />
+                                            </div>
+                                            <div className="overflow-y-auto p-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setProjectId('')
+                                                        setShowProjectPicker(false)
+                                                    }}
+                                                    className={cn(
+                                                        "w-full text-left px-3 py-2 text-sm rounded-lg transition-colors",
+                                                        !projectId ? "bg-accent/10 text-accent font-medium" : "text-text-muted hover:bg-surface-secondary"
+                                                    )}
+                                                >
+                                                    No Project
+                                                </button>
+                                                {filteredProjects.map((p) => (
+                                                    <button
+                                                        key={p.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setProjectId(p.id)
+                                                            setShowProjectPicker(false)
+                                                        }}
+                                                        className={cn(
+                                                            "w-full text-left px-3 py-2 text-sm rounded-lg transition-colors",
+                                                            projectId === p.id ? "bg-accent/10 text-accent font-medium" : "text-text-primary hover:bg-surface-secondary"
+                                                        )}
+                                                    >
+                                                        {p.name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {projectQuery.trim().length > 0 && !projects.some((p) => p.name.toLowerCase() === projectQuery.trim().toLowerCase()) && (
+                                                <div className="p-2 border-t border-border/50">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => void createProjectFromQuery()}
+                                                        disabled={isCreatingProject}
+                                                        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors text-sm font-semibold disabled:opacity-50"
+                                                    >
+                                                        <Plus className="w-4 h-4" />
+                                                        <span>{isCreatingProject ? 'Creating...' : `Create "${projectQuery.trim()}"`}</span>
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
 
                         {/* Today Toggle */}
                         <div className="space-y-2">
-                            <label className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Schedule</label>
+                            <label className="text-sm md:text-xs uppercase font-bold tracking-widest text-text-muted">Schedule</label>
                             <button
                                 type="button"
                                 onClick={() => setToday(!today)}
@@ -219,7 +358,7 @@ export const TaskForm = ({
                     {/* Dates */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Start</label>
+                            <label className="text-sm md:text-xs uppercase font-bold tracking-widest text-text-muted">Start</label>
                             <DateTimePicker
                                 value={startAt}
                                 onChange={setStartAt}
@@ -228,7 +367,7 @@ export const TaskForm = ({
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-[10px] uppercase font-bold tracking-widest text-text-muted">End</label>
+                            <label className="text-sm md:text-xs uppercase font-bold tracking-widest text-text-muted">End</label>
                             <DateTimePicker
                                 value={endAt}
                                 onChange={setEndAt}
@@ -240,25 +379,25 @@ export const TaskForm = ({
 
                     {/* Context Pills */}
                     <div className="space-y-4 pt-2 border-t border-border/50">
-                        <h3 className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Fields</h3>
+                        <h3 className="text-sm md:text-xs uppercase font-bold tracking-widest text-text-muted">Fields</h3>
 
                         <div className="space-y-4">
                             {/* Status */}
                             <div className="flex items-center justify-between">
-                                <span className="text-xs text-text-primary font-medium">Status</span>
+                                <span className="text-sm md:text-xs text-text-primary font-medium">Status</span>
                                 <div className="relative">
                                     <button
                                         type="button"
                                         ref={statusPickerRef}
                                         onClick={() => setShowStatusPicker(!showStatusPicker)}
-                                        className="flex items-center space-x-2 px-3 py-1.5 bg-surface-secondary/50 rounded-lg border border-border transition-all group hover:bg-surface-secondary"
+                                        className="touch-target flex items-center space-x-2 px-3 py-2 bg-surface-secondary/50 rounded-lg border border-border transition-all group hover:bg-surface-secondary"
                                     >
                                         {StatusOptions.find(opt => opt.value === status)?.icon && (() => {
                                             const Icon = StatusOptions.find(opt => opt.value === status)!.icon
                                             const color = StatusOptions.find(opt => opt.value === status)!.color
                                             return <Icon className={cn("w-3.5 h-3.5", color)} />
                                         })()}
-                                        <span className={cn("text-xs font-medium uppercase tracking-wider", StatusOptions.find(opt => opt.value === status)?.color)}>
+                                        <span className={cn("text-sm md:text-xs font-medium uppercase tracking-wider", StatusOptions.find(opt => opt.value === status)?.color)}>
                                             {StatusOptions.find(opt => opt.value === status)?.label}
                                         </span>
                                     </button>
@@ -274,7 +413,7 @@ export const TaskForm = ({
 
                             {/* Location */}
                             <div className="flex items-center justify-between">
-                                <span className="text-xs text-text-primary font-medium">Location</span>
+                                <span className="text-sm md:text-xs text-text-primary font-medium">Location</span>
                                 <div className="flex bg-surface-secondary/50 p-1 rounded-lg border border-border">
                                     {[null, 'home', 'outside'].map((val) => (
                                         <button
@@ -282,7 +421,7 @@ export const TaskForm = ({
                                             type="button"
                                             onClick={() => setLocation(val as 'home' | 'outside' | null)}
                                             className={cn(
-                                                "flex items-center space-x-1.5 px-3 py-1 rounded text-xs transition-all",
+                                                "touch-target flex items-center space-x-1.5 px-3 py-1.5 rounded text-sm md:text-xs transition-all",
                                                 location === val ? "bg-accent text-white" : "text-text-muted hover:text-text-primary"
                                             )}
                                         >
@@ -296,7 +435,7 @@ export const TaskForm = ({
 
                             {/* Energy */}
                             <div className="flex items-center justify-between">
-                                <span className="text-xs text-text-primary font-medium">Energy</span>
+                                <span className="text-sm md:text-xs text-text-primary font-medium">Energy</span>
                                 <div className="flex bg-surface-secondary/50 p-1 rounded-lg border border-border">
                                     {[null, 'high', 'low'].map((val) => (
                                         <button
@@ -304,7 +443,7 @@ export const TaskForm = ({
                                             type="button"
                                             onClick={() => setEnergy(val as 'high' | 'low' | null)}
                                             className={cn(
-                                                "flex items-center space-x-1.5 px-3 py-1 rounded text-xs transition-all",
+                                                "touch-target flex items-center space-x-1.5 px-3 py-1.5 rounded text-sm md:text-xs transition-all",
                                                 energy === val ? "bg-accent text-white" : "text-text-muted hover:text-text-primary"
                                             )}
                                         >
@@ -318,7 +457,7 @@ export const TaskForm = ({
 
                             {/* Focus */}
                             <div className="flex items-center justify-between">
-                                <span className="text-xs text-text-primary font-medium">Focus</span>
+                                <span className="text-sm md:text-xs text-text-primary font-medium">Focus</span>
                                 <div className="flex bg-surface-secondary/50 p-1 rounded-lg border border-border">
                                     {[null, 'immersion', 'process'].map((val) => (
                                         <button
@@ -326,7 +465,7 @@ export const TaskForm = ({
                                             type="button"
                                             onClick={() => setFocus(val as 'immersion' | 'process' | null)}
                                             className={cn(
-                                                "flex items-center space-x-1.5 px-3 py-1 rounded text-xs transition-all",
+                                                "touch-target flex items-center space-x-1.5 px-3 py-1.5 rounded text-sm md:text-xs transition-all",
                                                 focus === val ? "bg-accent text-white" : "text-text-muted hover:text-text-primary"
                                             )}
                                         >
@@ -342,7 +481,7 @@ export const TaskForm = ({
                             <div className="flex flex-col space-y-3 pt-4 border-t border-border/50">
                                 <div className="flex items-center space-x-2">
                                     <Clock className="w-3.5 h-3.5 text-text-muted" />
-                                    <span className="text-xs text-text-primary font-medium">Estimated Effort</span>
+                                    <span className="text-sm md:text-xs text-text-primary font-medium">Estimated Effort</span>
                                 </div>
                                 <div className="flex flex-wrap gap-1.5">
                                     {[5, 15, 30, 60, 120, 240].map((mins) => (
@@ -351,7 +490,7 @@ export const TaskForm = ({
                                             type="button"
                                             onClick={() => setEstimatedEffort(estimatedEffort === mins ? 0 : mins)}
                                             className={cn(
-                                                "px-3 py-1.5 rounded-lg border text-xs font-bold transition-all",
+                                                "touch-target px-3 py-1.5 rounded-lg border text-sm md:text-xs font-bold transition-all",
                                                 estimatedEffort === mins
                                                     ? "bg-accent-warm/20 border-accent-warm/40 text-accent-warm"
                                                     : "bg-surface-secondary border-border text-text-muted hover:text-text-primary hover:border-border"
@@ -368,12 +507,12 @@ export const TaskForm = ({
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-2">
                                         <RefreshCw className="w-3.5 h-3.5 text-text-muted" />
-                                        <span className="text-xs text-text-primary font-medium">Repeat</span>
+                                        <span className="text-sm md:text-xs text-text-primary font-medium">Repeat</span>
                                     </div>
                                     <select
                                         value={recurrence || ''}
                                         onChange={(e) => setRecurrence((e.target.value || null) as 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly' | null)}
-                                        className="bg-surface-secondary border border-border rounded-lg px-3 py-1 text-xs text-text-primary focus:border-accent outline-none appearance-none cursor-pointer"
+                                        className="touch-target bg-surface-secondary border border-border rounded-lg px-3 py-1.5 text-sm md:text-xs text-text-primary focus:border-accent outline-none appearance-none cursor-pointer"
                                     >
                                         <option value="">None</option>
                                         <option value="daily">Daily</option>
@@ -386,12 +525,13 @@ export const TaskForm = ({
 
                                 {recurrence && (
                                     <div className="flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300">
-                                        <span className="text-xs text-text-primary font-medium shrink-0 mr-4">End Repeat</span>
+                                        <span className="text-sm md:text-xs text-text-primary font-medium shrink-0 mr-4">End Repeat</span>
                                         <DateTimePicker
                                             value={recurrenceEndAt}
                                             onChange={setRecurrenceEndAt}
-                                            placeholder="Ends Never"
-                                            className="bg-surface-secondary border-border"
+                                            placeholder="Repeat ends on..."
+                                            type="date"
+                                            className="bg-surface-secondary border-border text-sm md:text-xs"
                                         />
                                     </div>
                                 )}
@@ -420,7 +560,7 @@ export const TaskForm = ({
                         {submitting ? 'Saving...' : (task ? 'Update Task' : 'Create Task')}
                     </button>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     )
 }

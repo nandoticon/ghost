@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { Project } from '../types'
 import { useAuth } from './useAuth'
@@ -8,9 +8,16 @@ export function useProjects() {
     const [loading, setLoading] = useState(true)
     const { user } = useAuth()
 
+    const projectsRef = useRef<Project[]>([])
+
+    useEffect(() => {
+        projectsRef.current = projects
+    }, [projects])
+
     const fetchProjects = useCallback(async () => {
         if (!user) {
             setLoading(false)
+            setProjects([])
             return
         }
         setLoading(true)
@@ -18,7 +25,7 @@ export function useProjects() {
         try {
             const { data, error } = await supabase
                 .from('projects')
-                .select('*')
+                .select('id,user_id,name,description,color,category_id,sort_order,archived,short_id,created_at,updated_at')
                 .eq('user_id', user.id)
                 .order('sort_order', { ascending: true })
 
@@ -52,8 +59,7 @@ export function useProjects() {
             sort_order: maxSortOrder,
             archived: false,
             created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            ...project
+            updated_at: new Date().toISOString()
         } as Project
 
         // Optimistic Update
