@@ -15,6 +15,7 @@ import { useState } from 'react'
 import { useShortcutContext } from '../context/ShortcutContext'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useProfile } from '../hooks/useProfile'
+import { prefetchRoute } from '../lib/routePrefetch'
 
 export default function Layout() {
     const { user } = useAuth()
@@ -87,6 +88,8 @@ export default function Layout() {
                         <NavLink
                             key={item.to}
                             to={item.to}
+                            onMouseEnter={() => prefetchRoute(item.to)}
+                            onFocus={() => prefetchRoute(item.to)}
                             className={() =>
                                 cn(
                                     "flex items-center space-x-3 px-3 py-2.5 2xl:py-3 rounded-xl transition-all text-sm 2xl:text-base font-semibold",
@@ -245,6 +248,8 @@ export default function Layout() {
                         <NavLink
                             key={item.to}
                             to={item.to}
+                            onMouseEnter={() => prefetchRoute(item.to)}
+                            onFocus={() => prefetchRoute(item.to)}
                             className={({ isActive }) =>
                                 cn(
                                     "flex-1 flex justify-center py-2 transition-colors relative",
@@ -280,6 +285,8 @@ export default function Layout() {
                         <NavLink
                             key={item.to}
                             to={item.to}
+                            onMouseEnter={() => prefetchRoute(item.to)}
+                            onFocus={() => prefetchRoute(item.to)}
                             className={({ isActive }) =>
                                 cn(
                                     "flex-1 flex justify-center py-2 transition-colors relative",

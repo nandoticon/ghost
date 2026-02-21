@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AuthGuard from './components/AuthGuard'
 import Layout from './components/Layout'
@@ -22,8 +22,29 @@ import { TimerProvider } from './context/TimerContext'
 import { AuthProvider } from './context/AuthContext'
 import { ProjectsProvider } from './hooks/useProjects'
 import { ProjectCategoriesProvider } from './hooks/useProjectCategories'
+import { prefetchLikelyRoutes } from './lib/routePrefetch'
 
 function App() {
+    useEffect(() => {
+        const run = () => prefetchLikelyRoutes()
+        const win = window as Window & {
+            requestIdleCallback?: (cb: () => void) => number
+            cancelIdleCallback?: (id: number) => void
+        }
+
+        if (typeof win.requestIdleCallback === 'function') {
+            const id = win.requestIdleCallback(run)
+            return () => {
+                if (typeof win.cancelIdleCallback === 'function') {
+                    win.cancelIdleCallback(id)
+                }
+            }
+        }
+
+        const timeoutId = window.setTimeout(run, 1200)
+        return () => window.clearTimeout(timeoutId)
+    }, [])
+
     return (
         <ThemeProvider>
             <AuthProvider>

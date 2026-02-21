@@ -136,29 +136,40 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
         setIsGeneratingSubtasks(true)
         try {
             const existing = new Set(subtasks.map(s => s.title.trim().toLowerCase()))
-            const contextText = [title, notes, comments.slice(-3).map(c => c.body).join(' ')].filter(Boolean).join(' ')
-            const actionPrefix = energy === 'low' ? 'Do a tiny step:' : 'Do this next:'
+            const response = await fetch('/api/generate-subtasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title,
+                    notes,
+                    status,
+                    energy,
+                    focus,
+                    location,
+                    today,
+                    startAt,
+                    endAt,
+                    existingSubtasks: subtasks.map(s => s.title),
+                    comments: comments.map(c => c.body),
+                }),
+            })
 
-            const candidates = [
-                `${actionPrefix} define the outcome for "${title}" in one sentence`,
-                `${actionPrefix} list the first 3 concrete actions`,
-                `${actionPrefix} do the easiest first action now`,
-                `${actionPrefix} complete one 10-minute pass and capture blockers`,
-                `${actionPrefix} decide the very next follow-up step`,
-                'Scan notes/context and pull out key constraints',
-                'Set a clear done definition for this task',
-                'Execute one focused mini-sprint and log progress'
-            ]
+            if (!response.ok) {
+                throw new Error(`Subtask API returned ${response.status}`)
+            }
+
+            const data = await response.json()
+            const candidates = Array.isArray(data?.subtasks) ? data.subtasks : []
 
             const generated = candidates
-                .map((line) => line.replace(/\s+/g, ' ').trim())
-                .filter((line) => line.length > 0 && !existing.has(line.toLowerCase()))
-                .slice(0, contextText.length > 0 ? 5 : 3)
+                .map((line: string) => line.replace(/\s+/g, ' ').trim())
+                .filter((line: string) => line.length > 0 && !existing.has(line.toLowerCase()))
+                .slice(0, 5)
 
             if (generated.length === 0) {
                 showToast('No new subtasks to add.', 'info')
             } else {
-                await Promise.all(generated.map((st) => addSubtask(st)))
+                await Promise.all(generated.map((st: string) => addSubtask(st)))
                 showToast('Magic breakdown complete.', 'success')
             }
         } catch (error) {
