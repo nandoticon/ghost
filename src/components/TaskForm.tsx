@@ -19,6 +19,7 @@ import { cn } from '../lib/cn'
 import { DateTimePicker } from './DateTimePicker'
 import { StatusMenu, StatusOptions } from './StatusMenu'
 import { useProjects } from '../hooks/useProjects'
+import { useModalA11y } from '../hooks/useModalA11y'
 
 interface TaskFormProps {
     task?: Task
@@ -118,6 +119,14 @@ export const TaskForm = ({
         }
     }, [isOpen, onCancel])
 
+    const { modalRef } = useModalA11y<HTMLDivElement>({
+        isOpen,
+        onClose: onCancel,
+        initialFocusRef: titleInputRef,
+        lockBodyScroll: true,
+        trapFocus: true,
+    })
+
     if (!isOpen) return null
 
     const filteredProjects = projects.filter((p) =>
@@ -187,17 +196,23 @@ export const TaskForm = ({
                 onClick={onCancel}
             />
             <div
+                ref={modalRef}
                 className="relative w-full max-w-xl 4k:max-w-2xl bg-surface border-t md:border border-border rounded-t-[2rem] md:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] md:max-h-[85vh] animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-300"
                 onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="task-form-title"
+                tabIndex={-1}
             >
                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-accent to-accent-warm/70" />
                 <div className="flex items-center justify-between px-4 md:px-7 py-4 md:py-5 border-b border-border bg-surface/85 backdrop-blur sticky top-0 z-10">
-                    <h2 className="text-lg font-bold tracking-tight text-text-primary">
+                    <h2 id="task-form-title" className="text-lg font-bold tracking-tight text-text-primary">
                         {task ? 'Edit Task' : 'New Task'}
                     </h2>
                     <button
                         onClick={onCancel}
                         className="touch-target flex items-center justify-center p-1 rounded-full hover:bg-surface-secondary transition-colors"
+                        aria-label="Close task form"
                     >
                         <X className="w-5 h-5 text-text-muted" />
                     </button>
@@ -222,14 +237,14 @@ export const TaskForm = ({
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             rows={3}
-                            className="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none resize-none px-0"
+                            className="w-full bg-transparent text-base md:text-sm text-text-primary placeholder:text-text-muted focus:outline-none resize-none px-0"
                         />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Project Selector */}
                         <div className="space-y-2">
-                            <label className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Project</label>
+                            <label className="text-sm md:text-xs uppercase font-bold tracking-widest text-text-muted">Project</label>
                             <div className="relative">
                                 <button
                                     type="button"
@@ -314,7 +329,7 @@ export const TaskForm = ({
 
                         {/* Today Toggle */}
                         <div className="space-y-2">
-                            <label className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Schedule</label>
+                            <label className="text-sm md:text-xs uppercase font-bold tracking-widest text-text-muted">Schedule</label>
                             <button
                                 type="button"
                                 onClick={() => setToday(!today)}
@@ -343,7 +358,7 @@ export const TaskForm = ({
                     {/* Dates */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Start</label>
+                            <label className="text-sm md:text-xs uppercase font-bold tracking-widest text-text-muted">Start</label>
                             <DateTimePicker
                                 value={startAt}
                                 onChange={setStartAt}
@@ -352,7 +367,7 @@ export const TaskForm = ({
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-[10px] uppercase font-bold tracking-widest text-text-muted">End</label>
+                            <label className="text-sm md:text-xs uppercase font-bold tracking-widest text-text-muted">End</label>
                             <DateTimePicker
                                 value={endAt}
                                 onChange={setEndAt}
@@ -364,25 +379,25 @@ export const TaskForm = ({
 
                     {/* Context Pills */}
                     <div className="space-y-4 pt-2 border-t border-border/50">
-                        <h3 className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Fields</h3>
+                        <h3 className="text-sm md:text-xs uppercase font-bold tracking-widest text-text-muted">Fields</h3>
 
                         <div className="space-y-4">
                             {/* Status */}
                             <div className="flex items-center justify-between">
-                                <span className="text-xs text-text-primary font-medium">Status</span>
+                                <span className="text-sm md:text-xs text-text-primary font-medium">Status</span>
                                 <div className="relative">
                                     <button
                                         type="button"
                                         ref={statusPickerRef}
                                         onClick={() => setShowStatusPicker(!showStatusPicker)}
-                                        className="flex items-center space-x-2 px-3 py-1.5 bg-surface-secondary/50 rounded-lg border border-border transition-all group hover:bg-surface-secondary"
+                                        className="touch-target flex items-center space-x-2 px-3 py-2 bg-surface-secondary/50 rounded-lg border border-border transition-all group hover:bg-surface-secondary"
                                     >
                                         {StatusOptions.find(opt => opt.value === status)?.icon && (() => {
                                             const Icon = StatusOptions.find(opt => opt.value === status)!.icon
                                             const color = StatusOptions.find(opt => opt.value === status)!.color
                                             return <Icon className={cn("w-3.5 h-3.5", color)} />
                                         })()}
-                                        <span className={cn("text-xs font-medium uppercase tracking-wider", StatusOptions.find(opt => opt.value === status)?.color)}>
+                                        <span className={cn("text-sm md:text-xs font-medium uppercase tracking-wider", StatusOptions.find(opt => opt.value === status)?.color)}>
                                             {StatusOptions.find(opt => opt.value === status)?.label}
                                         </span>
                                     </button>
@@ -398,7 +413,7 @@ export const TaskForm = ({
 
                             {/* Location */}
                             <div className="flex items-center justify-between">
-                                <span className="text-xs text-text-primary font-medium">Location</span>
+                                <span className="text-sm md:text-xs text-text-primary font-medium">Location</span>
                                 <div className="flex bg-surface-secondary/50 p-1 rounded-lg border border-border">
                                     {[null, 'home', 'outside'].map((val) => (
                                         <button
@@ -406,7 +421,7 @@ export const TaskForm = ({
                                             type="button"
                                             onClick={() => setLocation(val as 'home' | 'outside' | null)}
                                             className={cn(
-                                                "flex items-center space-x-1.5 px-3 py-1 rounded text-xs transition-all",
+                                                "touch-target flex items-center space-x-1.5 px-3 py-1.5 rounded text-sm md:text-xs transition-all",
                                                 location === val ? "bg-accent text-white" : "text-text-muted hover:text-text-primary"
                                             )}
                                         >
@@ -420,7 +435,7 @@ export const TaskForm = ({
 
                             {/* Energy */}
                             <div className="flex items-center justify-between">
-                                <span className="text-xs text-text-primary font-medium">Energy</span>
+                                <span className="text-sm md:text-xs text-text-primary font-medium">Energy</span>
                                 <div className="flex bg-surface-secondary/50 p-1 rounded-lg border border-border">
                                     {[null, 'high', 'low'].map((val) => (
                                         <button
@@ -428,7 +443,7 @@ export const TaskForm = ({
                                             type="button"
                                             onClick={() => setEnergy(val as 'high' | 'low' | null)}
                                             className={cn(
-                                                "flex items-center space-x-1.5 px-3 py-1 rounded text-xs transition-all",
+                                                "touch-target flex items-center space-x-1.5 px-3 py-1.5 rounded text-sm md:text-xs transition-all",
                                                 energy === val ? "bg-accent text-white" : "text-text-muted hover:text-text-primary"
                                             )}
                                         >
@@ -442,7 +457,7 @@ export const TaskForm = ({
 
                             {/* Focus */}
                             <div className="flex items-center justify-between">
-                                <span className="text-xs text-text-primary font-medium">Focus</span>
+                                <span className="text-sm md:text-xs text-text-primary font-medium">Focus</span>
                                 <div className="flex bg-surface-secondary/50 p-1 rounded-lg border border-border">
                                     {[null, 'immersion', 'process'].map((val) => (
                                         <button
@@ -450,7 +465,7 @@ export const TaskForm = ({
                                             type="button"
                                             onClick={() => setFocus(val as 'immersion' | 'process' | null)}
                                             className={cn(
-                                                "flex items-center space-x-1.5 px-3 py-1 rounded text-xs transition-all",
+                                                "touch-target flex items-center space-x-1.5 px-3 py-1.5 rounded text-sm md:text-xs transition-all",
                                                 focus === val ? "bg-accent text-white" : "text-text-muted hover:text-text-primary"
                                             )}
                                         >
@@ -466,7 +481,7 @@ export const TaskForm = ({
                             <div className="flex flex-col space-y-3 pt-4 border-t border-border/50">
                                 <div className="flex items-center space-x-2">
                                     <Clock className="w-3.5 h-3.5 text-text-muted" />
-                                    <span className="text-xs text-text-primary font-medium">Estimated Effort</span>
+                                    <span className="text-sm md:text-xs text-text-primary font-medium">Estimated Effort</span>
                                 </div>
                                 <div className="flex flex-wrap gap-1.5">
                                     {[5, 15, 30, 60, 120, 240].map((mins) => (
@@ -475,7 +490,7 @@ export const TaskForm = ({
                                             type="button"
                                             onClick={() => setEstimatedEffort(estimatedEffort === mins ? 0 : mins)}
                                             className={cn(
-                                                "px-3 py-1.5 rounded-lg border text-xs font-bold transition-all",
+                                                "touch-target px-3 py-1.5 rounded-lg border text-sm md:text-xs font-bold transition-all",
                                                 estimatedEffort === mins
                                                     ? "bg-accent-warm/20 border-accent-warm/40 text-accent-warm"
                                                     : "bg-surface-secondary border-border text-text-muted hover:text-text-primary hover:border-border"
@@ -492,12 +507,12 @@ export const TaskForm = ({
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-2">
                                         <RefreshCw className="w-3.5 h-3.5 text-text-muted" />
-                                        <span className="text-xs text-text-primary font-medium">Repeat</span>
+                                        <span className="text-sm md:text-xs text-text-primary font-medium">Repeat</span>
                                     </div>
                                     <select
                                         value={recurrence || ''}
                                         onChange={(e) => setRecurrence((e.target.value || null) as 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly' | null)}
-                                        className="bg-surface-secondary border border-border rounded-lg px-3 py-1 text-xs text-text-primary focus:border-accent outline-none appearance-none cursor-pointer"
+                                        className="touch-target bg-surface-secondary border border-border rounded-lg px-3 py-1.5 text-sm md:text-xs text-text-primary focus:border-accent outline-none appearance-none cursor-pointer"
                                     >
                                         <option value="">None</option>
                                         <option value="daily">Daily</option>
@@ -509,13 +524,14 @@ export const TaskForm = ({
                                 </div>
 
                                 {recurrence && (
-                                    <div className="flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300">
-                                        <span className="text-xs text-text-primary font-medium">End Repeat</span>
-                                        <input
-                                            type="date"
+                                    <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <span className="text-sm md:text-xs text-text-primary font-medium">End Repeat</span>
+                                        <DateTimePicker
                                             value={recurrenceEndAt}
-                                            onChange={(e) => setRecurrenceEndAt(e.target.value)}
-                                            className="bg-surface-secondary border border-border rounded-lg px-3 py-1 text-xs text-text-primary focus:border-accent outline-none [color-scheme:dark]"
+                                            onChange={setRecurrenceEndAt}
+                                            placeholder="Repeat ends on..."
+                                            type="date"
+                                            className="bg-surface-secondary border-border text-sm md:text-xs"
                                         />
                                     </div>
                                 )}

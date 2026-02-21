@@ -121,7 +121,7 @@ export default function Tasks() {
     }, [tasks, filters.projectId, projects])
 
     return (
-        <div className="w-full max-w-full mx-auto px-4 py-8 md:py-12 space-y-8 animate-in fade-in duration-500">
+        <div className="w-full max-w-full mx-auto px-3 py-6 md:py-10 space-y-7 animate-in fade-in duration-500">
             <header className="flex items-center justify-between gap-4 flex-wrap">
                 <h1 className="text-4xl md:text-5xl xl:text-5xl 2xl:text-6xl font-black tracking-tightest title-gradient">Tasks</h1>
                 <div className="flex items-center gap-3">

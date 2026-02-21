@@ -7,7 +7,7 @@ export interface TimeSession {
     started_at: string
     ended_at: string | null
     duration_seconds: number | null
-    source: string
+    source?: string | null
     created_at: string
     updated_at: string
 }
@@ -24,6 +24,93 @@ export interface TimeAnalytics {
     byTask: Record<string, number>
 }
 
+interface SessionRangeInput {
+    startedAt: string
+    endedAt: string
+}
+
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const taskIdResolutionCache = new Map<string, string>()
+
+function isMissingSourceColumnError(error: unknown): boolean {
+    if (!error || typeof error !== 'object') return false
+    const candidate = error as { code?: string; message?: string }
+    const message = (candidate.message || '').toLowerCase()
+    return candidate.code === 'PGRST204' && message.includes("'source' column")
+}
+
+function normalizeSession(session: TimeSession): TimeSession {
+    return {
+        ...session,
+        source: session.source ?? 'manual',
+    }
+}
+
+function normalizeSessions(sessions: TimeSession[] | null | undefined): TimeSession[] {
+    if (!sessions) return []
+    return sessions.map(normalizeSession)
+}
+
+function buildDurationSeconds(range: SessionRangeInput): number {
+    const startedAt = new Date(range.startedAt)
+    const endedAt = new Date(range.endedAt)
+
+    if (Number.isNaN(startedAt.getTime()) || Number.isNaN(endedAt.getTime())) {
+        throw new Error('Invalid start/end time')
+    }
+    if (endedAt <= startedAt) {
+        throw new Error('End time must be after start time')
+    }
+
+    return Math.max(1, Math.floor((endedAt.getTime() - startedAt.getTime()) / 1000))
+}
+
+function isUuid(value: string): boolean {
+    return uuidRegex.test(value)
+}
+
+async function getCurrentUserId(): Promise<string> {
+    const { data, error } = await supabase.auth.getUser()
+    if (error) {
+        throw error
+    }
+
+    const userId = data.user?.id
+    if (!userId) {
+        throw new Error('You must be signed in to track time')
+    }
+
+    return userId
+}
+
+async function resolveTaskId(taskIdentifier: string): Promise<string> {
+    if (isUuid(taskIdentifier)) {
+        return taskIdentifier
+    }
+
+    const cached = taskIdResolutionCache.get(taskIdentifier)
+    if (cached) {
+        return cached
+    }
+
+    const { data, error } = await supabase
+        .from('tasks')
+        .select('id')
+        .eq('short_id', taskIdentifier)
+        .maybeSingle()
+
+    if (error) {
+        throw error
+    }
+
+    if (!data?.id) {
+        throw new Error(`Task "${taskIdentifier}" was not found`)
+    }
+
+    taskIdResolutionCache.set(taskIdentifier, data.id)
+    return data.id
+}
+
 export async function getActiveSession(userId: string): Promise<TimeSession | null> {
     const { data, error } = await supabase
         .from('task_time_sessions')
@@ -36,25 +123,38 @@ export async function getActiveSession(userId: string): Promise<TimeSession | nu
         throw error
     }
 
-    return data
+    return data ? normalizeSession(data) : null
 }
 
 export async function startSession(taskId: string, opts?: { source?: string }): Promise<TimeSession> {
     await stopActiveSession()
 
+    const userId = await getCurrentUserId()
+    const resolvedTaskId = await resolveTaskId(taskId)
     const source = opts?.source ?? 'manual'
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
         .from('task_time_sessions')
-        .insert([{ task_id: taskId, source }])
+        .insert([{ user_id: userId, task_id: resolvedTaskId, source }])
         .select('*')
         .single()
+
+    if (error && isMissingSourceColumnError(error)) {
+        const fallback = await supabase
+            .from('task_time_sessions')
+            .insert([{ user_id: userId, task_id: resolvedTaskId }])
+            .select('*')
+            .single()
+
+        data = fallback.data
+        error = fallback.error
+    }
 
     if (error) {
         throw error
     }
 
-    return data
+    return normalizeSession(data)
 }
 
 export async function stopActiveSession(opts?: { stoppedAt?: string }): Promise<TimeSession | null> {
@@ -71,7 +171,7 @@ export async function stopActiveSession(opts?: { stoppedAt?: string }): Promise<
         return null
     }
 
-    return data[0] as TimeSession
+    return normalizeSession(data[0] as TimeSession)
 }
 
 export async function stopSession(sessionId: string, opts?: { stoppedAt?: string }): Promise<TimeSession> {
@@ -98,7 +198,7 @@ export async function stopSession(sessionId: string, opts?: { stoppedAt?: string
             .single()
 
         if (error) throw error
-        return data as TimeSession
+        return normalizeSession(data as TimeSession)
     }
 
     const startedAt = new Date(existing.started_at)
@@ -125,7 +225,7 @@ export async function stopSession(sessionId: string, opts?: { stoppedAt?: string
         throw error
     }
 
-    return data as TimeSession
+    return normalizeSession(data as TimeSession)
 }
 
 export async function listSessionsByRange(range: DateRange): Promise<TimeSession[]> {
@@ -140,7 +240,112 @@ export async function listSessionsByRange(range: DateRange): Promise<TimeSession
         throw error
     }
 
-    return data ?? []
+    return normalizeSessions(data ?? [])
+}
+
+export async function listTaskSessions(taskId: string, opts?: { limit?: number }): Promise<TimeSession[]> {
+    const limit = opts?.limit ?? 50
+    const resolvedTaskId = await resolveTaskId(taskId)
+
+    const { data, error } = await supabase
+        .from('task_time_sessions')
+        .select('*')
+        .eq('task_id', resolvedTaskId)
+        .order('started_at', { ascending: false })
+        .limit(limit)
+
+    if (error) {
+        throw error
+    }
+
+    return normalizeSessions(data ?? [])
+}
+
+export async function createManualSession(input: {
+    taskId: string
+    startedAt: string
+    endedAt: string
+    source?: string
+}): Promise<TimeSession> {
+    const userId = await getCurrentUserId()
+    const resolvedTaskId = await resolveTaskId(input.taskId)
+    const durationSeconds = buildDurationSeconds({
+        startedAt: input.startedAt,
+        endedAt: input.endedAt,
+    })
+
+    const source = input.source ?? 'manual'
+
+    let { data, error } = await supabase
+        .from('task_time_sessions')
+        .insert([{
+            user_id: userId,
+            task_id: resolvedTaskId,
+            started_at: input.startedAt,
+            ended_at: input.endedAt,
+            duration_seconds: durationSeconds,
+            source,
+        }])
+        .select('*')
+        .single()
+
+    if (error && isMissingSourceColumnError(error)) {
+        const fallback = await supabase
+            .from('task_time_sessions')
+            .insert([{
+                user_id: userId,
+                task_id: resolvedTaskId,
+                started_at: input.startedAt,
+                ended_at: input.endedAt,
+                duration_seconds: durationSeconds,
+            }])
+            .select('*')
+            .single()
+
+        data = fallback.data
+        error = fallback.error
+    }
+
+    if (error) {
+        throw error
+    }
+
+    return normalizeSession(data as TimeSession)
+}
+
+export async function updateSessionRange(
+    sessionId: string,
+    range: SessionRangeInput
+): Promise<TimeSession> {
+    const durationSeconds = buildDurationSeconds(range)
+
+    const { data, error } = await supabase
+        .from('task_time_sessions')
+        .update({
+            started_at: range.startedAt,
+            ended_at: range.endedAt,
+            duration_seconds: durationSeconds,
+        })
+        .eq('id', sessionId)
+        .select('*')
+        .single()
+
+    if (error) {
+        throw error
+    }
+
+    return normalizeSession(data as TimeSession)
+}
+
+export async function deleteSession(sessionId: string): Promise<void> {
+    const { error } = await supabase
+        .from('task_time_sessions')
+        .delete()
+        .eq('id', sessionId)
+
+    if (error) {
+        throw error
+    }
 }
 
 export async function getAnalytics(range: DateRange): Promise<TimeAnalytics> {

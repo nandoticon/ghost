@@ -246,7 +246,7 @@ export default function Layout() {
                 </header>
 
                 {/* Page Content — fluid width */}
-                <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 tablet:p-6 xl:p-8 2xl:p-14 4k:p-16 pb-[calc(7rem+env(safe-area-inset-bottom))] tablet:pb-10 relative">
+                <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-3 tablet:p-5 xl:p-7 2xl:p-12 4k:p-14 pb-[calc(5.75rem+env(safe-area-inset-bottom))] tablet:pb-9 relative">
                     <div
                         key={location.pathname}
                         className="w-full max-w-full min-w-0 4k:max-w-[1600px] 4k:mx-auto animate-in fade-in duration-200"
@@ -256,26 +256,31 @@ export default function Layout() {
                 </main>
 
                 {/* Bottom Nav — Mobile only */}
-                <nav className="tablet:hidden flex items-center bg-surface/95 backdrop-blur-md border-t border-border fixed inset-x-0 bottom-0 z-50 min-h-[4.25rem] pb-[max(env(safe-area-inset-bottom),0.35rem)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+                <nav
+                    className="tablet:hidden fixed inset-x-0 bottom-0 z-50 bg-surface border-t border-border h-[calc(4.35rem+env(safe-area-inset-bottom))] pt-1 pb-[max(0.35rem,env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
+                    aria-label="Bottom navigation"
+                >
+                    <div className="flex h-full items-end">
                     {/* Left nav items */}
-                    {navItems.slice(0, 1).map((item) => (
+                    {navItems.slice(0, 2).map((item) => (
                         <NavLink
                             key={item.to}
                             to={item.to}
                             className={({ isActive }) =>
                                 cn(
-                                    "flex-1 flex justify-center py-2 transition-colors relative",
+                                    "flex-1 flex justify-center transition-colors relative",
                                     isActive ? "text-accent" : "text-text-muted"
                                 )
                             }
+                            aria-label={item.label}
                         >
                             {({ isActive }) => (
                                 <span className={cn(
-                                    "flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all",
+                                    "touch-target flex flex-col items-center justify-center gap-1 px-2 py-1 rounded-xl transition-all min-w-[56px]",
                                     isActive ? "bg-accent/10" : ""
                                 )}>
                                     <item.icon className={cn("w-5 h-5", isActive && "fill-current")} />
-                                    <span className="text-xs font-bold">{item.to === '/today' ? 'Today' : item.label}</span>
+                                    <span className="text-[13px] font-bold">{item.to === '/today' ? 'Today' : item.label}</span>
                                     {isActive && <span className="absolute bottom-1 w-1 h-1 rounded-full bg-accent" />}
                                 </span>
                             )}
@@ -283,39 +288,43 @@ export default function Layout() {
                     ))}
 
                     {/* Center FAB */}
-                    <div className="flex-none px-4">
+                    <div className="flex-none px-1.5 pb-0.5">
                         <button
                             onClick={() => setQuickCaptureOpen(true)}
-                            className="w-12 h-12 bg-accent text-white rounded-full flex items-center justify-center shadow-lg shadow-accent/30 active:scale-95 transition-all"
+                            className="touch-target w-[3.25rem] h-[3.25rem] bg-accent text-white rounded-full flex items-center justify-center shadow-lg shadow-accent/30 active:scale-95 transition-all"
+                            aria-label="Quick add task"
+                            title="Quick add task"
                         >
                             <Plus className="w-5 h-5" />
                         </button>
                     </div>
 
                     {/* Right nav items */}
-                    {navItems.slice(1).map((item) => (
+                    {navItems.slice(2).map((item) => (
                         <NavLink
                             key={item.to}
                             to={item.to}
                             className={({ isActive }) =>
                                 cn(
-                                    "flex-1 flex justify-center py-2 transition-colors relative",
+                                    "flex-1 flex justify-center transition-colors relative",
                                     isActive ? "text-accent" : "text-text-muted"
                                 )
                             }
+                            aria-label={item.label}
                         >
                             {({ isActive }) => (
                                 <span className={cn(
-                                    "flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all",
+                                    "touch-target flex flex-col items-center justify-center gap-1 px-2 py-1 rounded-xl transition-all min-w-[56px]",
                                     isActive ? "bg-accent/10" : ""
                                 )}>
                                     <item.icon className={cn("w-5 h-5", isActive && "fill-current")} />
-                                    <span className="text-xs font-bold">{item.label}</span>
+                                    <span className="text-[13px] font-bold">{item.label}</span>
                                     {isActive && <span className="absolute bottom-1 w-1 h-1 rounded-full bg-accent" />}
                                 </span>
                             )}
                         </NavLink>
                     ))}
+                    </div>
                 </nav>
 
                 {/* Overlays */}

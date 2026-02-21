@@ -3,6 +3,7 @@ import { BarChart3, CalendarDays, Clock3, Flame, Folder, ListChecks, Timer, Tren
 import { subDays } from 'date-fns'
 import { listSessionsByRange, TimeSession } from '../lib/timeTracking'
 import { useGlobalTasks } from '../context/TaskContext'
+import { DateTimePicker } from '../components/DateTimePicker'
 
 const PRESETS = ['7d', '30d', '90d', 'custom'] as const
 
@@ -292,7 +293,7 @@ export default function Analytics() {
     const maxGrouped = Math.max(1, ...groupedBuckets.map((d) => d.seconds))
 
     return (
-        <div className="w-full max-w-full mx-auto px-4 py-8 md:py-12 space-y-8 animate-in fade-in duration-500">
+        <div className="w-full max-w-full mx-auto px-3 py-6 md:py-10 space-y-7 animate-in fade-in duration-500">
             <header className="flex items-center justify-between gap-4 flex-wrap">
                 <div>
                     <h1 className="text-4xl md:text-5xl xl:text-5xl 2xl:text-6xl font-black tracking-tightest title-gradient">
@@ -343,17 +344,19 @@ export default function Analytics() {
 
             {preset === 'custom' && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-surface-secondary/20 border border-border/40 rounded-2xl p-4">
-                    <input
-                        type="date"
+                    <DateTimePicker
                         value={customFrom}
-                        onChange={(e) => setCustomFrom(e.target.value)}
-                        className="px-3 py-2 rounded-xl border border-border bg-surface text-text-primary"
-                    />
-                    <input
+                        onChange={setCustomFrom}
                         type="date"
+                        placeholder="From date"
+                        className="bg-surface border-border"
+                    />
+                    <DateTimePicker
                         value={customTo}
-                        onChange={(e) => setCustomTo(e.target.value)}
-                        className="px-3 py-2 rounded-xl border border-border bg-surface text-text-primary"
+                        onChange={setCustomTo}
+                        type="date"
+                        placeholder="To date"
+                        className="bg-surface border-border"
                     />
                     <button
                         onClick={() => void refresh()}
