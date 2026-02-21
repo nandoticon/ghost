@@ -40,7 +40,7 @@ export default function Projects() {
     }
 
     const processProjects = (projectList: Project[]) => {
-        let filtered = projectList.filter(p => !categoryFilterId || p.category_id === categoryFilterId)
+        const filtered = projectList.filter(p => !categoryFilterId || p.category_id === categoryFilterId)
 
         return [...filtered].sort((a, b) => {
             if (sortBy === 'name') return a.name.localeCompare(b.name)

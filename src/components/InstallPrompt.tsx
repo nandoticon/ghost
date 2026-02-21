@@ -12,7 +12,8 @@ export function InstallPrompt() {
         const isMobile = isIos || isAndroid || /blackberry|mini|windows\sce|palm/i.test(ua)
 
         // Detect if already in standalone mode
-        const isStandalone = (window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches
+        const iosNavigator = window.navigator as Navigator & { standalone?: boolean }
+        const isStandalone = Boolean(iosNavigator.standalone) || window.matchMedia('(display-mode: standalone)').matches
         // Check if previously dismissed
         const isDismissed = localStorage.getItem('ghost-install-dismissed') === 'true'
 
