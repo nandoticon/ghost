@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { X, Check, Trash2, AlertTriangle } from 'lucide-react'
 import { Project, ProjectCategory } from '../types'
 import { cn } from '../lib/cn'
+import { useRef } from 'react'
 
 interface ProjectFormProps {
     isOpen: boolean
@@ -37,11 +38,16 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
     const [categoryId, setCategoryId] = useState('')
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const nameInputRef = useRef<HTMLInputElement>(null)
+    const descriptionTextareaRef = useRef<HTMLTextAreaElement>(null)
 
     useEffect(() => {
         if (project) {
-            setName(project.name)
-            setDescription(project.description || '')
+            const active = document.activeElement
+            const nameFocused = active === nameInputRef.current
+            const descriptionFocused = active === descriptionTextareaRef.current
+            if (!nameFocused) setName(project.name)
+            if (!descriptionFocused) setDescription(project.description || '')
             setColor(project.color || PRESET_COLORS[0])
             setCategoryId(project.category_id || '')
         } else {
@@ -111,6 +117,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                                 Project Name
                             </label>
                             <input
+                                ref={nameInputRef}
                                 autoFocus
                                 type="text"
                                 value={name}
@@ -127,6 +134,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                                 Description
                             </label>
                             <textarea
+                                ref={descriptionTextareaRef}
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="What's this project about?"

@@ -66,11 +66,12 @@ export default function ProjectDetail() {
     const [editDesc, setEditDesc] = useState('')
 
     useEffect(() => {
+        if (isEditingInline) return
         if (project) {
             setEditName(project.name)
             setEditDesc(project.description || '')
         }
-    }, [project])
+    }, [project, isEditingInline])
 
     const handleInlineSave = async () => {
         if (!project || !editName.trim()) return

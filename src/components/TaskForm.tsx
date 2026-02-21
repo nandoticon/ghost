@@ -61,12 +61,16 @@ export const TaskForm = ({
     const statusPickerRef = useRef<HTMLButtonElement>(null)
     const formRef = useRef<HTMLFormElement>(null)
     const titleInputRef = useRef<HTMLInputElement>(null)
+    const notesTextareaRef = useRef<HTMLTextAreaElement>(null)
 
     useEffect(() => {
         // Reset form if task changes
         if (task) {
-            setTitle(task.title || '')
-            setNotes(task.notes || '')
+            const active = document.activeElement
+            const titleFocused = active === titleInputRef.current
+            const notesFocused = active === notesTextareaRef.current
+            if (!titleFocused) setTitle(task.title || '')
+            if (!notesFocused) setNotes(task.notes || '')
             setProjectId(task.project_id || '')
             setToday(task.today || false)
             setStartAt(task.start_at ? task.start_at.substring(0, 16) : '')
@@ -233,6 +237,7 @@ export const TaskForm = ({
                     {/* Notes */}
                     <div className="space-y-1">
                         <textarea
+                            ref={notesTextareaRef}
                             placeholder="Add notes..."
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}

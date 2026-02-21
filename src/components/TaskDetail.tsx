@@ -85,10 +85,15 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
     const statusPickerRef = useRef<HTMLButtonElement>(null)
     const contentScrollRef = useRef<HTMLDivElement>(null)
     const titleTextareaRef = useRef<HTMLTextAreaElement>(null)
+    const titleInputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
         if (task) {
-            setTitle(task.title)
+            const active = document.activeElement
+            const titleFocused = active === titleTextareaRef.current || active === titleInputRef.current
+            if (!titleFocused) {
+                setTitle(task.title)
+            }
             setNotes(task.notes || '')
             setProjectId(task.project_id)
             setToday(task.today)
@@ -492,6 +497,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                             {completed && <Check className="w-3.5 h-3.5" />}
                         </button>
                         <input
+                            ref={titleInputRef}
                             value={title}
                             onChange={(e) => handleTitleChange(e.target.value)}
                             placeholder="Task title"
