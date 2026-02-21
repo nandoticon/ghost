@@ -216,7 +216,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
                     {/* Status Badges */}
                     {task.status === 'doing' && (
                         <span className="flex items-center gap-1 text-[10px] 2xl:text-xs uppercase tracking-widest font-black text-blue-500 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full shrink-0">
-                            <Loader2 className="w-3 h-3 animate-spin hidden sm:block" /> Doing
+                            <Loader2 className="w-3 h-3 hidden sm:block" /> Doing
                         </span>
                     )}
                     {task.status === 'waiting' && (
