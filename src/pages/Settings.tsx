@@ -180,7 +180,7 @@ export default function Settings() {
                                     type="password"
                                     value={newPassword}
                                     onChange={(e) => setNewPassword(e.target.value)}
-                                    className="w-full bg-surface-secondary border border-border rounded-xl px-4 py-3 text-sm text-text-primary focus:border-accent/50 outline-none transition-all"
+                                    className="w-full bg-surface-secondary border border-border rounded-xl px-4 py-3 text-base md:text-sm text-text-primary focus:border-accent/50 outline-none transition-all"
                                     placeholder="Enter new password"
                                     required
                                 />
@@ -191,7 +191,7 @@ export default function Settings() {
                                     type="password"
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}
-                                    className="w-full bg-surface-secondary border border-border rounded-xl px-4 py-3 text-sm text-text-primary focus:border-accent/50 outline-none transition-all"
+                                    className="w-full bg-surface-secondary border border-border rounded-xl px-4 py-3 text-base md:text-sm text-text-primary focus:border-accent/50 outline-none transition-all"
                                     placeholder="Confirm new password"
                                     required
                                 />

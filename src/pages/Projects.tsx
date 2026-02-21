@@ -13,7 +13,7 @@ import { SyncStatusDot } from '../components/SyncStatusDot'
 export default function Projects() {
     const { projects, loading: projectsLoading, createProject, updateProject, deleteProject } = useProjects()
     const { categories, loading: categoriesLoading } = useProjectCategories()
-    const { getStats, loading: statsLoading } = useProjectTaskStats()
+    const { getStats } = useProjectTaskStats()
     const { showToast } = useToast()
 
     const [isFormOpen, setIsFormOpen] = useState(false)
@@ -61,7 +61,7 @@ export default function Projects() {
         showToast(project.archived ? 'Project unarchived' : 'Project archived', 'success')
     }
 
-    if (projectsLoading || statsLoading || categoriesLoading) {
+    if (projectsLoading || categoriesLoading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6">
                 <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin" />

@@ -58,6 +58,8 @@ export const TaskForm = ({
     const [projectQuery, setProjectQuery] = useState('')
     const [isCreatingProject, setIsCreatingProject] = useState(false)
     const statusPickerRef = useRef<HTMLButtonElement>(null)
+    const formRef = useRef<HTMLFormElement>(null)
+    const titleInputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
         // Reset form if task changes
@@ -91,6 +93,13 @@ export const TaskForm = ({
         }
         setProjectQuery('')
         setShowProjectPicker(false)
+
+        if (isOpen) {
+            window.setTimeout(() => {
+                if (formRef.current) formRef.current.scrollTop = 0
+                titleInputRef.current?.focus()
+            }, 40)
+        }
     }, [task, isOpen, defaultProjectId, defaultToday])
 
     if (!isOpen) return null
@@ -162,7 +171,7 @@ export const TaskForm = ({
                 onClick={onCancel}
             />
             <div
-                className="relative w-full max-w-xl 4k:max-w-2xl bg-surface border-t md:border border-border rounded-t-[2rem] md:rounded-2xl shadow-2xl overflow-hidden flex flex-col md:max-h-[85vh] animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-300"
+                className="relative w-full max-w-xl 4k:max-w-2xl bg-surface border-t md:border border-border rounded-t-[2rem] md:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] md:max-h-[85vh] animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-300"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-accent to-accent-warm/70" />
@@ -178,11 +187,11 @@ export const TaskForm = ({
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-7 space-y-6">
+                <form ref={formRef} onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-7 space-y-6">
                     {/* Title - Auto Focused */}
                     <div className="space-y-1">
                         <input
-                            autoFocus
+                            ref={titleInputRef}
                             placeholder="What needs to be done?"
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}

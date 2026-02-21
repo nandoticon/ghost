@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef } from 'react'
 import type { DraggableProvidedDragHandleProps } from '@hello-pangea/dnd'
 import {
     Circle,
@@ -99,17 +99,34 @@ export const TaskItem = React.memo<TaskItemProps>(({
 
     const dueDateStyle = getDueDateStyle()
     const isOverdue = !isCompleted && task.end_at && isPast(new Date(task.end_at)) && !isToday(new Date(task.end_at))
+    const lastTouchOpenRef = useRef(0)
+    const openTask = () => {
+        if (onClickTitle) {
+            onClickTitle(task)
+            return
+        }
+        onClick(task)
+    }
 
     return (
         <div
             className={cn(
-                "group relative flex items-center space-x-4 px-4 py-4 2xl:py-5 rounded-2xl border border-transparent transition-all cursor-pointer overflow-hidden",
+                "group relative flex items-start md:items-center space-x-2 md:space-x-4 px-3 md:px-4 py-3 md:py-4 2xl:py-5 rounded-2xl border border-transparent transition-all cursor-pointer overflow-hidden min-w-0",
                 isDragging
                     ? "bg-surface shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border-accent/30 scale-[1.03] z-50 ring-2 ring-accent/20"
                     : "hover:bg-surface hover:border-border/60 hover:shadow-lg hover:-translate-y-0.5",
                 isCompleted && "opacity-50"
             )}
-            onClick={() => onClickTitle ? onClickTitle(task) : onClick(task)}
+            onClick={() => {
+                if (Date.now() - lastTouchOpenRef.current < 350) return
+                openTask()
+            }}
+            onTouchEnd={(e) => {
+                const target = e.target as HTMLElement
+                if (target.closest('button, input, textarea, select, a, [role="button"]')) return
+                lastTouchOpenRef.current = Date.now()
+                openTask()
+            }}
         >
             {/* Project Color Side-Bar Indicator */}
             <div
@@ -123,7 +140,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
                     {...dragHandleProps}
                     onClick={(e) => e.stopPropagation()}
                     className={cn(
-                        "cursor-grab active:cursor-grabbing text-text-muted transition-opacity -ml-1 p-1",
+                        "hidden md:block cursor-grab active:cursor-grabbing text-text-muted transition-opacity -ml-1 p-1",
                         isDragging ? "opacity-100 text-accent" : "opacity-0 group-hover:opacity-60"
                     )}
                 >
@@ -209,12 +226,14 @@ export const TaskItem = React.memo<TaskItemProps>(({
                     )}
 
                     {/* Context Pills */}
-                    {getContextPills()}
+                    <div className="hidden sm:contents">
+                        {getContextPills()}
+                    </div>
 
                     {/* Due Date */}
                     {task.end_at && (
                         <div className={cn(
-                            "flex items-center space-x-1.5 text-xs 2xl:text-sm px-2.5 py-1 rounded-full border shrink-0 font-bold uppercase tracking-wider",
+                            "hidden sm:flex items-center space-x-1.5 text-xs 2xl:text-sm px-2.5 py-1 rounded-full border shrink-0 font-bold uppercase tracking-wider",
                             dueDateStyle
                         )}>
                             <Clock className="w-3 h-3" />
@@ -226,19 +245,21 @@ export const TaskItem = React.memo<TaskItemProps>(({
                     )}
 
                     {/* Subtask Progress */}
-                    <SubtaskProgress task={task} />
+                    <div className="hidden sm:block">
+                        <SubtaskProgress task={task} />
+                    </div>
                 </div>
             </div>
 
             {/* Snooze and Today Star */}
-            <div className="flex items-center space-x-1 shrink-0">
+            <div className="flex items-center space-x-0.5 md:space-x-1 shrink-0">
                 {!isCompleted && onFocus && (
                     <button
                         onClick={(e) => {
                             e.stopPropagation()
                             onFocus(task)
                         }}
-                        className="touch-target flex items-center justify-center text-text-muted opacity-0 group-hover:opacity-100 hover:text-accent hover:bg-surface-secondary transition-all p-2 rounded-xl"
+                        className="hidden md:flex touch-target items-center justify-center text-text-muted opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto hover:text-accent hover:bg-surface-secondary transition-all p-2 rounded-xl"
                         title="Focus Mode"
                     >
                         <Maximize2 className="w-5 h-5 2xl:w-6 2xl:h-6" />
@@ -252,10 +273,10 @@ export const TaskItem = React.memo<TaskItemProps>(({
                         }}
                         disabled={isSyncing}
                         className={cn(
-                            "touch-target flex items-center justify-center transition-all p-2 rounded-xl",
+                            "touch-target flex items-center justify-center transition-all p-2 rounded-xl opacity-100",
                             isTimerActiveForTask
                                 ? "text-emerald-300 bg-emerald-400/10 border border-emerald-300/20"
-                                : "text-text-muted opacity-0 group-hover:opacity-100 hover:text-emerald-300 hover:bg-surface-secondary",
+                                : "text-text-muted md:opacity-0 md:pointer-events-none md:group-hover:opacity-100 md:group-hover:pointer-events-auto hover:text-emerald-300 hover:bg-surface-secondary",
                             isSyncing && "opacity-60 cursor-not-allowed"
                         )}
                         title={isTimerActiveForTask ? "Stop timer" : "Start timer"}
@@ -273,7 +294,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
                             e.stopPropagation()
                             onSnooze(task.id)
                         }}
-                        className="touch-target flex items-center justify-center text-text-muted opacity-0 group-hover:opacity-100 hover:text-blue-400 hover:bg-surface-secondary transition-all p-2 rounded-xl"
+                        className="hidden md:flex touch-target items-center justify-center text-text-muted opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto hover:text-blue-400 hover:bg-surface-secondary transition-all p-2 rounded-xl"
                         title="Snooze to tomorrow"
                     >
                         <Moon className="w-5 h-5 2xl:w-6 2xl:h-6" />
@@ -286,8 +307,8 @@ export const TaskItem = React.memo<TaskItemProps>(({
                             onToggleToday(task.id, !task.today)
                         }}
                         className={cn(
-                            "touch-target flex items-center justify-center transition-all p-2 rounded-xl",
-                            task.today ? "text-accent-warm" : "text-text-muted opacity-0 group-hover:opacity-100 hover:bg-surface-secondary"
+                            "touch-target flex items-center justify-center transition-all p-2 rounded-xl opacity-100",
+                            task.today ? "text-accent-warm" : "text-text-muted md:opacity-0 md:pointer-events-none md:group-hover:opacity-100 md:group-hover:pointer-events-auto hover:bg-surface-secondary"
                         )}
                     >
                         <Star className={cn("w-5 h-5 2xl:w-6 2xl:h-6", task.today && "fill-current")} />

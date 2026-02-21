@@ -92,7 +92,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
             />
 
             {/* Modal Content */}
-            <div className="relative w-full max-w-md bg-surface border-t md:border border-border rounded-t-[2rem] md:rounded-2xl shadow-2xl animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-300 overflow-hidden">
+            <div className="relative w-full max-w-md bg-surface border-t md:border border-border rounded-t-[2rem] md:rounded-2xl shadow-2xl animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-300 overflow-hidden max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] md:max-h-[85vh] flex flex-col">
                 <div className="absolute top-0 left-0 right-0 h-1.5" style={{ background: `linear-gradient(90deg, ${color}, color-mix(in srgb, ${color} 65%, #ffffff))` }} />
                 <div className="flex items-center justify-between p-7 border-b border-border/50 bg-surface/85 backdrop-blur">
                     <h2 className="text-xl font-bold text-text-primary">
@@ -103,7 +103,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-7 space-y-7">
+                <form onSubmit={handleSubmit} className="p-7 space-y-7 overflow-y-auto overflow-x-hidden flex-1 min-h-0">
                     <div className="space-y-4">
                         {/* Name Input */}
                         <div className="space-y-1.5">

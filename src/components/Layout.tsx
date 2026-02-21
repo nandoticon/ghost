@@ -217,12 +217,24 @@ export default function Layout() {
                 {/* Mobile Top Bar */}
                 <header className="tablet:hidden flex items-center justify-between px-5 h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-surface/70 backdrop-blur-md border-b border-border sticky top-0 z-40">
                     <h1 className="text-xl font-black tracking-tightest text-text-primary">Ghost</h1>
-                    <button
-                        onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
-                        className="touch-target flex items-center justify-center p-2 hover:bg-surface-secondary rounded-xl text-text-muted transition-colors"
-                    >
-                        <SearchIcon className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                        <button
+                            onClick={() => navigate('/settings')}
+                            className="touch-target flex items-center justify-center p-2 hover:bg-surface-secondary rounded-xl text-text-muted transition-colors"
+                            aria-label="Open settings"
+                            title="Settings"
+                        >
+                            <SettingsIcon className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
+                            className="touch-target flex items-center justify-center p-2 hover:bg-surface-secondary rounded-xl text-text-muted transition-colors"
+                            aria-label="Search tasks"
+                            title="Search"
+                        >
+                            <SearchIcon className="w-5 h-5" />
+                        </button>
+                    </div>
                     {isMobileSearchOpen && (
                         <div className="absolute top-[calc(3.5rem+env(safe-area-inset-top))] left-0 right-0 bg-surface border-b border-border p-4 animate-in slide-in-from-top duration-200 z-50">
                             <SearchBar onTaskClick={(id) => {

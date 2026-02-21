@@ -4,7 +4,7 @@ import {
     X, MoreVertical, Check, Calendar, Home, MapPin, Zap, ZapOff,
     Target, Layers, Star, Trash2, Copy, ChevronDown, Plus,
     CheckCircle2, Circle, Clock, GripVertical, RefreshCw, FolderKanban,
-    SlidersHorizontal, Search, Sparkles, Loader2
+    SlidersHorizontal, Search, Sparkles, Loader2, Play, Pause
 } from 'lucide-react'
 import { Task } from '../types'
 import { useTasks } from '../hooks/useTasks'
@@ -19,6 +19,7 @@ import { DateTimePicker } from './DateTimePicker'
 import { StatusMenu, StatusOptions } from './StatusMenu'
 import { cn } from '../lib/cn'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
+import { useTimer } from '../context/TimerContext'
 
 interface TaskDetailProps {
     taskId: string | null
@@ -32,6 +33,8 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
     const { subtasks, addSubtask, updateSubtask, deleteSubtask, reorderSubtasks } = useSubtasks(task?.id)
     const { comments } = useComments(task?.id)
     const { showToast } = useToast()
+    const { activeSession, elapsedSeconds, toggleTimer, isSyncing: isTimerSyncing } = useTimer()
+    const isTimerActiveForTask = activeSession?.task_id === taskId
 
     // Local state
     const [title, setTitle] = useState('')
@@ -85,6 +88,13 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
 
     const timerRef = useRef<number | null>(null)
     const pendingUpdatesRef = useRef<Partial<Task>>({})
+
+    const formatElapsed = (seconds: number) => {
+        const h = Math.floor(seconds / 3600)
+        const m = Math.floor((seconds % 3600) / 60)
+        const s = seconds % 60
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+    }
 
     const triggerSave = (updates: Partial<Task>) => {
         if (!taskId) return
@@ -260,7 +270,7 @@ Click save`
             {/* Slide-over Panel */}
             <div
                 className={cn(
-                    "relative flex flex-col bg-surface border-l border-border h-full w-full max-w-[900px] shadow-2xl overflow-hidden",
+                    "relative flex flex-col bg-surface border-l border-border h-full w-full max-w-[900px] shadow-2xl overflow-hidden overflow-x-hidden",
                     "animate-in slide-in-from-right duration-300"
                 )}
             >
@@ -299,6 +309,23 @@ Click save`
                         <span className="text-xs font-mono text-text-muted/50 tracking-wider">
                             {task?.short_id || taskId.substring(0, 8)}
                         </span>
+                        {taskId && (
+                            <button
+                                onClick={() => void toggleTimer(taskId, 'task_detail')}
+                                disabled={isTimerSyncing}
+                                className={cn(
+                                    "touch-target inline-flex items-center gap-1.5 px-2.5 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-all",
+                                    isTimerActiveForTask
+                                        ? "bg-emerald-400/10 border-emerald-300/25 text-emerald-300"
+                                        : "bg-surface-secondary/60 border-border/60 text-text-muted hover:text-text-primary",
+                                    isTimerSyncing && "opacity-60 cursor-not-allowed"
+                                )}
+                                title={isTimerActiveForTask ? 'Stop timer' : 'Start timer'}
+                            >
+                                {isTimerActiveForTask ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                                <span>{isTimerActiveForTask ? formatElapsed(elapsedSeconds) : 'Track'}</span>
+                            </button>
+                        )}
 
                         {/* Saving Indicator */}
                         <div className="ml-4 flex items-center h-4">
@@ -356,10 +383,10 @@ Click save`
                 </header>
 
                 {/* Content Area - 2 Columns */}
-                <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
+                <div className="flex flex-1 overflow-hidden overflow-x-hidden flex-col md:flex-row min-w-0">
 
                     {/* LEFTSIDE: Main Content */}
-                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:p-10 space-y-10">
+                    <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden custom-scrollbar p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:p-10 space-y-10">
                         {/* Title & Description */}
                         <div className="space-y-6">
                             <textarea
@@ -509,7 +536,7 @@ Click save`
                     </div>
 
                     {/* RIGHTSIDE: Sidebar Metadata */}
-                    <div className="w-full md:w-[320px] lg:w-[380px] border-t md:border-t-0 md:border-l border-border/50 bg-surface/30 overflow-y-auto custom-scrollbar p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] space-y-8">
+                    <div className="w-full md:w-[320px] lg:w-[380px] border-t md:border-t-0 md:border-l border-border/50 bg-surface/30 overflow-y-auto overflow-x-hidden custom-scrollbar p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] space-y-8">
 
                         {/* Context Properties */}
                         <div className="space-y-6">
