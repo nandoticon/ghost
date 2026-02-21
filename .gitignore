@@ -28,3 +28,6 @@ dist-ssr
 .env.local
 .agent/
 .gemini/
+.tsbuildinfo
+*.tsbuildinfo
+supabase/.temp/

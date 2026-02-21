@@ -1,15 +1,20 @@
 import { useRegisterSW } from 'virtual:pwa-register/react'
 
 export function PWAUpdateNotification() {
+    const isDev = import.meta.env.DEV
     const {
         needRefresh: [needRefresh],
         updateServiceWorker,
     } = useRegisterSW({
         onRegistered(_r: ServiceWorkerRegistration | undefined) {
-            console.log('Ghost PWA: Service Worker registered')
+            if (isDev) {
+                console.log('Ghost PWA: Service Worker registered')
+            }
         },
         onRegisterError(error: unknown) {
-            console.log('SW registration error', error)
+            if (isDev) {
+                console.log('SW registration error', error)
+            }
         },
     })
 

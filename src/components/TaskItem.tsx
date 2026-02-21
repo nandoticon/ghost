@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import type { DraggableProvidedDragHandleProps } from '@hello-pangea/dnd'
 import {
     Circle,
@@ -13,13 +13,15 @@ import {
     Clock,
     GripVertical,
     RefreshCw,
-    Loader2,
     Moon,
-    Maximize2
+    Maximize2,
+    Pause,
+    Play
 } from 'lucide-react'
 import { Task } from '../types'
 import { cn } from '../lib/cn'
 import { format, isToday, isPast, startOfDay } from 'date-fns'
+import { useTimer } from '../context/TimerContext'
 
 interface TaskItemProps {
     task: Task
@@ -51,6 +53,43 @@ export const TaskItem = React.memo<TaskItemProps>(({
     onSelect
 }) => {
     const isCompleted = task.completed
+    const { activeSession, toggleTimer, isSyncing } = useTimer()
+    const isTimerActiveForTask = activeSession?.task_id === task.id
+    const [liveElapsedSeconds, setLiveElapsedSeconds] = useState(0)
+
+    useEffect(() => {
+        if (!isTimerActiveForTask || !activeSession?.started_at) {
+            setLiveElapsedSeconds(0)
+            return
+        }
+
+        const startedAtMs = new Date(activeSession.started_at).getTime()
+        if (Number.isNaN(startedAtMs)) {
+            setLiveElapsedSeconds(0)
+            return
+        }
+
+        const updateElapsed = () => {
+            const seconds = Math.max(0, Math.floor((Date.now() - startedAtMs) / 1000))
+            setLiveElapsedSeconds(seconds)
+        }
+
+        updateElapsed()
+        const interval = window.setInterval(updateElapsed, 1000)
+        return () => window.clearInterval(interval)
+    }, [isTimerActiveForTask, activeSession?.started_at])
+
+    const formatElapsed = (seconds: number) => {
+        const h = Math.floor(seconds / 3600)
+        const m = Math.floor((seconds % 3600) / 60)
+        const s = seconds % 60
+
+        const hh = String(h).padStart(2, '0')
+        const mm = String(m).padStart(2, '0')
+        const ss = String(s).padStart(2, '0')
+
+        return `${hh}:${mm}:${ss}`
+    }
 
     const getContextPills = () => {
         const pills = []
@@ -84,11 +123,35 @@ export const TaskItem = React.memo<TaskItemProps>(({
 
     const dueDateStyle = getDueDateStyle()
     const isOverdue = !isCompleted && task.end_at && isPast(new Date(task.end_at)) && !isToday(new Date(task.end_at))
+    const handleFocus = (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.stopPropagation()
+        onFocus?.(task)
+    }
+    const handleToggleTimer = (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.stopPropagation()
+        void toggleTimer(task.id, 'manual')
+    }
+    const handleSnooze = (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.stopPropagation()
+        onSnooze?.(task.id)
+    }
+    const handleToggleToday = (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.stopPropagation()
+        onToggleToday(task.id, !task.today)
+    }
+
+    const openTask = () => {
+        if (onClickTitle) {
+            onClickTitle(task)
+            return
+        }
+        onClick(task)
+    }
 
     return (
         <div
             className={cn(
-                "group relative flex items-center space-x-4 px-4 py-4 2xl:py-5 rounded-2xl border border-transparent transition-all cursor-pointer overflow-hidden",
+                "group relative flex items-start md:items-center gap-2 md:gap-4 px-3 md:px-4 py-3 md:py-4 2xl:py-5 rounded-2xl border border-transparent transition-all cursor-pointer overflow-hidden min-w-0",
                 isDragging
                     ? "bg-surface shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border-accent/30 scale-[1.03] z-50 ring-2 ring-accent/20"
                     : "hover:bg-surface hover:border-border/60 hover:shadow-lg hover:-translate-y-0.5",
@@ -97,8 +160,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
             )}
             onClick={(e) => {
                 if (onSelect) onSelect(task.id, e)
-                else if (onClickTitle) onClickTitle(task)
-                else onClick(task)
+                else openTask()
             }}
         >
             {/* Project Color Side-Bar Indicator */}
@@ -113,7 +175,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
                     {...dragHandleProps}
                     onClick={(e) => e.stopPropagation()}
                     className={cn(
-                        "cursor-grab active:cursor-grabbing text-text-muted transition-opacity -ml-1 p-1",
+                        "hidden md:block cursor-grab active:cursor-grabbing text-text-muted transition-opacity -ml-1 p-1",
                         isDragging ? "opacity-100 text-accent" : "opacity-0 group-hover:opacity-60"
                     )}
                 >
@@ -128,7 +190,8 @@ export const TaskItem = React.memo<TaskItemProps>(({
                         e.stopPropagation()
                         onToggleComplete(task.id, !isCompleted)
                     }}
-                    className="relative z-10 text-text-muted hover:text-accent-warm transition-all active:scale-125 hover:scale-110"
+                    className="touch-target relative z-10 flex items-center justify-center rounded-xl text-text-muted hover:text-accent-warm transition-all active:scale-125 hover:scale-110"
+                    aria-label={isCompleted ? 'Mark task as not completed' : 'Mark task as completed'}
                 >
                     {isCompleted ? (
                         <CheckCircle2 className="w-6 h-6 2xl:w-[26px] 2xl:h-[26px] text-accent-warm animate-in zoom-in-50 duration-200" />
@@ -141,9 +204,9 @@ export const TaskItem = React.memo<TaskItemProps>(({
 
             {/* Title & Metadata */}
             <div className="flex-1 min-w-0 flex flex-col justify-center">
-                <div className="flex items-center space-x-2 mb-1">
+                <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mb-1 min-w-0">
                     <span className={cn(
-                        "text-base 2xl:text-lg font-heavy tracking-tight transition-all duration-300",
+                        "text-base md:text-[1.05rem] 2xl:text-[1.15rem] leading-snug font-heavy tracking-tight transition-all duration-300 break-words line-clamp-2",
                         isCompleted
                             ? "line-through text-text-muted decoration-text-muted/60"
                             : isSelected ? "text-accent" : "text-text-primary no-underline"
@@ -151,15 +214,20 @@ export const TaskItem = React.memo<TaskItemProps>(({
                         {task.title}
                     </span>
                     {task.recurrence && (
-                        <RefreshCw className="w-3.5 h-3.5 text-text-muted shrink-0" />
+                        <RefreshCw className="hidden sm:block w-3.5 h-3.5 text-text-muted shrink-0" />
+                    )}
+                    {isTimerActiveForTask && (
+                        <span className="text-xs 2xl:text-sm uppercase font-black tracking-widest text-emerald-300 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-300/20 tabular-nums">
+                            {formatElapsed(liveElapsedSeconds)}
+                        </span>
                     )}
                     {task.today && !isCompleted && (
-                        <span className="text-[10px] 2xl:text-xs uppercase font-black tracking-widest text-accent-warm bg-accent-warm/10 px-1.5 py-0.5 rounded-full border border-accent-warm/10">
+                        <span className="text-xs 2xl:text-sm uppercase font-black tracking-widest text-accent-warm bg-accent-warm/10 px-2 py-0.5 rounded-full border border-accent-warm/10">
                             Today
                         </span>
                     )}
                     {isOverdue && (
-                        <span className="text-[10px] 2xl:text-xs uppercase font-black tracking-widest text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded-full border border-red-500/10">
+                        <span className="text-xs 2xl:text-sm uppercase font-black tracking-widest text-red-500 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/10">
                             Overdue
                         </span>
                     )}
@@ -169,11 +237,11 @@ export const TaskItem = React.memo<TaskItemProps>(({
                     {/* Project Name (if exists) */}
                     {task.project && (
                         <>
-                            <span className="text-[10px] 2xl:text-[11px] font-black uppercase tracking-widest text-text-muted/80">
+                            <span className="text-sm md:text-xs 2xl:text-sm font-semibold md:font-black normal-case md:uppercase tracking-normal md:tracking-widest text-text-muted truncate max-w-[10rem] sm:max-w-[16rem]">
                                 {task.project.name}
                             </span>
                             {task.project.category?.name && (
-                                <span className="text-[10px] 2xl:text-[11px] uppercase tracking-widest font-black text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-full">
+                                <span className="hidden sm:inline-flex text-xs 2xl:text-sm uppercase tracking-widest font-black text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-full">
                                     {task.project.category.name}
                                 </span>
                             )}
@@ -182,23 +250,25 @@ export const TaskItem = React.memo<TaskItemProps>(({
 
                     {/* Status Badges */}
                     {task.status === 'doing' && (
-                        <span className="flex items-center gap-1 text-[10px] 2xl:text-xs uppercase tracking-widest font-black text-blue-500 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full shrink-0">
-                            <Loader2 className="w-3 h-3 animate-spin hidden sm:block" /> Doing
+                        <span className="hidden sm:flex items-center gap-1 text-[10px] 2xl:text-xs uppercase tracking-widest font-black text-blue-500 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full shrink-0">
+                            <RefreshCw className="w-3 h-3 hidden sm:block" /> Doing
                         </span>
                     )}
                     {task.status === 'waiting' && (
-                        <span className="flex items-center gap-1 text-[10px] 2xl:text-xs uppercase tracking-widest font-black text-orange-500 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full shrink-0">
+                        <span className="hidden sm:flex items-center gap-1 text-[10px] 2xl:text-xs uppercase tracking-widest font-black text-orange-500 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full shrink-0">
                             <Clock className="w-3 h-3 hidden sm:block" /> Waiting
                         </span>
                     )}
 
                     {/* Context Pills */}
-                    {getContextPills()}
+                    <div className="hidden sm:contents">
+                        {getContextPills()}
+                    </div>
 
                     {/* Due Date */}
                     {task.end_at && (
                         <div className={cn(
-                            "flex items-center space-x-1.5 text-xs 2xl:text-sm px-2.5 py-1 rounded-full border shrink-0 font-bold uppercase tracking-wider",
+                            "hidden sm:flex items-center space-x-1.5 text-xs 2xl:text-sm px-2.5 py-1 rounded-full border shrink-0 font-bold uppercase tracking-wider",
                             dueDateStyle
                         )}>
                             <Clock className="w-3 h-3" />
@@ -210,46 +280,120 @@ export const TaskItem = React.memo<TaskItemProps>(({
                     )}
 
                     {/* Subtask Progress */}
-                    <SubtaskProgress task={task} />
+                    <div className="hidden sm:block">
+                        <SubtaskProgress task={task} />
+                    </div>
                 </div>
+
+                {/* Mobile action row */}
+                {!isCompleted && (
+                    <div className="md:hidden mt-2 flex items-center gap-1.5">
+                        {onFocus && (
+                            <button
+                                onClick={handleFocus}
+                                className="touch-target inline-flex items-center justify-center rounded-lg border border-border/60 bg-surface-secondary/35 text-text-muted hover:text-accent hover:border-accent/35 transition-all"
+                                title="Focus Mode"
+                                aria-label="Open focus mode"
+                            >
+                                <Maximize2 className="w-[18px] h-[18px]" />
+                            </button>
+                        )}
+                        <button
+                            onClick={handleToggleTimer}
+                            disabled={isSyncing}
+                            className={cn(
+                                "touch-target inline-flex items-center justify-center rounded-lg border transition-all",
+                                isTimerActiveForTask
+                                    ? "text-emerald-300 bg-emerald-400/10 border-emerald-300/20"
+                                    : "text-text-muted bg-surface-secondary/35 border-border/60 hover:text-emerald-300 hover:border-emerald-300/30",
+                                isSyncing && "opacity-60 cursor-not-allowed"
+                            )}
+                            title={isTimerActiveForTask ? "Stop timer" : "Start timer"}
+                            aria-label={isTimerActiveForTask ? "Stop focus timer for task" : "Start focus timer for task"}
+                        >
+                            {isTimerActiveForTask ? (
+                                <Pause className="w-[18px] h-[18px]" />
+                            ) : (
+                                <Play className="w-[18px] h-[18px]" />
+                            )}
+                        </button>
+                        {onSnooze && task.today && (
+                            <button
+                                onClick={handleSnooze}
+                                className="touch-target inline-flex items-center justify-center rounded-lg border border-border/60 bg-surface-secondary/35 text-text-muted hover:text-blue-400 hover:border-blue-400/40 transition-all"
+                                title="Snooze to tomorrow"
+                                aria-label="Snooze task to tomorrow"
+                            >
+                                <Moon className="w-[18px] h-[18px]" />
+                            </button>
+                        )}
+                        <button
+                            onClick={handleToggleToday}
+                            className={cn(
+                                "touch-target inline-flex items-center justify-center rounded-lg border transition-all",
+                                task.today
+                                    ? "text-accent-warm bg-accent-warm/10 border-accent-warm/25"
+                                    : "text-text-muted bg-surface-secondary/35 border-border/60 hover:bg-surface-secondary hover:text-accent-warm hover:border-accent-warm/30"
+                            )}
+                            aria-label={task.today ? "Remove task from Today" : "Add task to Today"}
+                        >
+                            <Star className={cn("w-[18px] h-[18px]", task.today && "fill-current")} />
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Snooze and Today Star */}
-            <div className="flex items-center space-x-1 shrink-0">
+            <div className="hidden md:flex items-center space-x-0.5 md:space-x-1 shrink-0">
                 {!isCompleted && onFocus && (
                     <button
-                        onClick={(e) => {
-                            e.stopPropagation()
-                            onFocus(task)
-                        }}
-                        className="text-text-muted opacity-0 group-hover:opacity-100 hover:text-accent hover:bg-surface-secondary transition-all p-2 rounded-xl"
+                        onClick={handleFocus}
+                        className="touch-target flex items-center justify-center text-text-muted transition-all p-2 rounded-xl hover:text-accent hover:bg-surface-secondary md:opacity-0 md:pointer-events-none md:group-hover:opacity-100 md:group-hover:pointer-events-auto"
                         title="Focus Mode"
+                        aria-label="Open focus mode"
                     >
                         <Maximize2 className="w-5 h-5 2xl:w-6 2xl:h-6" />
                     </button>
                 )}
+                {!isCompleted && (
+                    <button
+                        onClick={handleToggleTimer}
+                        disabled={isSyncing}
+                        className={cn(
+                            "touch-target flex items-center justify-center transition-all p-2 rounded-xl opacity-100",
+                            isTimerActiveForTask
+                                ? "text-emerald-300 bg-emerald-400/10 border border-emerald-300/20"
+                                : "text-text-muted md:opacity-0 md:pointer-events-none md:group-hover:opacity-100 md:group-hover:pointer-events-auto hover:text-emerald-300 hover:bg-surface-secondary",
+                            isSyncing && "opacity-60 cursor-not-allowed"
+                        )}
+                        title={isTimerActiveForTask ? "Stop timer" : "Start timer"}
+                        aria-label={isTimerActiveForTask ? "Stop focus timer for task" : "Start focus timer for task"}
+                    >
+                        {isTimerActiveForTask ? (
+                            <Pause className="w-5 h-5 2xl:w-6 2xl:h-6" />
+                        ) : (
+                            <Play className="w-5 h-5 2xl:w-6 2xl:h-6" />
+                        )}
+                    </button>
+                )}
                 {!isCompleted && onSnooze && task.today && (
                     <button
-                        onClick={(e) => {
-                            e.stopPropagation()
-                            onSnooze(task.id)
-                        }}
-                        className="text-text-muted opacity-0 group-hover:opacity-100 hover:text-blue-400 hover:bg-surface-secondary transition-all p-2 rounded-xl"
+                        onClick={handleSnooze}
+                        className="hidden md:flex touch-target items-center justify-center text-text-muted opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto hover:text-blue-400 hover:bg-surface-secondary transition-all p-2 rounded-xl"
                         title="Snooze to tomorrow"
+                        aria-label="Snooze task to tomorrow"
                     >
                         <Moon className="w-5 h-5 2xl:w-6 2xl:h-6" />
                     </button>
                 )}
                 {!isCompleted && (
                     <button
-                        onClick={(e) => {
-                            e.stopPropagation()
-                            onToggleToday(task.id, !task.today)
-                        }}
+                        onClick={handleToggleToday}
                         className={cn(
-                            "transition-all p-2 rounded-xl",
-                            task.today ? "text-accent-warm" : "text-text-muted opacity-0 group-hover:opacity-100 hover:bg-surface-secondary"
+                            "touch-target flex items-center justify-center transition-all p-2 rounded-xl opacity-100",
+                            task.today ? "text-accent-warm" : "text-text-muted md:opacity-0 md:pointer-events-none md:group-hover:opacity-100 md:group-hover:pointer-events-auto hover:bg-surface-secondary"
                         )}
+                        aria-label={task.today ? "Remove task from Today" : "Add task to Today"}
                     >
                         <Star className={cn("w-5 h-5 2xl:w-6 2xl:h-6", task.today && "fill-current")} />
                     </button>

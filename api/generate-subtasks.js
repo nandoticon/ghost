@@ -2,11 +2,66 @@ function toStringSafe(value) {
     return typeof value === 'string' ? value : ''
 }
 
+const MAX_BODY_BYTES = 16 * 1024
+const MAX_FIELD_LENGTH = 2000
+const REQUEST_TIMEOUT_MS = 12000
+const RATE_LIMIT_WINDOW_MS = 60 * 1000
+const RATE_LIMIT_MAX = 20
+const ipRateLimit = new Map()
+
+function getClientIp(req) {
+    const forwarded = toStringSafe(req.headers['x-forwarded-for']).split(',')[0].trim()
+    const realIp = toStringSafe(req.headers['x-real-ip']).trim()
+    return forwarded || realIp || 'unknown'
+}
+
+function checkRateLimit(key) {
+    const now = Date.now()
+    const bucket = ipRateLimit.get(key)
+    if (!bucket || now - bucket.windowStart > RATE_LIMIT_WINDOW_MS) {
+        ipRateLimit.set(key, { count: 1, windowStart: now })
+        return { allowed: true, retryAfter: 0 }
+    }
+
+    if (bucket.count >= RATE_LIMIT_MAX) {
+        const retryAfter = Math.max(1, Math.ceil((RATE_LIMIT_WINDOW_MS - (now - bucket.windowStart)) / 1000))
+        return { allowed: false, retryAfter }
+    }
+
+    bucket.count += 1
+    ipRateLimit.set(key, bucket)
+    return { allowed: true, retryAfter: 0 }
+}
+
 function normalizeLines(text) {
     return toStringSafe(text)
         .split('\n')
         .map((line) => line.trim().replace(/^[-*0-9.)\s]+/, '').trim())
         .filter(Boolean)
+}
+
+function sanitizeList(value, maxItems = 20) {
+    if (!Array.isArray(value)) return []
+    return value
+        .map((item) => toStringSafe(item).trim().slice(0, MAX_FIELD_LENGTH))
+        .filter(Boolean)
+        .slice(0, maxItems)
+}
+
+function sanitizePayload(payload) {
+    return {
+        title: toStringSafe(payload.title).trim().slice(0, 300),
+        notes: toStringSafe(payload.notes).trim().slice(0, MAX_FIELD_LENGTH),
+        status: toStringSafe(payload.status).trim().slice(0, 40),
+        energy: toStringSafe(payload.energy).trim().slice(0, 40),
+        focus: toStringSafe(payload.focus).trim().slice(0, 40),
+        location: toStringSafe(payload.location).trim().slice(0, 40),
+        today: Boolean(payload.today),
+        startAt: toStringSafe(payload.startAt).trim().slice(0, 80),
+        endAt: toStringSafe(payload.endAt).trim().slice(0, 80),
+        existingSubtasks: sanitizeList(payload.existingSubtasks, 30),
+        comments: sanitizeList(payload.comments, 20),
+    }
 }
 
 function buildFallbackSuggestions(payload) {
@@ -64,12 +119,25 @@ Rules:
 }
 
 export default async function handler(req, res) {
+    res.setHeader('Cache-Control', 'no-store')
+
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' })
     }
 
-    const payload = req.body || {}
-    const title = toStringSafe(payload.title).trim()
+    const contentLength = Number(req.headers['content-length'] || 0)
+    if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+        return res.status(413).json({ error: 'Payload too large' })
+    }
+
+    const rateLimit = checkRateLimit(getClientIp(req))
+    if (!rateLimit.allowed) {
+        res.setHeader('Retry-After', String(rateLimit.retryAfter))
+        return res.status(429).json({ error: 'Too many requests' })
+    }
+
+    const payload = sanitizePayload(req.body || {})
+    const title = payload.title
     if (!title) {
         return res.status(400).json({ error: 'Missing title' })
     }
@@ -82,16 +150,21 @@ export default async function handler(req, res) {
 
     try {
         const prompt = makePrompt(payload)
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
         const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                signal: controller.signal,
                 body: JSON.stringify({
                     contents: [{ parts: [{ text: prompt }] }],
                 }),
             }
-        )
+        ).finally(() => {
+            clearTimeout(timeout)
+        })
 
         if (!response.ok) {
             throw new Error(`Gemini HTTP ${response.status}`)

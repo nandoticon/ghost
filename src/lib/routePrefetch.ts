@@ -20,4 +20,5 @@ export function prefetchLikelyRoutes() {
     prefetchRoute('/today')
     prefetchRoute('/tasks')
     prefetchRoute('/projects')
+    prefetchRoute('/analytics')
 }

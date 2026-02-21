@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { Task } from '../types'
 import { useAuth } from '../hooks/useAuth'
 import { generateNextTask } from '../lib/recurrence'
+import { useToast } from '../components/Toast'
 
 const TASK_SELECT = `
     id,
@@ -35,8 +36,7 @@ const TASK_SELECT = `
         short_id,
         archived,
         category:project_categories(id,name)
-    ),
-    subtasks(id, completed)
+    )
 `
 
 interface TaskContextType {
@@ -54,10 +54,44 @@ interface TaskContextType {
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined)
 
+const RETRY_ATTEMPTS = 3
+const RETRY_BASE_DELAY_MS = 150
+const RETRYABLE_PG_CODES = new Set(['40001', '40P01', '53300', '57P03', '08000', '08003', '08006', '08001'])
+
+function sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function isRetryableError(error: unknown) {
+    if (!error || typeof error !== 'object') return false
+    const candidate = error as { code?: string; status?: number; message?: string }
+    if (typeof candidate.status === 'number' && candidate.status >= 500) return true
+    if (candidate.code && RETRYABLE_PG_CODES.has(candidate.code)) return true
+    const message = (candidate.message || '').toLowerCase()
+    return message.includes('network') || message.includes('fetch') || message.includes('timeout')
+}
+
+async function withRetry<T>(fn: () => Promise<T>, attempts = RETRY_ATTEMPTS): Promise<T> {
+    let lastError: unknown
+    for (let i = 0; i < attempts; i += 1) {
+        try {
+            return await fn()
+        } catch (error) {
+            lastError = error
+            if (i === attempts - 1 || !isRetryableError(error)) {
+                throw error
+            }
+            await sleep(RETRY_BASE_DELAY_MS * 2 ** i)
+        }
+    }
+    throw lastError
+}
+
 export function TaskProvider({ children }: { children: ReactNode }) {
     const [tasks, setTasks] = useState<Task[]>([])
     const [loading, setLoading] = useState(true)
     const { user } = useAuth()
+    const { showToast } = useToast()
 
     const fetchTasks = useCallback(async () => {
         if (!user) {
@@ -93,6 +127,25 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (!user) return
 
+        const upsertTaskWithRelations = async (taskId: string) => {
+            const { data, error } = await supabase
+                .from('tasks')
+                .select(TASK_SELECT)
+                .eq('id', taskId)
+                .maybeSingle()
+
+            if (error || !data) {
+                return false
+            }
+
+            setTasks(prev => {
+                const filtered = prev.filter(t => t.id !== taskId && !t.id.startsWith('temp-'))
+                return [...filtered, data as unknown as Task]
+            })
+
+            return true
+        }
+
         const channel = supabase
             .channel('tasks-realtime')
             .on(
@@ -107,15 +160,17 @@ export function TaskProvider({ children }: { children: ReactNode }) {
                     const { eventType, new: newRecord, old: oldRecord } = payload
 
                     if (eventType === 'INSERT') {
-                        setTasks(prev => {
-                            // Avoid duplicates (e.g. if insert event arrives after optimistic set)
-                            if (prev.some(t => t.id === newRecord.id)) return prev
-                            // Filter out temporary tasks
-                            const filtered = prev.filter(t => !t.id.startsWith('temp-'))
-                            return [...filtered, newRecord as Task]
-                        })
+                        if (newRecord?.id) {
+                            void upsertTaskWithRelations(newRecord.id)
+                        }
                     } else if (eventType === 'UPDATE') {
-                        setTasks(prev => prev.map(t => t.id === newRecord.id ? { ...t, ...newRecord } : t))
+                        if (newRecord?.id) {
+                            void upsertTaskWithRelations(newRecord.id).then((synced) => {
+                                if (!synced) {
+                                    setTasks(prev => prev.map(t => t.id === newRecord.id ? { ...t, ...newRecord } : t))
+                                }
+                            })
+                        }
                     } else if (eventType === 'DELETE') {
                         setTasks(prev => prev.filter(t => t.id !== oldRecord.id))
                     }
@@ -154,24 +209,35 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         const tempId = 'temp-' + Math.random()
         setTasks(prev => [...prev, { ...newTask, id: tempId } as Task])
 
-        const { data, error } = await supabase
-            .from('tasks')
-            .insert([newTask])
-            .select(TASK_SELECT)
-            .single()
+        try {
+            const { data } = await withRetry(async () => {
+                const result = await supabase
+                    .from('tasks')
+                    .insert([newTask])
+                    .select(TASK_SELECT)
+                    .single()
+                if (result.error) throw result.error
+                return result
+            })
 
-        if (error) {
+            const createdTask = data as unknown as Task
+            setTasks(prev => prev.map(t => t.id === tempId ? createdTask : t))
+            return createdTask
+        } catch (error) {
             console.error('Error creating task:', error)
+            setTasks(prev => prev.filter(t => t.id !== tempId))
+            showToast('Could not create task. Retry?', 'error', () => {
+                void createTask(task, isToday)
+            }, 7000)
             fetchTasks()
             return null
         }
-
-        const createdTask = data as unknown as Task
-        setTasks(prev => prev.map(t => t.id === tempId ? createdTask : t))
-        return createdTask
-    }, [user, tasks, fetchTasks])
+    }, [user, tasks, fetchTasks, showToast])
 
     const updateTask = useCallback(async (id: string, updates: Partial<Task>) => {
+        const previousTask = tasks.find(t => t.id === id)
+        if (!previousTask) return
+
         // Sync logic for status/completed bridging
         const finalUpdates = { ...updates }
         if (updates.status !== undefined && updates.completed === undefined) {
@@ -182,32 +248,53 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
         setTasks(prev => prev.map(t => t.id === id ? { ...t, ...finalUpdates, updated_at: new Date().toISOString() } : t))
 
-        const { error } = await supabase
-            .from('tasks')
-            .update({ ...finalUpdates, updated_at: new Date().toISOString() })
-            .eq('id', id)
-
-        if (error) {
+        try {
+            await withRetry(async () => {
+                const { error } = await supabase
+                    .from('tasks')
+                    .update({ ...finalUpdates, updated_at: new Date().toISOString() })
+                    .eq('id', id)
+                if (error) throw error
+            })
+        } catch (error) {
             console.error('Error updating task:', error)
+            setTasks(prev => prev.map(t => t.id === id ? previousTask : t))
+            showToast('Save failed. Changes were reverted. Retry?', 'error', () => {
+                void updateTask(id, updates)
+            }, 7000)
             fetchTasks()
         }
-    }, [fetchTasks])
+    }, [fetchTasks, tasks, showToast])
 
     const deleteTask = useCallback(async (id: string) => {
+        const deletedTask = tasks.find(t => t.id === id)
+        if (!deletedTask) return
+
         setTasks(prev => prev.filter(t => t.id !== id))
 
-        const { error } = await supabase
-            .from('tasks')
-            .delete()
-            .eq('id', id)
-
-        if (error) {
+        try {
+            await withRetry(async () => {
+                const { error } = await supabase
+                    .from('tasks')
+                    .delete()
+                    .eq('id', id)
+                if (error) throw error
+            })
+            showToast('Task deleted', 'info', () => {
+                const { id: _id, created_at: _createdAt, updated_at: _updatedAt, ...restored } = deletedTask
+                void createTask(restored)
+            }, 6000)
+        } catch (error) {
             console.error('Error deleting task:', error)
+            setTasks(prev => [...prev, deletedTask])
+            showToast('Delete failed. Task restored.', 'error')
             fetchTasks()
         }
-    }, [fetchTasks])
+    }, [fetchTasks, tasks, showToast, createTask])
 
     const batchUpdateTasks = useCallback(async (ids: string[], updates: Partial<Task>) => {
+        const previousById = new Map(tasks.filter(t => ids.includes(t.id)).map(t => [t.id, t]))
+
         // Sync logic for status/completed bridging
         const finalUpdates = { ...updates }
         if (updates.status !== undefined && (updates.completed === undefined)) {
@@ -219,46 +306,66 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         // Apply immediately to local state
         setTasks(prev => prev.map(t => ids.includes(t.id) ? { ...t, ...finalUpdates, updated_at: new Date().toISOString() } : t))
 
-        const { error } = await supabase
-            .from('tasks')
-            .update({ ...finalUpdates, updated_at: new Date().toISOString() })
-            .in('id', ids)
-
-        if (error) {
+        try {
+            await withRetry(async () => {
+                const { error } = await supabase
+                    .from('tasks')
+                    .update({ ...finalUpdates, updated_at: new Date().toISOString() })
+                    .in('id', ids)
+                if (error) throw error
+            })
+        } catch (error) {
             console.error('Error batch updating tasks:', error)
+            setTasks(prev => prev.map(t => previousById.get(t.id) || t))
+            showToast('Batch update failed. Changes were reverted.', 'error')
             fetchTasks()
         }
-    }, [fetchTasks])
+    }, [fetchTasks, tasks, showToast])
 
     const batchDeleteTasks = useCallback(async (ids: string[]) => {
+        const deletedTasks = tasks.filter(t => ids.includes(t.id))
+
         // Apply immediately to local state
         setTasks(prev => prev.filter(t => !ids.includes(t.id)))
 
-        const { error } = await supabase
-            .from('tasks')
-            .delete()
-            .in('id', ids)
-
-        if (error) {
+        try {
+            await withRetry(async () => {
+                const { error } = await supabase
+                    .from('tasks')
+                    .delete()
+                    .in('id', ids)
+                if (error) throw error
+            })
+        } catch (error) {
             console.error('Error batch deleting tasks:', error)
+            setTasks(prev => [...prev, ...deletedTasks])
+            showToast('Batch delete failed. Tasks restored.', 'error')
             fetchTasks()
         }
-    }, [fetchTasks])
+    }, [fetchTasks, tasks, showToast])
 
     const completeTask = useCallback(async (id: string, completed: boolean) => {
         const task = tasks.find(t => t.id === id)
         if (!task) return { success: false }
+        const previousTask = { ...task }
 
         const newStatus = completed ? 'done' : 'todo'
         setTasks(prev => prev.map(t => t.id === id ? { ...t, completed, status: newStatus, updated_at: new Date().toISOString() } : t))
 
-        const { error } = await supabase
-            .from('tasks')
-            .update({ completed, status: newStatus, updated_at: new Date().toISOString() })
-            .eq('id', id)
-
-        if (error) {
+        try {
+            await withRetry(async () => {
+                const { error } = await supabase
+                    .from('tasks')
+                    .update({ completed, status: newStatus, updated_at: new Date().toISOString() })
+                    .eq('id', id)
+                if (error) throw error
+            })
+        } catch (error) {
             console.error('Error completing task:', error)
+            setTasks(prev => prev.map(t => t.id === id ? previousTask : t))
+            showToast('Could not update task status. Retry?', 'error', () => {
+                void completeTask(id, completed)
+            }, 7000)
             fetchTasks()
             return { success: false }
         }
@@ -269,25 +376,31 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         if (completed && task.recurrence) {
             const nextTaskData = generateNextTask(task)
             if (nextTaskData) {
-                const { data: nextTask, error: insertError } = await supabase
-                    .from('tasks')
-                    .insert([{ ...nextTaskData, user_id: user?.id }])
-                    .select(TASK_SELECT)
-                    .single()
+                try {
+                    const { data: nextTask } = await withRetry(async () => {
+                        const result = await supabase
+                            .from('tasks')
+                            .insert([{ ...nextTaskData, user_id: user?.id }])
+                            .select(TASK_SELECT)
+                            .single()
+                        if (result.error) throw result.error
+                        return result
+                    })
 
-                if (!insertError && nextTask) {
                     nextOccurrenceCreated = true
-                    nextOccurrenceDate = nextTask.end_at
+                    nextOccurrenceDate = nextTask?.end_at || null
 
-                    setTasks(prev => [...prev, nextTask as unknown as Task])
-                } else {
+                    if (nextTask) {
+                        setTasks(prev => [...prev, nextTask as unknown as Task])
+                    }
+                } catch (insertError) {
                     console.error('Error creating next occurrence:', insertError)
                 }
             }
         }
 
         return { success: true, nextOccurrenceCreated, nextOccurrenceDate }
-    }, [tasks, fetchTasks, user])
+    }, [tasks, fetchTasks, user, showToast])
 
     const reorderTasks = useCallback(async (orderedIds: string[], isToday?: boolean) => {
         const sortField = isToday ? 'sort_order_today' : 'sort_order'
@@ -313,21 +426,26 @@ export function TaskProvider({ children }: { children: ReactNode }) {
             const updates = changedIds.map((id) => {
                 const index = nextOrderById.get(id)
                 if (index === undefined) return Promise.resolve({ error: null })
-                return supabase
-                    .from('tasks')
-                    .update({ [sortField]: index, updated_at: new Date().toISOString() })
-                    .eq('id', id)
+                return withRetry(async () => {
+                    const result = await supabase
+                        .from('tasks')
+                        .update({ [sortField]: index, updated_at: new Date().toISOString() })
+                        .eq('id', id)
+                    if (result.error) throw result.error
+                    return result
+                })
             })
 
             const results = await Promise.all(updates)
-            const error = results.find(r => r.error)
+            const error = results.find(r => r?.error)
 
             if (error) throw error.error
         } catch (error) {
             console.error('Error reordering tasks:', error)
             setTasks(previousTasks) // Rollback to reliable state
+            showToast('Could not reorder tasks. Order restored.', 'error')
         }
-    }, [tasks])
+    }, [tasks, showToast])
 
     return (
         <TaskContext.Provider

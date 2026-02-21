@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { Comment } from '../types'
+import { useToast } from '../components/Toast'
 
 export const useComments = (taskId: string | undefined) => {
     const [comments, setComments] = useState<Comment[]>([])
     const [loading, setLoading] = useState(false)
+    const { showToast } = useToast()
 
-    const fetchComments = useCallback(async () => {
+    const fetchComments = useCallback(async (signal?: AbortSignal) => {
         if (!taskId) return
         setLoading(true)
         try {
@@ -17,16 +19,23 @@ export const useComments = (taskId: string | undefined) => {
                 .order('created_at', { ascending: true })
 
             if (error) throw error
-            setComments(data || [])
+            if (!signal?.aborted) {
+                setComments(data || [])
+            }
         } catch (error) {
-            console.error('Error fetching comments:', error)
+            if (!signal?.aborted) {
+                console.error('Error fetching comments:', error)
+            }
         } finally {
-            setLoading(false)
+            if (!signal?.aborted) {
+                setLoading(false)
+            }
         }
     }, [taskId])
 
     useEffect(() => {
-        fetchComments()
+        const controller = new AbortController()
+        void fetchComments(controller.signal)
 
         if (!taskId) return
 
@@ -54,6 +63,7 @@ export const useComments = (taskId: string | undefined) => {
             .subscribe()
 
         return () => {
+            controller.abort()
             supabase.removeChannel(channel)
         }
     }, [taskId, fetchComments])
@@ -90,6 +100,9 @@ export const useComments = (taskId: string | undefined) => {
         } catch (error) {
             console.error('Error adding comment:', error)
             setComments(prev => prev.filter(c => c.id !== tempId)) // Rollback
+            showToast('Could not add comment. Retry?', 'error', () => {
+                void addComment(body)
+            }, 7000)
         }
     }
 
@@ -112,6 +125,9 @@ export const useComments = (taskId: string | undefined) => {
         } catch (error) {
             console.error('Error editing comment:', error)
             setComments(prev => prev.map(c => c.id === id ? original : c)) // Rollback
+            showToast('Could not edit comment. Retry?', 'error', () => {
+                void editComment(id, body)
+            }, 7000)
         }
     }
 
@@ -132,6 +148,7 @@ export const useComments = (taskId: string | undefined) => {
         } catch (error) {
             console.error('Error deleting comment:', error)
             setComments(prev => [...prev, original]) // Rollback
+            showToast('Could not delete comment. Restored.', 'error')
         }
     }
 

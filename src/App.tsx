@@ -49,86 +49,85 @@ function App() {
         <ThemeProvider>
             <AuthProvider>
                 <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                    <ShortcutProvider>
-                        <ProjectsProvider>
-                            <ProjectCategoriesProvider>
-                                <TimerProvider>
-                                    <TaskProvider>
-                                        <ToastProvider>
-                                    <Suspense fallback={<div className="h-screen bg-background" />}>
-                                        <Routes>
-                                        <Route path="/login" element={<Login />} />
+                    <ToastProvider>
+                        <ShortcutProvider>
+                            <ProjectsProvider>
+                                <ProjectCategoriesProvider>
+                                    <TimerProvider>
+                                        <TaskProvider>
+                                            <Suspense fallback={<div className="h-screen bg-background" />}>
+                                                <Routes>
+                                                    <Route path="/login" element={<Login />} />
 
-
-                                        {/* Protected Routes */}
-                                        <Route
-                                            element={
-                                                <ErrorBoundary>
-                                                    <AuthGuard>
-                                                        <Layout />
-                                                    </AuthGuard>
-                                                </ErrorBoundary>
-                                            }
-                                        >
-                                            <Route index element={<Navigate to="/today" replace />} />
-                                            <Route
-                                                path="today"
-                                                element={
-                                                    <Suspense fallback={<TaskListSkeleton />}>
-                                                        <Today />
-                                                    </Suspense>
-                                                }
-                                            />
-                                            <Route
-                                                path="tasks"
-                                                element={
-                                                    <Suspense fallback={<TaskListSkeleton />}>
-                                                        <Tasks />
-                                                    </Suspense>
-                                                }
-                                            />
-                                            <Route
-                                                path="projects"
-                                                element={
-                                                    <Suspense fallback={<ProjectGridSkeleton />}>
-                                                        <Projects />
-                                                    </Suspense>
-                                                }
-                                            />
-                                            <Route
-                                                path="analytics"
-                                                element={
-                                                    <Suspense fallback={<TaskListSkeleton />}>
-                                                        <Analytics />
-                                                    </Suspense>
-                                                }
-                                            />
-                                            <Route
-                                                path="projects/:id"
-                                                element={
-                                                    <Suspense fallback={<TaskListSkeleton />}>
-                                                        <ProjectDetail />
-                                                    </Suspense>
-                                                }
-                                            />
-                                            <Route
-                                                path="settings"
-                                                element={
-                                                    <Suspense fallback={<div className="h-screen bg-background" />}>
-                                                        <Settings />
-                                                    </Suspense>
-                                                }
-                                            />
-                                            <Route path="*" element={<Navigate to="/today" replace />} />
-                                        </Route>
-                                        </Routes>
-                                    </Suspense>
-                                        </ToastProvider>
-                                    </TaskProvider>
-                                </TimerProvider>
-                            </ProjectCategoriesProvider>
-                        </ProjectsProvider>
-                    </ShortcutProvider>
+                                                    {/* Protected Routes */}
+                                                    <Route
+                                                        element={
+                                                            <ErrorBoundary>
+                                                                <AuthGuard>
+                                                                    <Layout />
+                                                                </AuthGuard>
+                                                            </ErrorBoundary>
+                                                        }
+                                                    >
+                                                        <Route index element={<Navigate to="/today" replace />} />
+                                                        <Route
+                                                            path="today"
+                                                            element={
+                                                                <Suspense fallback={<TaskListSkeleton />}>
+                                                                    <Today />
+                                                                </Suspense>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="tasks"
+                                                            element={
+                                                                <Suspense fallback={<TaskListSkeleton />}>
+                                                                    <Tasks />
+                                                                </Suspense>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="projects"
+                                                            element={
+                                                                <Suspense fallback={<ProjectGridSkeleton />}>
+                                                                    <Projects />
+                                                                </Suspense>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="analytics"
+                                                            element={
+                                                                <Suspense fallback={<TaskListSkeleton />}>
+                                                                    <Analytics />
+                                                                </Suspense>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="projects/:id"
+                                                            element={
+                                                                <Suspense fallback={<TaskListSkeleton />}>
+                                                                    <ProjectDetail />
+                                                                </Suspense>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="settings"
+                                                            element={
+                                                                <Suspense fallback={<div className="h-screen bg-background" />}>
+                                                                    <Settings />
+                                                                </Suspense>
+                                                            }
+                                                        />
+                                                        <Route path="*" element={<Navigate to="/today" replace />} />
+                                                    </Route>
+                                                </Routes>
+                                            </Suspense>
+                                        </TaskProvider>
+                                    </TimerProvider>
+                                </ProjectCategoriesProvider>
+                            </ProjectsProvider>
+                        </ShortcutProvider>
+                    </ToastProvider>
                 </BrowserRouter>
             </AuthProvider>
         </ThemeProvider>

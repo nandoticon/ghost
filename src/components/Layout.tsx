@@ -1,5 +1,5 @@
 import { NavLink, useNavigate, Outlet, useLocation } from 'react-router-dom'
-import { Calendar, CheckSquare, Folder, LogOut, Search as SearchIcon, HelpCircle, Settings as SettingsIcon, Plus, Ghost, MoreHorizontal } from 'lucide-react'
+import { Calendar, CheckSquare, Folder, LogOut, Search as SearchIcon, HelpCircle, Settings as SettingsIcon, Plus, Ghost, MoreHorizontal, BarChart3 } from 'lucide-react'
 import { cn } from '../lib/cn'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
@@ -11,15 +11,15 @@ import { KeyboardShortcutsModal } from './KeyboardShortcutsModal'
 import { OfflineBanner } from './OfflineBanner'
 import { InstallPrompt } from './InstallPrompt'
 import { PWAUpdateNotification } from './PWAUpdateNotification'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useShortcutContext } from '../context/ShortcutContext'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
-import { useProfile } from '../hooks/useProfile'
+import { useTimer } from '../context/TimerContext'
+import { useToast } from './Toast'
 import { prefetchRoute } from '../lib/routePrefetch'
 
 export default function Layout() {
     const { user } = useAuth()
-    const { profile } = useProfile()
     const navigate = useNavigate()
     const {
         isQuickCaptureOpen,
@@ -34,11 +34,23 @@ export default function Layout() {
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
     const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
     const location = useLocation()
+    const { lastError } = useTimer()
+    const { showToast } = useToast()
+    const lastShownTimerError = useRef<string | null>(null)
+
+    useEffect(() => {
+        if (!lastError) return
+        if (lastShownTimerError.current === lastError) return
+
+        showToast(lastError, 'info', undefined, 3500)
+        lastShownTimerError.current = lastError
+    }, [lastError, showToast])
 
     const navItems = [
         { to: '/today', icon: Calendar, label: 'Today' },
         { to: '/tasks', icon: CheckSquare, label: 'Tasks' },
         { to: '/projects', icon: Folder, label: 'Projects' },
+        { to: '/analytics', icon: BarChart3, label: 'Analytics' },
     ]
 
     const handleSignOut = async () => {
@@ -46,12 +58,11 @@ export default function Layout() {
         navigate('/login')
     }
 
-    // Derive user name and initials
-    const displayName = profile?.full_name || user?.email?.split('@')[0].split(/[._-]/)[0] || 'User'
-    const firstName = displayName.split(' ')[0]
-    const initials = profile?.full_name
-        ? profile.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-        : user?.email?.slice(0, 2).toUpperCase() || '?'
+    // Derive user initials for avatar
+    const initials = user?.email
+        ? user.email.slice(0, 2).toUpperCase()
+        : '?'
+    const accountName = user?.email?.split('@')[0] || 'User'
 
     return (
         <div className="flex tablet:grid tablet:grid-cols-[250px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)] 4k:grid-cols-[380px_minmax(0,1fr)] h-[100dvh] min-h-0 w-full max-w-full bg-background overflow-hidden text-text-primary relative">
@@ -137,12 +148,7 @@ export default function Layout() {
                                 </div>
                                 <div className="min-w-0">
                                     <p className="text-xs 2xl:text-sm uppercase font-black tracking-widest text-text-muted">Account</p>
-                                    <p className="text-sm 2xl:text-base font-semibold text-text-primary truncate">
-                                        {firstName.charAt(0).toUpperCase() + firstName.slice(1)}
-                                    </p>
-                                    {profile?.pronouns && (
-                                        <p className="text-[10px] font-bold text-text-muted uppercase tracking-tighter">{profile.pronouns}</p>
-                                    )}
+                                    <p className="text-sm 2xl:text-base font-semibold text-text-primary truncate">{accountName}</p>
                                 </div>
                             </div>
                         </div>
@@ -213,16 +219,28 @@ export default function Layout() {
             {/* Main content area */}
             <div className="flex-1 flex flex-col min-w-0 min-h-0 h-full relative">
                 {/* Mobile Top Bar */}
-                <header className="tablet:hidden flex items-center justify-between px-5 h-14 bg-surface/70 backdrop-blur-md border-b border-border sticky top-0 z-40">
+                <header className="tablet:hidden flex items-center justify-between px-5 h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-surface/70 backdrop-blur-md border-b border-border sticky top-0 z-40">
                     <h1 className="text-xl font-black tracking-tightest text-text-primary">Ghost</h1>
-                    <button
-                        onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
-                        className="p-2 hover:bg-surface-secondary rounded-xl text-text-muted transition-colors"
-                    >
-                        <SearchIcon className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                        <button
+                            onClick={() => navigate('/settings')}
+                            className="touch-target flex items-center justify-center p-2 hover:bg-surface-secondary rounded-xl text-text-muted transition-colors"
+                            aria-label="Open settings"
+                            title="Settings"
+                        >
+                            <SettingsIcon className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
+                            className="touch-target flex items-center justify-center p-2 hover:bg-surface-secondary rounded-xl text-text-muted transition-colors"
+                            aria-label="Search tasks"
+                            title="Search"
+                        >
+                            <SearchIcon className="w-5 h-5" />
+                        </button>
+                    </div>
                     {isMobileSearchOpen && (
-                        <div className="absolute top-14 left-0 right-0 bg-surface border-b border-border p-4 animate-in slide-in-from-top duration-200 z-50">
+                        <div className="absolute top-[calc(3.5rem+env(safe-area-inset-top))] left-0 right-0 bg-surface border-b border-border p-4 animate-in slide-in-from-top duration-200 z-50">
                             <SearchBar onTaskClick={(id) => {
                                 setActiveTaskId(id)
                                 setIsMobileSearchOpen(false)
@@ -232,19 +250,23 @@ export default function Layout() {
                 </header>
 
                 {/* Page Content — fluid width */}
-                <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pt-2 tablet:pt-3 xl:pt-4 2xl:pt-6 4k:pt-8 px-4 tablet:px-6 xl:px-8 2xl:px-14 4k:px-16 pb-24 tablet:pb-10 relative">
+                <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-3 tablet:p-5 xl:p-7 2xl:p-12 4k:p-14 pb-[calc(5.75rem+env(safe-area-inset-bottom))] tablet:pb-9 relative">
                     <div
                         key={location.pathname}
-                        className="w-full max-w-full min-w-0 4k:max-w-[1600px] 4k:mx-auto animate-in fade-in slide-in-from-bottom-2 duration-200"
+                        className="w-full max-w-full min-w-0 4k:max-w-[1600px] 4k:mx-auto animate-in fade-in duration-200"
                     >
                         <Outlet />
                     </div>
                 </main>
 
                 {/* Bottom Nav — Mobile only */}
-                <nav className="tablet:hidden flex items-center bg-surface/95 backdrop-blur border-t border-border fixed bottom-0 left-0 right-0 z-50">
+                <nav
+                    className="tablet:hidden fixed inset-x-0 bottom-0 z-50 bg-surface border-t border-border h-[calc(4.35rem+env(safe-area-inset-bottom))] pt-1 pb-[max(0.35rem,env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
+                    aria-label="Bottom navigation"
+                >
+                    <div className="flex h-full items-end">
                     {/* Left nav items */}
-                    {navItems.slice(0, 1).map((item) => (
+                    {navItems.slice(0, 2).map((item) => (
                         <NavLink
                             key={item.to}
                             to={item.to}
@@ -252,18 +274,19 @@ export default function Layout() {
                             onFocus={() => prefetchRoute(item.to)}
                             className={({ isActive }) =>
                                 cn(
-                                    "flex-1 flex justify-center py-2 transition-colors relative",
+                                    "flex-1 flex justify-center transition-colors relative",
                                     isActive ? "text-accent" : "text-text-muted"
                                 )
                             }
+                            aria-label={item.label}
                         >
                             {({ isActive }) => (
                                 <span className={cn(
-                                    "flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all",
+                                    "touch-target flex flex-col items-center justify-center gap-1 px-2 py-1 rounded-xl transition-all min-w-[56px]",
                                     isActive ? "bg-accent/10" : ""
                                 )}>
                                     <item.icon className={cn("w-5 h-5", isActive && "fill-current")} />
-                                    <span className="text-xs font-bold">{item.to === '/today' ? 'Today' : item.label}</span>
+                                    <span className="text-[13px] font-bold">{item.to === '/today' ? 'Today' : item.label}</span>
                                     {isActive && <span className="absolute bottom-1 w-1 h-1 rounded-full bg-accent" />}
                                 </span>
                             )}
@@ -271,17 +294,19 @@ export default function Layout() {
                     ))}
 
                     {/* Center FAB */}
-                    <div className="flex-none px-4">
+                    <div className="flex-none px-1.5 pb-0.5">
                         <button
                             onClick={() => setQuickCaptureOpen(true)}
-                            className="w-12 h-12 bg-accent text-white rounded-full flex items-center justify-center shadow-lg shadow-accent/30 active:scale-95 transition-all"
+                            className="touch-target w-[3.25rem] h-[3.25rem] bg-accent text-white rounded-full flex items-center justify-center shadow-lg shadow-accent/30 active:scale-95 transition-all"
+                            aria-label="Quick add task"
+                            title="Quick add task"
                         >
                             <Plus className="w-5 h-5" />
                         </button>
                     </div>
 
                     {/* Right nav items */}
-                    {navItems.slice(1).map((item) => (
+                    {navItems.slice(2).map((item) => (
                         <NavLink
                             key={item.to}
                             to={item.to}
@@ -289,23 +314,25 @@ export default function Layout() {
                             onFocus={() => prefetchRoute(item.to)}
                             className={({ isActive }) =>
                                 cn(
-                                    "flex-1 flex justify-center py-2 transition-colors relative",
+                                    "flex-1 flex justify-center transition-colors relative",
                                     isActive ? "text-accent" : "text-text-muted"
                                 )
                             }
+                            aria-label={item.label}
                         >
                             {({ isActive }) => (
                                 <span className={cn(
-                                    "flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all",
+                                    "touch-target flex flex-col items-center justify-center gap-1 px-2 py-1 rounded-xl transition-all min-w-[56px]",
                                     isActive ? "bg-accent/10" : ""
                                 )}>
                                     <item.icon className={cn("w-5 h-5", isActive && "fill-current")} />
-                                    <span className="text-xs font-bold">{item.label}</span>
+                                    <span className="text-[13px] font-bold">{item.label}</span>
                                     {isActive && <span className="absolute bottom-1 w-1 h-1 rounded-full bg-accent" />}
                                 </span>
                             )}
                         </NavLink>
                     ))}
+                    </div>
                 </nav>
 
                 {/* Overlays */}

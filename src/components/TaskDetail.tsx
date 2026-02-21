@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef, FC } from 'react'
+import { useState, useEffect, useRef, FC, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import {
     X, MoreVertical, Check, Calendar, Home, MapPin, Zap, ZapOff,
     Target, Layers, Star, Trash2, Copy, ChevronDown, Plus,
     CheckCircle2, Circle, Clock, GripVertical, RefreshCw, FolderKanban,
-    SlidersHorizontal, Search, Sparkles, Loader2
+    SlidersHorizontal, Search, Sparkles, Loader2, Play, Pause, Pencil
 } from 'lucide-react'
 import { Task } from '../types'
 import { useTasks } from '../hooks/useTasks'
@@ -19,6 +19,15 @@ import { DateTimePicker } from './DateTimePicker'
 import { StatusMenu, StatusOptions } from './StatusMenu'
 import { cn } from '../lib/cn'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
+import { useTimer } from '../context/TimerContext'
+import { useModalA11y } from '../hooks/useModalA11y'
+import {
+    TimeSession,
+    listTaskSessions,
+    createManualSession,
+    updateSessionRange,
+    deleteSession,
+} from '../lib/timeTracking'
 
 interface TaskDetailProps {
     taskId: string | null
@@ -26,12 +35,15 @@ interface TaskDetailProps {
 }
 
 export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
-    const { task, updateTaskField } = useTaskById(taskId)
-    const { deleteTask, completeTask, createTask } = useTasks()
-    const { projects } = useProjects()
+    const { task } = useTaskById(taskId)
+    const { deleteTask, completeTask, createTask, updateTask } = useTasks()
+    const { projects, createProject } = useProjects()
     const { subtasks, addSubtask, updateSubtask, deleteSubtask, reorderSubtasks } = useSubtasks(task?.id)
     const { comments } = useComments(task?.id)
     const { showToast } = useToast()
+    const { activeSession, elapsedSeconds, toggleTimer, isSyncing: isTimerSyncing } = useTimer()
+    const resolvedTaskId = task?.id ?? null
+    const isTimerActiveForTask = activeSession?.task_id === resolvedTaskId
 
     // Local state
     const [title, setTitle] = useState('')
@@ -49,56 +61,204 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
     const [status, setStatus] = useState<Task['status']>('todo')
     const [estimatedEffort, setEstimatedEffort] = useState<number | null>(0)
 
-    // Refs for focus protection
-    const titleRef = useRef<HTMLTextAreaElement>(null)
-    const notesRef = useRef<HTMLTextAreaElement>(null)
-
     // UI state
     const [showMenu, setShowMenu] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [completionPulse, setCompletionPulse] = useState(false)
     const [isGeneratingSubtasks, setIsGeneratingSubtasks] = useState(false)
+    const [taskSessions, setTaskSessions] = useState<TimeSession[]>([])
+    const [isLoadingSessions, setIsLoadingSessions] = useState(false)
+    const [isSavingSession, setIsSavingSession] = useState(false)
+    const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null)
+    const [isSessionEditorOpen, setIsSessionEditorOpen] = useState(false)
+    const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
+    const [sessionStartInput, setSessionStartInput] = useState('')
+    const [sessionEndInput, setSessionEndInput] = useState('')
 
     // Custom Popover states
     const [showProjectPicker, setShowProjectPicker] = useState(false)
     const [showRecurrencePicker, setShowRecurrencePicker] = useState(false)
     const [showStatusPicker, setShowStatusPicker] = useState(false)
     const [projectSearch, setProjectSearch] = useState('')
+    const [isCreatingProject, setIsCreatingProject] = useState(false)
     const statusPickerRef = useRef<HTMLButtonElement>(null)
+    const contentScrollRef = useRef<HTMLDivElement>(null)
+    const titleTextareaRef = useRef<HTMLTextAreaElement>(null)
 
     useEffect(() => {
         if (task) {
-            // Only update local state if the element isn't currently focused
-            // AND we don't have pending changes for that field
-            if (document.activeElement !== titleRef.current && !pendingUpdatesRef.current.title) {
-                setTitle(task.title)
-            }
-            if (document.activeElement !== notesRef.current && !pendingUpdatesRef.current.notes) {
-                setNotes(task.notes || '')
-            }
-
-            // For other fields, we check if they are in pendingUpdates before syncing from global
-            if (pendingUpdatesRef.current.project_id === undefined) setProjectId(task.project_id)
-            if (pendingUpdatesRef.current.today === undefined) setToday(task.today)
-            if (pendingUpdatesRef.current.start_at === undefined) setStartAt(task.start_at ? task.start_at.substring(0, 16) : '')
-            if (pendingUpdatesRef.current.end_at === undefined) setEndAt(task.end_at ? task.end_at.substring(0, 16) : '')
-            if (pendingUpdatesRef.current.location === undefined) setLocation(task.location)
-            if (pendingUpdatesRef.current.energy === undefined) setEnergy(task.energy)
-            if (pendingUpdatesRef.current.focus === undefined) setFocus(task.focus)
-            if (pendingUpdatesRef.current.recurrence === undefined) setRecurrence(task.recurrence)
-            if (pendingUpdatesRef.current.recurrence_end_at === undefined) setRecurrenceEndAt(task.recurrence_end_at || '')
-            if (pendingUpdatesRef.current.completed === undefined) setCompleted(task.completed)
-            if (pendingUpdatesRef.current.status === undefined) setStatus(task.status)
-            if (pendingUpdatesRef.current.estimated_effort === undefined) setEstimatedEffort(task.estimated_effort || 0)
+            setTitle(task.title)
+            setNotes(task.notes || '')
+            setProjectId(task.project_id)
+            setToday(task.today)
+            setStartAt(task.start_at ? task.start_at.substring(0, 16) : '')
+            setEndAt(task.end_at ? task.end_at.substring(0, 16) : '')
+            setLocation(task.location)
+            setEnergy(task.energy)
+            setFocus(task.focus)
+            setRecurrence(task.recurrence)
+            setRecurrenceEndAt(task.recurrence_end_at || '')
+            setCompleted(task.completed)
+            setStatus(task.status)
+            setEstimatedEffort(task.estimated_effort || 0)
         }
     }, [task])
 
     const timerRef = useRef<number | null>(null)
     const pendingUpdatesRef = useRef<Partial<Task>>({})
 
+    const formatElapsed = (seconds: number) => {
+        const h = Math.floor(seconds / 3600)
+        const m = Math.floor((seconds % 3600) / 60)
+        const s = seconds % 60
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+    }
+
+    const toLocalInputValue = (iso: string | null) => {
+        if (!iso) return ''
+        const date = new Date(iso)
+        if (Number.isNaN(date.getTime())) return ''
+
+        const pad = (value: number) => String(value).padStart(2, '0')
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+    }
+
+    const toIsoString = (localValue: string) => {
+        if (!localValue) return null
+        const date = new Date(localValue)
+        if (Number.isNaN(date.getTime())) return null
+        return date.toISOString()
+    }
+
+    const formatSessionDateTime = (iso: string) => {
+        const date = new Date(iso)
+        if (Number.isNaN(date.getTime())) return 'Invalid date'
+        return date.toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+        })
+    }
+
+    const formatSessionDuration = (seconds: number | null) => {
+        if (!seconds || seconds <= 0) return '0m'
+        const hrs = Math.floor(seconds / 3600)
+        const mins = Math.floor((seconds % 3600) / 60)
+        if (hrs > 0) return `${hrs}h ${mins}m`
+        return `${Math.max(1, mins)}m`
+    }
+
+    const loadTaskSessions = useCallback(async () => {
+        if (!resolvedTaskId) {
+            setTaskSessions([])
+            return
+        }
+
+        setIsLoadingSessions(true)
+        try {
+            const sessions = await listTaskSessions(resolvedTaskId, { limit: 30 })
+            setTaskSessions(sessions)
+        } catch (error) {
+            console.error('Failed to load task sessions:', error)
+            showToast('Could not load tracked sessions', 'error')
+        } finally {
+            setIsLoadingSessions(false)
+        }
+    }, [resolvedTaskId, showToast])
+
+    const handleToggleTimer = useCallback(async () => {
+        if (!resolvedTaskId) return
+        await toggleTimer(resolvedTaskId, 'task_detail')
+        await loadTaskSessions()
+    }, [resolvedTaskId, toggleTimer, loadTaskSessions])
+
+    const openManualSessionEditor = () => {
+        const now = new Date()
+        const start = new Date(now.getTime() - 25 * 60 * 1000)
+        setEditingSessionId(null)
+        setSessionStartInput(toLocalInputValue(start.toISOString()))
+        setSessionEndInput(toLocalInputValue(now.toISOString()))
+        setIsSessionEditorOpen(true)
+    }
+
+    const openEditSessionEditor = (session: TimeSession) => {
+        setEditingSessionId(session.id)
+        setSessionStartInput(toLocalInputValue(session.started_at))
+        setSessionEndInput(toLocalInputValue(session.ended_at))
+        setIsSessionEditorOpen(true)
+    }
+
+    const closeSessionEditor = () => {
+        setIsSessionEditorOpen(false)
+        setEditingSessionId(null)
+        setSessionStartInput('')
+        setSessionEndInput('')
+    }
+
+    const submitSessionEditor = async () => {
+        if (!resolvedTaskId) return
+
+        const startedAtIso = toIsoString(sessionStartInput)
+        const endedAtIso = toIsoString(sessionEndInput)
+        if (!startedAtIso || !endedAtIso) {
+            showToast('Please select valid start and end date/time', 'error')
+            return
+        }
+
+        if (new Date(endedAtIso) <= new Date(startedAtIso)) {
+            showToast('End time must be after start time', 'error')
+            return
+        }
+
+        setIsSavingSession(true)
+        try {
+            if (editingSessionId) {
+                await updateSessionRange(editingSessionId, { startedAt: startedAtIso, endedAt: endedAtIso })
+                showToast('Tracked session updated', 'success')
+            } else {
+                await createManualSession({
+                    taskId: resolvedTaskId,
+                    startedAt: startedAtIso,
+                    endedAt: endedAtIso,
+                    source: 'manual',
+                })
+                showToast('Tracked session added', 'success')
+            }
+            closeSessionEditor()
+            await loadTaskSessions()
+        } catch (error) {
+            console.error('Failed to save tracked session:', error)
+            showToast('Could not save tracked session', 'error')
+        } finally {
+            setIsSavingSession(false)
+        }
+    }
+
+    const handleDeleteSession = async (session: TimeSession) => {
+        if (!session.id || session.ended_at === null) return
+        const confirmed = window.confirm('Delete this tracked session? This cannot be undone.')
+        if (!confirmed) return
+
+        setDeletingSessionId(session.id)
+        try {
+            await deleteSession(session.id)
+            if (editingSessionId === session.id) {
+                closeSessionEditor()
+            }
+            showToast('Tracked session deleted', 'success')
+            await loadTaskSessions()
+        } catch (error) {
+            console.error('Failed to delete tracked session:', error)
+            showToast('Could not delete tracked session', 'error')
+        } finally {
+            setDeletingSessionId(null)
+        }
+    }
+
     const triggerSave = (updates: Partial<Task>) => {
-        if (!taskId) return
+        if (!resolvedTaskId) return
 
         // Accumulate updates so we don't clobber rapid changes
         pendingUpdatesRef.current = { ...pendingUpdatesRef.current, ...updates }
@@ -111,7 +271,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
             // Clear the accumulator before the async call to allow new updates to start fresh
             pendingUpdatesRef.current = {}
 
-            await updateTaskField(finalUpdates)
+            await updateTask(resolvedTaskId, finalUpdates)
             setIsSaving(false)
         }, 600)
     }
@@ -131,7 +291,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
     }
 
     const generateSubtasks = async () => {
-        if (!title.trim() || !taskId) return
+        if (!title.trim() || !resolvedTaskId) return
 
         setIsGeneratingSubtasks(true)
         try {
@@ -151,7 +311,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                     endAt,
                     existingSubtasks: subtasks.map(s => s.title),
                     comments: comments.map(c => c.body),
-                }),
+                })
             })
 
             if (!response.ok) {
@@ -174,7 +334,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
             }
         } catch (error) {
             console.error(error)
-            showToast('Failed to generate subtasks.', 'error')
+            showToast("Failed to connect to AI.", "error")
         } finally {
             setIsGeneratingSubtasks(false)
         }
@@ -192,19 +352,90 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
             }
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                 e.preventDefault()
-                if (taskId) {
-                    completeTask(taskId, !completed)
+                if (resolvedTaskId) {
+                    completeTask(resolvedTaskId, !completed)
                     onClose()
                 }
             }
         }
         window.addEventListener('keydown', handleKeyDown)
         return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [onClose, showProjectPicker, showRecurrencePicker, showStatusPicker, showMenu, taskId, completed, completeTask])
+    }, [onClose, showProjectPicker, showRecurrencePicker, showStatusPicker, showMenu, resolvedTaskId, completed, completeTask])
+
+    useEffect(() => {
+        if (!resolvedTaskId) return
+        void loadTaskSessions()
+    }, [resolvedTaskId, activeSession?.id, loadTaskSessions])
+
+    useEffect(() => {
+        if (!taskId) return
+        window.requestAnimationFrame(() => {
+            contentScrollRef.current?.scrollTo({ top: 0 })
+        })
+    }, [taskId])
+
+    useEffect(() => {
+        const titleEl = titleTextareaRef.current
+        if (!titleEl) return
+
+        titleEl.style.height = 'auto'
+        titleEl.style.height = `${titleEl.scrollHeight}px`
+    }, [title])
+
+    const { modalRef } = useModalA11y<HTMLDivElement>({
+        isOpen: Boolean(taskId),
+        onClose,
+        lockBodyScroll: true,
+        trapFocus: true,
+    })
 
     if (!taskId) return null
 
     const filteredProjects = projects.filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase()))
+    const canCreateProject = projectSearch.trim().length > 0 && !projects.some(
+        p => p.name.toLowerCase() === projectSearch.trim().toLowerCase()
+    )
+
+    const createProjectFromSearch = async () => {
+        const name = projectSearch.trim()
+        if (!name || isCreatingProject) return
+
+        const existing = projects.find((p) => p.name.toLowerCase() === name.toLowerCase())
+        if (existing) {
+            setProjectId(existing.id)
+            handleFieldUpdate('project_id', existing.id)
+            setShowProjectPicker(false)
+            setProjectSearch('')
+            return
+        }
+
+        setIsCreatingProject(true)
+        try {
+            const created = await createProject({
+                name,
+                color: '#7c6aff',
+            })
+            if (created?.id) {
+                setProjectId(created.id)
+                handleFieldUpdate('project_id', created.id)
+                setShowProjectPicker(false)
+                setProjectSearch('')
+            }
+        } finally {
+            setIsCreatingProject(false)
+        }
+    }
+
+    const activeTaskSession = taskSessions.find((session) => session.ended_at === null) || null
+    const closedTaskSessions = taskSessions.filter((session) => session.ended_at !== null)
+    const totalTrackedSeconds = closedTaskSessions.reduce((sum, session) => {
+        if (session.duration_seconds) return sum + session.duration_seconds
+        if (session.ended_at) {
+            const duration = Math.floor((new Date(session.ended_at).getTime() - new Date(session.started_at).getTime()) / 1000)
+            return sum + Math.max(0, duration)
+        }
+        return sum
+    }, 0)
 
     return (
         <div className="fixed inset-0 z-50 flex justify-end overflow-hidden">
@@ -216,34 +447,41 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
 
             {/* Slide-over Panel */}
             <div
+                ref={modalRef}
                 className={cn(
-                    "relative flex flex-col bg-surface border-l border-border h-full w-full max-w-[900px] shadow-2xl overflow-hidden",
+                    "relative flex flex-col bg-surface border-l border-border h-full w-full max-w-[900px] shadow-2xl overflow-hidden overflow-x-hidden",
                     "animate-in slide-in-from-right duration-300"
                 )}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="task-detail-heading"
+                tabIndex={-1}
             >
                 {/* Header */}
-                <header className="flex items-center justify-between px-6 py-4 border-b border-transparent z-20 shrink-0">
-                    <div className="flex items-center space-x-3">
+                <header className="flex items-center justify-between gap-2 pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(0.75rem+env(safe-area-inset-right))] md:px-6 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 border-b border-transparent z-20 shrink-0">
+                    <div className="flex flex-1 items-center gap-2 md:gap-3 min-w-0 flex-wrap">
+                        <h2 id="task-detail-heading" className="sr-only">Task details</h2>
                         <button
                             onClick={async () => {
-                                if (!taskId) return
+                                if (!resolvedTaskId) return
                                 const nextCompleted = !completed
                                 setCompleted(nextCompleted)
                                 if (nextCompleted) {
                                     setCompletionPulse(true)
                                     setTimeout(() => setCompletionPulse(false), 450)
                                 }
-                                const res = await completeTask(taskId, nextCompleted)
+                                const res = await completeTask(resolvedTaskId, nextCompleted)
                                 if (res.success && res.nextOccurrenceCreated) {
                                     const dateStr = res.nextOccurrenceDate ? new Date(res.nextOccurrenceDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'the future'
                                     showToast(`Task completed · Next on ${dateStr}`, 'success')
                                 }
                             }}
                             className={cn(
-                                "relative w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all shrink-0",
+                                "touch-target relative w-7 h-7 rounded-md border-2 flex items-center justify-center transition-all shrink-0",
                                 completed ? "bg-accent-warm border-accent-warm text-white" : "border-text-muted/40 hover:border-accent-warm"
                             )}
                             title="Complete Task (Ctrl+Enter)"
+                            aria-label={completed ? 'Mark task as not completed' : 'Mark task as completed'}
                         >
                             {completionPulse && (
                                 <span
@@ -253,12 +491,18 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                             )}
                             {completed && <Check className="w-3.5 h-3.5" />}
                         </button>
-                        <span className="text-xs font-mono text-text-muted/50 tracking-wider">
+                        <input
+                            value={title}
+                            onChange={(e) => handleTitleChange(e.target.value)}
+                            placeholder="Task title"
+                            className="sm:hidden flex-1 min-w-0 bg-transparent text-xl font-black leading-tight text-text-primary placeholder:text-text-muted/80 focus:outline-none"
+                            aria-label="Task title"
+                        />
+                        <span className="hidden sm:inline text-xs font-mono text-text-muted/60 tracking-wider shrink-0">
                             {task?.short_id || taskId.substring(0, 8)}
                         </span>
-
                         {/* Saving Indicator */}
-                        <div className="ml-4 flex items-center h-4">
+                        <div className="hidden sm:flex ml-1 md:ml-3 items-center h-4 shrink-0">
                             {isSaving ? (
                                 <div className="w-1.5 h-1.5 bg-accent rounded-full animate-pulse" title="Saving..." />
                             ) : (
@@ -267,11 +511,14 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                         </div>
                     </div>
 
-                    <div className="flex items-center space-x-1">
+                    <div className="flex items-center space-x-0.5 md:space-x-1 shrink-0">
                         <div className="relative">
                             <button
                                 onClick={() => setShowMenu(!showMenu)}
-                                className="p-2 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors"
+                                className="touch-target flex items-center justify-center p-2 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors"
+                                aria-label="Task actions"
+                                aria-haspopup="menu"
+                                aria-expanded={showMenu}
                             >
                                 <MoreVertical className="w-4 h-4" />
                             </button>
@@ -306,26 +553,30 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                 </>
                             )}
                         </div>
-                        <button onClick={onClose} className="p-2 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors">
+                        <button
+                            onClick={onClose}
+                            className="touch-target flex items-center justify-center p-2 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors"
+                            aria-label="Close task details"
+                        >
                             <X className="w-4 h-4" />
                         </button>
                     </div>
                 </header>
 
                 {/* Content Area - 2 Columns */}
-                <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
+                <div ref={contentScrollRef} className="flex flex-1 min-h-0 min-w-0 flex-col md:flex-row overflow-y-auto md:overflow-hidden overflow-x-hidden">
 
                     {/* LEFTSIDE: Main Content */}
-                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-10 space-y-10">
+                    <div className="min-w-0 overflow-visible md:flex-1 md:min-h-0 md:overflow-y-auto md:overflow-x-hidden custom-scrollbar p-4 md:p-10 pb-[calc(1.5rem+env(safe-area-inset-bottom))] space-y-7 md:space-y-10">
                         {/* Title & Description */}
-                        <div className="space-y-6">
+                        <div className="space-y-4 md:space-y-6">
                             <textarea
-                                ref={titleRef}
+                                ref={titleTextareaRef}
                                 value={title}
                                 onChange={(e) => handleTitleChange(e.target.value)}
                                 placeholder="Task title"
                                 rows={1}
-                                className="bg-transparent text-xl md:text-2xl font-black text-text-primary outline-none w-full resize-none focus:text-accent transition-colors py-2"
+                                className="hidden sm:block bg-transparent text-2xl md:text-3xl 2xl:text-4xl leading-tight font-black text-text-primary outline-none w-full resize-none overflow-hidden focus:text-accent transition-colors py-1 min-h-[2.25rem]"
                                 onInput={(e) => {
                                     const target = e.target as HTMLTextAreaElement;
                                     target.style.height = 'auto';
@@ -334,11 +585,10 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                             />
 
                             <textarea
-                                ref={notesRef}
                                 value={notes}
                                 onChange={(e) => handleNotesChange(e.target.value)}
                                 placeholder="Add description, notes, or links..."
-                                className="w-full bg-transparent p-0 text-base md:text-lg text-text-primary placeholder:text-text-muted/50 focus:outline-none resize-none min-h-[100px] transition-all"
+                                className="w-full bg-transparent p-0 text-base md:text-lg text-text-primary placeholder:text-text-muted focus:outline-none resize-none min-h-[96px] transition-all"
                                 onInput={(e) => {
                                     const target = e.target as HTMLTextAreaElement;
                                     target.style.height = 'auto';
@@ -355,7 +605,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                     Subtasks
                                 </h3>
                                 {subtasks.length > 0 && (
-                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-accent/10 text-accent">
+                                    <span className="text-sm md:text-xs font-black px-2 py-0.5 rounded-full bg-accent/10 text-accent">
                                         {subtasks.filter(s => s.completed).length}/{subtasks.length}
                                     </span>
                                 )}
@@ -390,7 +640,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                                                     e.stopPropagation()
                                                                     updateSubtask(subtask.id, { completed: !subtask.completed })
                                                                 }}
-                                                                className="relative group transition-transform active:scale-90"
+                                                                className="touch-target relative group transition-transform active:scale-90 flex items-center justify-center rounded-md"
                                                             >
                                                                 {subtask.completed ? <CheckCircle2 className="w-4 h-4 text-accent" /> : <Circle className="w-4 h-4 text-text-muted group-hover:text-accent" />}
                                                             </button>
@@ -405,7 +655,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                                             />
                                                             <button
                                                                 onClick={() => deleteSubtask(subtask.id)}
-                                                                className="p-1.5 text-text-muted hover:text-red-400 opacity-0 group-hover/sub:opacity-100 transition-all hover:bg-red-400/10 rounded-md"
+                                                                className="touch-target p-1.5 text-text-muted hover:text-red-400 opacity-0 group-hover/sub:opacity-100 transition-all hover:bg-red-400/10 rounded-md flex items-center justify-center"
                                                             >
                                                                 <X className="w-3.5 h-3.5" />
                                                             </button>
@@ -440,7 +690,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                         onClick={generateSubtasks}
                                         disabled={isGeneratingSubtasks}
                                         className={cn(
-                                            "items-center gap-1.5 px-3 py-1 bg-surface-secondary text-text-primary hover:text-white hover:bg-surface-secondary/80 border border-border/50 rounded-full text-[11px] font-bold tracking-wider uppercase transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-95",
+                                            "touch-target items-center gap-1.5 px-3 py-1 bg-surface-secondary text-text-primary hover:text-white hover:bg-surface-secondary/80 border border-border/50 rounded-full text-sm md:text-xs font-bold tracking-wider uppercase transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-95",
                                             isGeneratingSubtasks
                                                 ? "flex"
                                                 : subtasks.length === 0
@@ -468,18 +718,158 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                     </div>
 
                     {/* RIGHTSIDE: Sidebar Metadata */}
-                    <div className="w-full md:w-[320px] lg:w-[380px] border-t md:border-t-0 md:border-l border-border/50 bg-surface/30 overflow-y-auto custom-scrollbar p-6 space-y-8">
+                    <div className="w-full md:w-[320px] lg:w-[380px] border-t md:border-t-0 md:border-l border-border/50 bg-surface/30 overflow-visible md:overflow-y-auto md:overflow-x-hidden custom-scrollbar p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] space-y-8">
+                        {/* Time Tracking */}
+                        <div className="space-y-3 rounded-2xl border border-emerald-300/15 bg-emerald-400/5 p-4 md:p-5">
+                            <div className="flex items-center justify-between">
+                                <h4 className="text-sm md:text-xs uppercase font-bold tracking-[0.2em] text-emerald-200/90 flex items-center gap-2">
+                                    <Clock className="w-3.5 h-3.5" /> Time Tracking
+                                </h4>
+                                <button
+                                    onClick={openManualSessionEditor}
+                                    className="touch-target inline-flex items-center justify-center rounded-lg border border-emerald-300/25 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/20 transition-colors"
+                                    title="Add tracked session manually"
+                                    aria-label="Add tracked session manually"
+                                >
+                                    <Plus className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+
+                            <button
+                                onClick={() => void handleToggleTimer()}
+                                disabled={isTimerSyncing}
+                                className={cn(
+                                    "touch-target w-full inline-flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border text-base md:text-sm font-black uppercase tracking-wider transition-all",
+                                    isTimerActiveForTask
+                                        ? "bg-emerald-400/15 border-emerald-300/30 text-emerald-200"
+                                        : "bg-surface-secondary/60 border-border/60 text-text-primary hover:border-emerald-300/25 hover:text-emerald-100",
+                                    isTimerSyncing && "opacity-60 cursor-not-allowed"
+                                )}
+                                aria-live="polite"
+                            >
+                                {isTimerActiveForTask ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                                <span>{isTimerActiveForTask ? `Stop · ${formatElapsed(elapsedSeconds)}` : 'Start Focus Timer'}</span>
+                            </button>
+
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="rounded-lg border border-border/40 bg-surface/50 px-3 py-2">
+                                    <p className="text-sm md:text-xs uppercase tracking-widest text-text-muted">Tracked</p>
+                                    <p className="text-sm font-black text-text-primary">{formatSessionDuration(totalTrackedSeconds)}</p>
+                                </div>
+                                <div className="rounded-lg border border-border/40 bg-surface/50 px-3 py-2">
+                                    <p className="text-sm md:text-xs uppercase tracking-widest text-text-muted">Sessions</p>
+                                    <p className="text-sm font-black text-text-primary">{closedTaskSessions.length}</p>
+                                </div>
+                            </div>
+
+                            {isSessionEditorOpen && (
+                                <div className="rounded-xl border border-border/60 bg-surface/80 p-3 space-y-2.5">
+                                    <p className="text-sm md:text-xs uppercase font-bold tracking-[0.18em] text-text-muted">
+                                        {editingSessionId ? 'Edit Session' : 'Add Session'}
+                                    </p>
+                                    <div className="space-y-2">
+                                        <div>
+                                            <label className="block text-sm md:text-xs uppercase tracking-wider text-text-muted mb-1">Start</label>
+                                            <DateTimePicker
+                                                value={sessionStartInput}
+                                                onChange={setSessionStartInput}
+                                                placeholder="Session start"
+                                                type="datetime-local"
+                                                className="bg-surface-secondary/50 border-border/60"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm md:text-xs uppercase tracking-wider text-text-muted mb-1">End</label>
+                                            <DateTimePicker
+                                                value={sessionEndInput}
+                                                onChange={setSessionEndInput}
+                                                placeholder="Session end"
+                                                type="datetime-local"
+                                                className="bg-surface-secondary/50 border-border/60"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-end gap-2">
+                                        <button
+                                            onClick={closeSessionEditor}
+                                            className="touch-target px-3 py-1.5 text-sm md:text-xs font-bold uppercase tracking-wider text-text-muted hover:text-text-primary transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={() => void submitSessionEditor()}
+                                            disabled={isSavingSession}
+                                            className="touch-target px-3 py-1.5 rounded-lg bg-accent text-white text-sm md:text-xs font-black uppercase tracking-wider hover:bg-accent/90 transition-colors disabled:opacity-50"
+                                        >
+                                            {isSavingSession ? 'Saving...' : editingSessionId ? 'Save Changes' : 'Add Session'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">
+                                {isLoadingSessions ? (
+                                    <p className="text-sm md:text-xs text-text-muted">Loading sessions...</p>
+                                ) : taskSessions.length === 0 ? (
+                                    <p className="text-sm md:text-xs text-text-muted">No tracked sessions yet.</p>
+                                ) : (
+                                    taskSessions.map((session) => {
+                                        const isActiveRow = session.ended_at === null
+                                        return (
+                                            <div
+                                                key={session.id}
+                                                className="rounded-lg border border-border/40 bg-surface/60 px-3 py-2 space-y-1"
+                                            >
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className={cn(
+                                                        "text-sm md:text-xs uppercase tracking-widest font-bold",
+                                                        isActiveRow ? "text-emerald-300" : "text-text-muted"
+                                                    )}>
+                                                        {isActiveRow ? 'Running' : formatSessionDuration(session.duration_seconds)}
+                                                    </span>
+                                                    {!isActiveRow && (
+                                                        <div className="flex items-center gap-1">
+                                                            <button
+                                                                onClick={() => openEditSessionEditor(session)}
+                                                                className="touch-target inline-flex items-center gap-1 text-sm md:text-xs font-bold uppercase tracking-wider text-text-muted hover:text-text-primary transition-colors"
+                                                            >
+                                                                <Pencil className="w-3 h-3" />
+                                                                Edit
+                                                            </button>
+                                                            <button
+                                                                onClick={() => void handleDeleteSession(session)}
+                                                                disabled={deletingSessionId === session.id}
+                                                                className="touch-target inline-flex items-center gap-1 text-sm md:text-xs font-bold uppercase tracking-wider text-red-300/80 hover:text-red-300 transition-colors disabled:opacity-50"
+                                                            >
+                                                                <Trash2 className="w-3 h-3" />
+                                                                {deletingSessionId === session.id ? 'Deleting...' : 'Delete'}
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <p className="text-base md:text-sm text-text-primary">
+                                                    {formatSessionDateTime(session.started_at)}
+                                                </p>
+                                                <p className="text-base md:text-sm text-text-muted">
+                                                    {session.ended_at ? `to ${formatSessionDateTime(session.ended_at)}` : `elapsed ${isTimerActiveForTask && activeTaskSession?.id === session.id ? formatElapsed(elapsedSeconds) : '--:--:--'}`}
+                                                </p>
+                                            </div>
+                                        )
+                                    })
+                                )}
+                            </div>
+                        </div>
 
                         {/* Context Properties */}
                         <div className="space-y-6">
-                            <h4 className="text-[10px] uppercase font-bold tracking-[0.2em] text-text-muted/80 flex items-center gap-2">
+                            <h4 className="text-sm md:text-xs uppercase font-bold tracking-[0.2em] text-text-muted/80 flex items-center gap-2">
                                 <SlidersHorizontal className="w-3.5 h-3.5" /> Properties
                             </h4>
 
                             <div className="space-y-5">
                                 {/* Status Picker Selector */}
                                 <div className="space-y-1.5 pt-1">
-                                    <span className="text-xs font-bold text-text-muted/80 px-1 uppercase tracking-wider">Status</span>
+                                    <span className="text-sm md:text-xs font-bold text-text-muted/80 px-1 uppercase tracking-wider">Status</span>
                                     <div className="relative">
                                         <button
                                             ref={statusPickerRef}
@@ -549,7 +939,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                 />
 
                                 <div className="space-y-2.5">
-                                    <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-text-primary block flex items-center gap-2">
+                                    <span className="text-sm md:text-xs uppercase font-bold tracking-[0.15em] text-text-primary block flex items-center gap-2">
                                         <Clock className="w-3 h-3 text-accent-warm" /> Estimated Effort
                                     </span>
                                     <div className="flex flex-wrap gap-1.5">
@@ -562,7 +952,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                                     handleFieldUpdate('estimated_effort', newVal)
                                                 }}
                                                 className={cn(
-                                                    "px-2.5 py-1 rounded-lg border text-[10px] font-bold transition-all",
+                                                    "touch-target px-2.5 py-1 rounded-lg border text-sm md:text-xs font-bold transition-all",
                                                     estimatedEffort === mins
                                                         ? "bg-accent-warm/20 border-accent-warm/40 text-accent-warm"
                                                         : "bg-surface/50 border-border/50 text-text-muted hover:text-text-primary hover:border-border"
@@ -580,7 +970,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
 
                         {/* Project Picker (Custom Popover) */}
                         <div className="space-y-3">
-                            <h4 className="text-[10px] uppercase font-bold tracking-[0.2em] text-text-muted/80 flex items-center gap-2">
+                            <h4 className="text-sm md:text-xs uppercase font-bold tracking-[0.2em] text-text-muted/80 flex items-center gap-2">
                                 <FolderKanban className="w-3.5 h-3.5" /> Project
                             </h4>
                             <div className="relative">
@@ -603,10 +993,16 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                                 <input
                                                     autoFocus
                                                     type="text"
-                                                    placeholder="Search projects..."
+                                                    placeholder="Search or create project..."
                                                     className="bg-transparent border-none outline-none text-sm p-1 w-full text-text-primary"
                                                     value={projectSearch}
                                                     onChange={e => setProjectSearch(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault()
+                                                            void createProjectFromSearch()
+                                                        }
+                                                    }}
                                                 />
                                             </div>
                                             <div className="overflow-y-auto custom-scrollbar p-1">
@@ -632,6 +1028,18 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                                     </button>
                                                 ))}
                                             </div>
+                                            {canCreateProject && (
+                                                <div className="p-2 border-t border-border/50">
+                                                    <button
+                                                        onClick={() => void createProjectFromSearch()}
+                                                        disabled={isCreatingProject}
+                                                        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors text-sm font-semibold disabled:opacity-50"
+                                                    >
+                                                        <Plus className="w-4 h-4" />
+                                                        <span>{isCreatingProject ? 'Creating...' : `Create "${projectSearch.trim()}"`}</span>
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     </>
                                 )}
@@ -640,7 +1048,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
 
                         {/* Recurrence Picker (Custom Popover) */}
                         <div className="space-y-3">
-                            <h4 className="text-[10px] uppercase font-bold tracking-[0.2em] text-text-muted/80 flex items-center gap-2">
+                            <h4 className="text-sm md:text-xs uppercase font-bold tracking-[0.2em] text-text-muted/80 flex items-center gap-2">
                                 <RefreshCw className="w-3.5 h-3.5" /> Repeat
                             </h4>
                             <div className="relative">
@@ -687,15 +1095,16 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                 )}
 
                                 {recurrence && (
-                                    <div className="mt-3 relative group animate-in fade-in slide-in-from-top-2 duration-300">
+                                    <div className="mt-3 animate-in fade-in slide-in-from-top-2 duration-300">
                                         <DateTimePicker
                                             value={recurrenceEndAt}
                                             onChange={(val) => {
                                                 setRecurrenceEndAt(val)
                                                 handleFieldUpdate('recurrence_end_at', val || null)
                                             }}
-                                            placeholder="Ends Never"
-                                            className="bg-transparent hover:bg-surface-secondary/30 border-border/50 hover:border-border rounded-xl px-2 py-0.5"
+                                            placeholder="Ends never"
+                                            type="date"
+                                            className="bg-surface/50 hover:bg-surface/80 border-border/50 hover:border-border rounded-xl"
                                         />
                                     </div>
                                 )}
@@ -704,7 +1113,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
 
                         {/* Schedule */}
                         <div className="space-y-3">
-                            <h4 className="text-[10px] uppercase font-bold tracking-[0.2em] text-text-muted/80 flex items-center gap-2">
+                            <h4 className="text-sm md:text-xs uppercase font-bold tracking-[0.2em] text-text-muted/80 flex items-center gap-2">
                                 <Calendar className="w-3.5 h-3.5" /> Schedule
                             </h4>
                             <div className="space-y-3">
@@ -720,7 +1129,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                     )}
                                 >
                                     <Star className={cn("w-4 h-4", today && "fill-current")} />
-                                    <span className="text-xs font-bold uppercase tracking-wider">Do Today</span>
+                                    <span className="text-base md:text-sm font-bold uppercase tracking-wider">Do Today</span>
                                 </button>
 
                                 <div className="space-y-2">
@@ -751,7 +1160,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
             </div>
 
             {/* Delete Confirmation Modal */}
-            {showDeleteConfirm && task && taskId && (
+            {showDeleteConfirm && task && resolvedTaskId && (
                 task.recurrence ? (
                     <ConfirmModal
                         title="Delete recurring task?"
@@ -763,7 +1172,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                 variant: 'default',
                                 onClick: async () => {
                                     try {
-                                        await deleteTask(taskId)
+                                        await deleteTask(resolvedTaskId)
                                         showToast('Task deleted', 'info')
                                         setShowDeleteConfirm(false)
                                         onClose()
@@ -781,7 +1190,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                         const { error } = await supabase
                                             .from('tasks')
                                             .delete()
-                                            .or(`id.eq.${taskId},parent_task_id.eq.${taskId}`)
+                                            .or(`id.eq.${resolvedTaskId},parent_task_id.eq.${resolvedTaskId}`)
                                         if (error) throw error
                                         showToast('Recurring task deleted', 'info')
                                         setShowDeleteConfirm(false)
@@ -805,7 +1214,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                 const snapshot = { ...task }
                                 setShowDeleteConfirm(false)
                                 onClose()
-                                await deleteTask(taskId)
+                                await deleteTask(resolvedTaskId)
                                 showToast(
                                     'Task deleted',
                                     'info',
@@ -837,14 +1246,14 @@ function PillGroup<T>({ label, value, options, onChange }: {
 }) {
     return (
         <div className="space-y-2.5">
-            <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-text-primary block">{label}</span>
+            <span className="text-sm md:text-xs uppercase font-bold tracking-[0.15em] text-text-primary block">{label}</span>
             <div className="flex flex-wrap gap-2">
                 {options.map((opt) => (
                     <button
                         key={String(opt.value)}
                         onClick={() => onChange(value === opt.value ? null : opt.value)}
                         className={cn(
-                            "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold tracking-wide transition-all",
+                            "touch-target flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border text-sm md:text-xs font-bold tracking-wide transition-all",
                             value === opt.value
                                 ? "bg-accent/10 border-accent/30 text-accent"
                                 : "bg-surface/50 border-border/50 text-text-muted hover:text-text-primary hover:border-border hover:bg-surface-secondary/40"

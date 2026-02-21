@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { Subtask } from '../types'
+import { useToast } from '../components/Toast'
 
 export const useSubtasks = (taskId: string | undefined) => {
     const [subtasks, setSubtasks] = useState<Subtask[]>([])
     const [loading, setLoading] = useState(false)
+    const { showToast } = useToast()
 
-    const fetchSubtasks = useCallback(async () => {
+    const fetchSubtasks = useCallback(async (signal?: AbortSignal) => {
         if (!taskId || taskId.startsWith('temp-')) return
         setLoading(true)
         try {
@@ -17,16 +19,23 @@ export const useSubtasks = (taskId: string | undefined) => {
                 .order('sort_order', { ascending: true })
 
             if (error) throw error
-            setSubtasks(data || [])
+            if (!signal?.aborted) {
+                setSubtasks(data || [])
+            }
         } catch (error) {
-            console.error('Error fetching subtasks:', error)
+            if (!signal?.aborted) {
+                console.error('Error fetching subtasks:', error)
+            }
         } finally {
-            setLoading(false)
+            if (!signal?.aborted) {
+                setLoading(false)
+            }
         }
     }, [taskId])
 
     useEffect(() => {
-        fetchSubtasks()
+        const controller = new AbortController()
+        void fetchSubtasks(controller.signal)
 
         if (!taskId || taskId.startsWith('temp-')) return
 
@@ -53,6 +62,7 @@ export const useSubtasks = (taskId: string | undefined) => {
             .subscribe()
 
         return () => {
+            controller.abort()
             supabase.removeChannel(channel)
         }
     }, [taskId, fetchSubtasks])
@@ -88,6 +98,9 @@ export const useSubtasks = (taskId: string | undefined) => {
         } catch (error) {
             console.error('Error adding subtask:', error)
             setSubtasks(prev => prev.filter(s => s.id !== tempId))
+            showToast('Could not add subtask. Retry?', 'error', () => {
+                void addSubtask(title)
+            }, 7000)
         }
     }
 
@@ -107,6 +120,9 @@ export const useSubtasks = (taskId: string | undefined) => {
         } catch (error) {
             console.error('Error updating subtask:', error)
             setSubtasks(prev => prev.map(s => s.id === id ? original : s))
+            showToast('Could not update subtask. Retry?', 'error', () => {
+                void updateSubtask(id, updates)
+            }, 7000)
         }
     }
 
@@ -126,6 +142,7 @@ export const useSubtasks = (taskId: string | undefined) => {
         } catch (error) {
             console.error('Error deleting subtask:', error)
             setSubtasks(prev => [...prev, original].sort((a, b) => a.sort_order - b.sort_order))
+            showToast('Could not delete subtask. Restored.', 'error')
         }
     }
 
@@ -154,6 +171,7 @@ export const useSubtasks = (taskId: string | undefined) => {
         } catch (error) {
             console.error('Error reordering subtasks:', error)
             setSubtasks(originalSubtasks)
+            showToast('Could not reorder subtasks. Order restored.', 'error')
         }
     }
 

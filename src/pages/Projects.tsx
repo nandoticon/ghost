@@ -31,13 +31,25 @@ export default function Projects() {
         [categories]
     )
 
-    const getProjectStats = useCallback((projectId: string) => {
-        const projectTasks = tasks.filter(t => t.project_id === projectId)
-        const total = projectTasks.length
-        const completed = projectTasks.filter(t => t.completed).length
-        const progress = total > 0 ? (completed / total) * 100 : 0
-        return { total, completed, progress }
+    const projectStatsMap = useMemo(() => {
+        const stats = new Map<string, { total: number; completed: number; progress: number }>()
+        for (const task of tasks) {
+            if (!task.project_id) continue
+            const current = stats.get(task.project_id) || { total: 0, completed: 0, progress: 0 }
+            current.total += 1
+            if (task.completed) current.completed += 1
+            stats.set(task.project_id, current)
+        }
+        for (const [projectId, current] of stats) {
+            current.progress = current.total > 0 ? (current.completed / current.total) * 100 : 0
+            stats.set(projectId, current)
+        }
+        return stats
     }, [tasks])
+
+    const getProjectStats = useCallback((projectId: string) => {
+        return projectStatsMap.get(projectId) || { total: 0, completed: 0, progress: 0 }
+    }, [projectStatsMap])
 
     const processProjects = useCallback((projectList: Project[]) => {
         const filtered = projectList.filter(p => !categoryFilterId || p.category_id === categoryFilterId)
