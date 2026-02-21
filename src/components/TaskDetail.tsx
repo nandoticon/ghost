@@ -35,8 +35,8 @@ interface TaskDetailProps {
 }
 
 export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
-    const { task, updateTaskField } = useTaskById(taskId)
-    const { deleteTask, completeTask, createTask } = useTasks()
+    const { task } = useTaskById(taskId)
+    const { deleteTask, completeTask, createTask, updateTask } = useTasks()
     const { projects, createProject } = useProjects()
     const { subtasks, addSubtask, updateSubtask, deleteSubtask, reorderSubtasks } = useSubtasks(task?.id)
     const { comments } = useComments(task?.id)
@@ -271,9 +271,9 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
             // Clear the accumulator before the async call to allow new updates to start fresh
             pendingUpdatesRef.current = {}
 
-            await updateTaskField(finalUpdates)
+            await updateTask(resolvedTaskId, finalUpdates)
             setIsSaving(false)
-        }, 600)
+        }, 300)
     }
 
     const handleTitleChange = (val: string) => {
