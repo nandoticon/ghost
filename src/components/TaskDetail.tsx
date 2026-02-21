@@ -262,7 +262,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
         }
     }
 
-    const triggerSave = (updates: Partial<Task>) => {
+    const triggerSave = (updates: Partial<Task>, debounceMs = 600) => {
         if (!resolvedTaskId) return
 
         // Accumulate updates so we don't clobber rapid changes
@@ -278,21 +278,21 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
 
             await updateTask(resolvedTaskId, finalUpdates)
             setIsSaving(false)
-        }, 600)
+        }, debounceMs)
     }
 
     const handleTitleChange = (val: string) => {
         setTitle(val)
-        triggerSave({ title: val.trim() || 'Untitled Task' })
+        triggerSave({ title: val.trim() || 'Untitled Task' }, 350)
     }
 
     const handleNotesChange = (val: string) => {
         setNotes(val)
-        triggerSave({ notes: val.trim() || null })
+        triggerSave({ notes: val.trim() || null }, 350)
     }
 
-    const handleFieldUpdate = (field: keyof Task, val: Task[keyof Task]) => {
-        triggerSave({ [field]: val })
+    const handleFieldUpdate = (field: keyof Task, val: Task[keyof Task], debounceMs = 0) => {
+        triggerSave({ [field]: val }, debounceMs)
     }
 
     const generateSubtasks = async () => {
@@ -923,7 +923,11 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                         { value: 'home', icon: <Home className="w-3.5 h-3.5" />, label: 'Home' },
                                         { value: 'outside', icon: <MapPin className="w-3.5 h-3.5" />, label: 'Outside' }
                                     ]}
-                                    onChange={(val) => handleFieldUpdate('location', val)}
+                                    onChange={(val) => {
+                                        const next = val as 'home' | 'outside' | null
+                                        setLocation(next)
+                                        handleFieldUpdate('location', next)
+                                    }}
                                 />
                                 <PillGroup
                                     label="Energy"
@@ -932,7 +936,11 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                         { value: 'high', icon: <Zap className="w-3.5 h-3.5" />, label: 'High' },
                                         { value: 'low', icon: <ZapOff className="w-3.5 h-3.5" />, label: 'Low' }
                                     ]}
-                                    onChange={(val) => handleFieldUpdate('energy', val)}
+                                    onChange={(val) => {
+                                        const next = val as 'high' | 'low' | null
+                                        setEnergy(next)
+                                        handleFieldUpdate('energy', next)
+                                    }}
                                 />
                                 <PillGroup
                                     label="Focus"
@@ -941,7 +949,11 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                         { value: 'immersion', icon: <Target className="w-3.5 h-3.5" />, label: 'Immersion' },
                                         { value: 'process', icon: <Layers className="w-3.5 h-3.5" />, label: 'Process' }
                                     ]}
-                                    onChange={(val) => handleFieldUpdate('focus', val)}
+                                    onChange={(val) => {
+                                        const next = val as 'immersion' | 'process' | null
+                                        setFocus(next)
+                                        handleFieldUpdate('focus', next)
+                                    }}
                                 />
 
                                 <div className="space-y-2.5">
