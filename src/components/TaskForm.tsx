@@ -156,7 +156,7 @@ export const TaskForm = ({
     }
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-6 transition-all animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 pb-[env(safe-area-inset-bottom)] md:p-6 transition-all animate-in fade-in duration-200">
             <div
                 className="absolute inset-0 bg-background/75 backdrop-blur-md"
                 onClick={onCancel}
@@ -172,7 +172,7 @@ export const TaskForm = ({
                     </h2>
                     <button
                         onClick={onCancel}
-                        className="p-1 rounded-full hover:bg-surface-secondary transition-colors"
+                        className="touch-target flex items-center justify-center p-1 rounded-full hover:bg-surface-secondary transition-colors"
                     >
                         <X className="w-5 h-5 text-text-muted" />
                     </button>

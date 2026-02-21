@@ -71,7 +71,7 @@ export function QuickCapture({ isOpen, onClose }: QuickCaptureProps) {
                         <button
                             type="button"
                             onClick={onClose}
-                            className="p-1 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors"
+                            className="touch-target flex items-center justify-center p-1 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors"
                         >
                             <X className="w-4 h-4" />
                         </button>

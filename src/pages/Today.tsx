@@ -13,9 +13,24 @@ import { ConfirmModal } from '../components/ConfirmModal'
 import { Task } from '../types'
 import { useShortcutContext } from '../context/ShortcutContext'
 import { useAuth } from '../hooks/useAuth'
+import { supabase } from '../lib/supabase'
 import { SuggestTaskModal } from '../components/SuggestTaskModal'
 import { useTimer } from '../context/TimerContext'
 import { listSessionsByRange } from '../lib/timeTracking'
+
+const DAILY_BUDGET_OPTIONS_HOURS = [2, 4, 6, 8, 10, 12] as const
+const DEFAULT_DAILY_BUDGET_HOURS = 6
+
+function getDailyBudgetStorageKey(userId?: string): string {
+    return `ghost.daily_budget_hours:${userId ?? 'default'}`
+}
+
+function parseDailyBudgetHours(value: unknown): number | null {
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed)) return null
+    if (!DAILY_BUDGET_OPTIONS_HOURS.includes(parsed as (typeof DAILY_BUDGET_OPTIONS_HOURS)[number])) return null
+    return parsed
+}
 
 export default function Today() {
     const { user } = useAuth()
@@ -31,6 +46,8 @@ export default function Today() {
     const [showClearConfirm, setShowClearConfirm] = useState(false)
     const [focusedTask, setFocusedTask] = useState<Task | null>(null)
     const [focusedTodaySeconds, setFocusedTodaySeconds] = useState(0)
+    const [dailyBudgetHours, setDailyBudgetHours] = useState<number>(DEFAULT_DAILY_BUDGET_HOURS)
+    const [budgetHydrated, setBudgetHydrated] = useState(false)
 
     // Split tasks
     const remainingTasks = useMemo(() => tasks.filter(t => !t.completed), [tasks])
@@ -41,7 +58,7 @@ export default function Today() {
     const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
 
     // Capacity Calculations
-    const dailyCapacityMins = 360 // 6 hours "deep/focused" capacity
+    const dailyCapacityMins = dailyBudgetHours * 60
     const totalRemainingEffort = useMemo(() => remainingTasks.reduce((acc, t) => acc + (t.estimated_effort || 0), 0), [remainingTasks])
     const totalCompletedEffort = useMemo(() => completedTasks.reduce((acc, t) => acc + (t.estimated_effort || 0), 0), [completedTasks])
     const totalScheduledEffort = totalRemainingEffort + totalCompletedEffort
@@ -90,6 +107,70 @@ export default function Today() {
     useEffect(() => {
         void refreshFocusedToday()
     }, [refreshFocusedToday])
+
+    useEffect(() => {
+        let cancelled = false
+
+        const hydrateDailyBudget = async () => {
+            const storageKey = getDailyBudgetStorageKey(user?.id)
+            const localFallback = parseDailyBudgetHours(localStorage.getItem(storageKey))
+
+            if (!user) {
+                if (!cancelled) {
+                    setDailyBudgetHours(localFallback ?? DEFAULT_DAILY_BUDGET_HOURS)
+                    setBudgetHydrated(true)
+                }
+                return
+            }
+
+            const { data } = await supabase.auth.getUser()
+            const remoteBudget = parseDailyBudgetHours(data.user?.user_metadata?.daily_budget_hours)
+            const resolvedBudget = remoteBudget ?? localFallback ?? DEFAULT_DAILY_BUDGET_HOURS
+
+            if (!cancelled) {
+                setDailyBudgetHours(resolvedBudget)
+                setBudgetHydrated(true)
+            }
+        }
+
+        setBudgetHydrated(false)
+        void hydrateDailyBudget()
+
+        return () => {
+            cancelled = true
+        }
+    }, [user?.id])
+
+    useEffect(() => {
+        if (!budgetHydrated) return
+
+        const storageKey = getDailyBudgetStorageKey(user?.id)
+        localStorage.setItem(storageKey, String(dailyBudgetHours))
+    }, [dailyBudgetHours, user?.id, budgetHydrated])
+
+    useEffect(() => {
+        if (!budgetHydrated || !user) return
+
+        const currentRemoteBudget = parseDailyBudgetHours(user.user_metadata?.daily_budget_hours)
+        if (currentRemoteBudget === dailyBudgetHours) return
+
+        const timeoutId = window.setTimeout(async () => {
+            const { error } = await supabase.auth.updateUser({
+                data: {
+                    ...user.user_metadata,
+                    daily_budget_hours: dailyBudgetHours,
+                },
+            })
+
+            if (error) {
+                console.error('Failed to sync daily budget to account metadata:', error)
+            }
+        }, 250)
+
+        return () => {
+            window.clearTimeout(timeoutId)
+        }
+    }, [budgetHydrated, dailyBudgetHours, user])
 
     const displayName = useMemo(() => {
         const raw = user?.email?.split('@')[0] ?? 'there'
@@ -191,11 +272,11 @@ export default function Today() {
             </header>
 
             {/* Progress/Capacity Bar */}
-            <div className="space-y-3 bg-surface-secondary/25 border border-border/40 rounded-2xl p-4 md:p-5">
-                <div className="flex items-center justify-between gap-3 text-xs md:text-sm text-text-muted">
+            <div className="space-y-2.5 bg-surface-secondary/20 border border-border/40 rounded-2xl p-3.5 md:p-4">
+                <div className="flex items-center justify-between gap-3 text-[11px] md:text-xs text-text-muted">
                     <span className="font-bold uppercase tracking-widest">Focused today</span>
                     <div className="flex items-center gap-3">
-                        <span className="text-text-primary font-black">{formatHoursMins(focusedTodaySeconds)}</span>
+                        <span className="text-text-primary font-black text-sm md:text-base">{formatHoursMins(focusedTodaySeconds)}</span>
                         {activeSession && (
                             <button
                                 onClick={() => void stopTimer()}
@@ -206,7 +287,22 @@ export default function Today() {
                         )}
                     </div>
                 </div>
-                <div className="flex items-center justify-between text-xs 2xl:text-sm uppercase font-bold tracking-widest text-text-muted">
+                <div className="flex items-center justify-between gap-3 text-[11px] md:text-xs text-text-muted">
+                    <span className="font-bold uppercase tracking-widest">Time budget</span>
+                    <select
+                        value={dailyBudgetHours}
+                        onChange={(e) => setDailyBudgetHours(Number(e.target.value))}
+                        className="touch-target px-2.5 py-1 rounded-lg border border-border/60 bg-surface text-text-primary font-black uppercase tracking-wider text-[11px] focus:outline-none focus:border-accent"
+                        aria-label="Select daily time budget"
+                    >
+                        {DAILY_BUDGET_OPTIONS_HOURS.map((hours) => (
+                            <option key={hours} value={hours}>
+                                {hours}h
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                <div className="flex items-center justify-between text-[11px] md:text-xs 2xl:text-sm uppercase font-bold tracking-widest text-text-muted">
                     <span className="flex items-center gap-2">
                         {progress === 100 ? (
                             <span className="text-accent-warm inline-flex items-center gap-1.5">
@@ -221,10 +317,10 @@ export default function Today() {
                         {Math.round(progress)}% · {completedCount} of {totalCount}
                     </span>
                 </div>
-                <p className={progress === 100 ? "text-xs md:text-sm text-accent-warm font-semibold" : "text-xs md:text-sm text-text-muted"}>
+                <p className={progress === 100 ? "text-[11px] md:text-xs text-accent-warm font-semibold" : "text-[11px] md:text-xs text-text-muted"}>
                     {progress === 100 ? 'Everything scheduled for today is complete.' : `${remainingTasks.length} task${remainingTasks.length !== 1 ? 's' : ''} left to finish.`}
                 </p>
-                <div className="relative h-3 2xl:h-3.5 w-full bg-surface-secondary rounded-full overflow-hidden">
+                <div className="relative h-2.5 w-full bg-surface-secondary rounded-full overflow-hidden">
                     <div
                         className="h-full rounded-full transition-all duration-1000 ease-out"
                         style={{
@@ -241,8 +337,8 @@ export default function Today() {
 
                 {/* Capacity Visualization */}
                 {totalScheduledEffort > 0 && (
-                    <div className="pt-4 mt-4 border-t border-border/20 space-y-3">
-                        <div className="flex items-center justify-between text-[10px] 2xl:text-xs uppercase font-bold tracking-widest text-text-muted">
+                    <div className="pt-2 mt-1 border-t border-border/20 space-y-2">
+                        <div className="flex items-center justify-between text-[10px] uppercase font-bold tracking-widest text-text-muted">
                             <span className="flex items-center gap-2">
                                 <Clock className="w-3 h-3 text-accent-warm" />
                                 Time Budget
@@ -251,7 +347,7 @@ export default function Today() {
                                 {formatMins(totalScheduledEffort)} / {formatMins(dailyCapacityMins)}
                             </span>
                         </div>
-                        <div className="relative h-2 w-full bg-surface-secondary/50 rounded-full overflow-hidden flex">
+                        <div className="relative h-1.5 w-full bg-surface-secondary/50 rounded-full overflow-hidden flex">
                             {/* Completed Effort */}
                             <div
                                 className="h-full bg-accent-warm/40 transition-all duration-1000"
@@ -273,7 +369,7 @@ export default function Today() {
                             ) : (
                                 <span>{formatMins(dailyCapacityMins - totalScheduledEffort)} remaining in your focus budget</span>
                             )}
-                            <span className="opacity-60">Goal: 6h / day</span>
+                            <span className="opacity-60">Goal: {dailyBudgetHours}h / day</span>
                         </div>
                     </div>
                 )}
@@ -391,7 +487,7 @@ export default function Today() {
             {/* Mobile FAB */}
             <button
                 onClick={() => setIsFormOpen(true)}
-                className="md:hidden fixed bottom-24 right-6 w-14 h-14 bg-accent text-white rounded-full flex items-center justify-center shadow-2xl shadow-accent/40 active:scale-95 transition-all z-40"
+                className="md:hidden fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] right-6 w-14 h-14 bg-accent text-white rounded-full flex items-center justify-center shadow-2xl shadow-accent/40 active:scale-95 transition-all z-40"
             >
                 <Plus className="w-6 h-6" />
             </button>

@@ -215,16 +215,16 @@ export default function Layout() {
             {/* Main content area */}
             <div className="flex-1 flex flex-col min-w-0 min-h-0 h-full relative">
                 {/* Mobile Top Bar */}
-                <header className="tablet:hidden flex items-center justify-between px-5 h-14 bg-surface/70 backdrop-blur-md border-b border-border sticky top-0 z-40">
+                <header className="tablet:hidden flex items-center justify-between px-5 h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-surface/70 backdrop-blur-md border-b border-border sticky top-0 z-40">
                     <h1 className="text-xl font-black tracking-tightest text-text-primary">Ghost</h1>
                     <button
                         onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
-                        className="p-2 hover:bg-surface-secondary rounded-xl text-text-muted transition-colors"
+                        className="touch-target flex items-center justify-center p-2 hover:bg-surface-secondary rounded-xl text-text-muted transition-colors"
                     >
                         <SearchIcon className="w-5 h-5" />
                     </button>
                     {isMobileSearchOpen && (
-                        <div className="absolute top-14 left-0 right-0 bg-surface border-b border-border p-4 animate-in slide-in-from-top duration-200 z-50">
+                        <div className="absolute top-[calc(3.5rem+env(safe-area-inset-top))] left-0 right-0 bg-surface border-b border-border p-4 animate-in slide-in-from-top duration-200 z-50">
                             <SearchBar onTaskClick={(id) => {
                                 setActiveTaskId(id)
                                 setIsMobileSearchOpen(false)
@@ -234,7 +234,7 @@ export default function Layout() {
                 </header>
 
                 {/* Page Content — fluid width */}
-                <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 tablet:p-6 xl:p-8 2xl:p-14 4k:p-16 pb-24 tablet:pb-10 relative">
+                <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 tablet:p-6 xl:p-8 2xl:p-14 4k:p-16 pb-[calc(6.25rem+env(safe-area-inset-bottom))] tablet:pb-10 relative">
                     <div
                         key={location.pathname}
                         className="w-full max-w-full min-w-0 4k:max-w-[1600px] 4k:mx-auto animate-in fade-in duration-200"
@@ -244,7 +244,7 @@ export default function Layout() {
                 </main>
 
                 {/* Bottom Nav — Mobile only */}
-                <nav className="tablet:hidden flex items-center bg-surface/95 backdrop-blur border-t border-border fixed bottom-0 left-0 right-0 z-50">
+                <nav className="tablet:hidden flex items-center bg-surface/95 backdrop-blur border-t border-border fixed bottom-0 left-0 right-0 z-50 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
                     {/* Left nav items */}
                     {navItems.slice(0, 1).map((item) => (
                         <NavLink

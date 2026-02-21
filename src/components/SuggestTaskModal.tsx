@@ -90,7 +90,7 @@ export const SuggestTaskModal = ({ isOpen, onClose }: SuggestTaskModalProps) => 
                             </h2>
                             <p className="text-sm text-text-muted mt-1">Let's find the perfect task for right now.</p>
                         </div>
-                        <button onClick={onClose} className="p-2 -mr-2 text-text-muted hover:text-white transition-colors">
+                        <button onClick={onClose} className="touch-target flex items-center justify-center p-2 -mr-2 text-text-muted hover:text-white transition-colors rounded-xl hover:bg-surface-secondary/60">
                             <X className="w-5 h-5" />
                         </button>
                     </header>

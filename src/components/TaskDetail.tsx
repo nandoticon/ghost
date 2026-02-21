@@ -265,7 +265,7 @@ Click save`
                 )}
             >
                 {/* Header */}
-                <header className="flex items-center justify-between px-6 py-4 border-b border-transparent z-20 shrink-0">
+                <header className="flex items-center justify-between px-6 pt-[calc(1rem+env(safe-area-inset-top))] pb-4 border-b border-transparent z-20 shrink-0">
                     <div className="flex items-center space-x-3">
                         <button
                             onClick={async () => {
@@ -283,7 +283,7 @@ Click save`
                                 }
                             }}
                             className={cn(
-                                "relative w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all shrink-0",
+                                "touch-target relative w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all shrink-0",
                                 completed ? "bg-accent-warm border-accent-warm text-white" : "border-text-muted/40 hover:border-accent-warm"
                             )}
                             title="Complete Task (Ctrl+Enter)"
@@ -314,7 +314,7 @@ Click save`
                         <div className="relative">
                             <button
                                 onClick={() => setShowMenu(!showMenu)}
-                                className="p-2 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors"
+                                className="touch-target flex items-center justify-center p-2 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors"
                             >
                                 <MoreVertical className="w-4 h-4" />
                             </button>
@@ -349,7 +349,7 @@ Click save`
                                 </>
                             )}
                         </div>
-                        <button onClick={onClose} className="p-2 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors">
+                        <button onClick={onClose} className="touch-target flex items-center justify-center p-2 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors">
                             <X className="w-4 h-4" />
                         </button>
                     </div>
@@ -359,7 +359,7 @@ Click save`
                 <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
 
                     {/* LEFTSIDE: Main Content */}
-                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-10 space-y-10">
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:p-10 space-y-10">
                         {/* Title & Description */}
                         <div className="space-y-6">
                             <textarea
@@ -431,7 +431,7 @@ Click save`
                                                                     e.stopPropagation()
                                                                     updateSubtask(subtask.id, { completed: !subtask.completed })
                                                                 }}
-                                                                className="relative group transition-transform active:scale-90"
+                                                                className="touch-target relative group transition-transform active:scale-90 flex items-center justify-center rounded-md"
                                                             >
                                                                 {subtask.completed ? <CheckCircle2 className="w-4 h-4 text-accent" /> : <Circle className="w-4 h-4 text-text-muted group-hover:text-accent" />}
                                                             </button>
@@ -446,7 +446,7 @@ Click save`
                                                             />
                                                             <button
                                                                 onClick={() => deleteSubtask(subtask.id)}
-                                                                className="p-1.5 text-text-muted hover:text-red-400 opacity-0 group-hover/sub:opacity-100 transition-all hover:bg-red-400/10 rounded-md"
+                                                                className="touch-target p-1.5 text-text-muted hover:text-red-400 opacity-0 group-hover/sub:opacity-100 transition-all hover:bg-red-400/10 rounded-md flex items-center justify-center"
                                                             >
                                                                 <X className="w-3.5 h-3.5" />
                                                             </button>
@@ -509,7 +509,7 @@ Click save`
                     </div>
 
                     {/* RIGHTSIDE: Sidebar Metadata */}
-                    <div className="w-full md:w-[320px] lg:w-[380px] border-t md:border-t-0 md:border-l border-border/50 bg-surface/30 overflow-y-auto custom-scrollbar p-6 space-y-8">
+                    <div className="w-full md:w-[320px] lg:w-[380px] border-t md:border-t-0 md:border-l border-border/50 bg-surface/30 overflow-y-auto custom-scrollbar p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] space-y-8">
 
                         {/* Context Properties */}
                         <div className="space-y-6">

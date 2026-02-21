@@ -138,7 +138,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
                         e.stopPropagation()
                         onToggleComplete(task.id, !isCompleted)
                     }}
-                    className="relative z-10 text-text-muted hover:text-accent-warm transition-all active:scale-125 hover:scale-110"
+                    className="touch-target relative z-10 flex items-center justify-center rounded-xl text-text-muted hover:text-accent-warm transition-all active:scale-125 hover:scale-110"
                 >
                     {isCompleted ? (
                         <CheckCircle2 className="w-6 h-6 2xl:w-[26px] 2xl:h-[26px] text-accent-warm animate-in zoom-in-50 duration-200" />
@@ -238,7 +238,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
                             e.stopPropagation()
                             onFocus(task)
                         }}
-                        className="text-text-muted opacity-0 group-hover:opacity-100 hover:text-accent hover:bg-surface-secondary transition-all p-2 rounded-xl"
+                        className="touch-target flex items-center justify-center text-text-muted opacity-0 group-hover:opacity-100 hover:text-accent hover:bg-surface-secondary transition-all p-2 rounded-xl"
                         title="Focus Mode"
                     >
                         <Maximize2 className="w-5 h-5 2xl:w-6 2xl:h-6" />
@@ -252,7 +252,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
                         }}
                         disabled={isSyncing}
                         className={cn(
-                            "transition-all p-2 rounded-xl",
+                            "touch-target flex items-center justify-center transition-all p-2 rounded-xl",
                             isTimerActiveForTask
                                 ? "text-emerald-300 bg-emerald-400/10 border border-emerald-300/20"
                                 : "text-text-muted opacity-0 group-hover:opacity-100 hover:text-emerald-300 hover:bg-surface-secondary",
@@ -273,7 +273,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
                             e.stopPropagation()
                             onSnooze(task.id)
                         }}
-                        className="text-text-muted opacity-0 group-hover:opacity-100 hover:text-blue-400 hover:bg-surface-secondary transition-all p-2 rounded-xl"
+                        className="touch-target flex items-center justify-center text-text-muted opacity-0 group-hover:opacity-100 hover:text-blue-400 hover:bg-surface-secondary transition-all p-2 rounded-xl"
                         title="Snooze to tomorrow"
                     >
                         <Moon className="w-5 h-5 2xl:w-6 2xl:h-6" />
@@ -286,7 +286,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
                             onToggleToday(task.id, !task.today)
                         }}
                         className={cn(
-                            "transition-all p-2 rounded-xl",
+                            "touch-target flex items-center justify-center transition-all p-2 rounded-xl",
                             task.today ? "text-accent-warm" : "text-text-muted opacity-0 group-hover:opacity-100 hover:bg-surface-secondary"
                         )}
                     >

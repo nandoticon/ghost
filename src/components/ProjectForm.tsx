@@ -84,7 +84,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 pb-[env(safe-area-inset-bottom)] md:p-4">
             {/* Backdrop */}
             <div
                 className="absolute inset-0 bg-background/80 backdrop-blur-md animate-in fade-in duration-300"
@@ -98,7 +98,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                     <h2 className="text-xl font-bold text-text-primary">
                         {project ? 'Edit Project' : 'New Project'}
                     </h2>
-                    <button onClick={onCancel} className="text-text-muted hover:text-text-primary transition-colors">
+                    <button onClick={onCancel} className="touch-target inline-flex items-center justify-center rounded-xl text-text-muted hover:text-text-primary hover:bg-surface-secondary transition-colors">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
