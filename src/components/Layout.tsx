@@ -14,9 +14,11 @@ import { PWAUpdateNotification } from './PWAUpdateNotification'
 import { useState } from 'react'
 import { useShortcutContext } from '../context/ShortcutContext'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+import { useProfile } from '../hooks/useProfile'
 
 export default function Layout() {
     const { user } = useAuth()
+    const { profile } = useProfile()
     const navigate = useNavigate()
     const {
         isQuickCaptureOpen,
@@ -43,10 +45,12 @@ export default function Layout() {
         navigate('/login')
     }
 
-    // Derive user initials for avatar
-    const initials = user?.email
-        ? user.email.slice(0, 2).toUpperCase()
-        : '?'
+    // Derive user name and initials
+    const displayName = profile?.full_name || user?.email?.split('@')[0].split(/[._-]/)[0] || 'User'
+    const firstName = displayName.split(' ')[0]
+    const initials = profile?.full_name
+        ? profile.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+        : user?.email?.slice(0, 2).toUpperCase() || '?'
 
     return (
         <div className="flex tablet:grid tablet:grid-cols-[250px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)] 4k:grid-cols-[380px_minmax(0,1fr)] h-[100dvh] min-h-0 w-full max-w-full bg-background overflow-hidden text-text-primary relative">
@@ -130,7 +134,12 @@ export default function Layout() {
                                 </div>
                                 <div className="min-w-0">
                                     <p className="text-xs 2xl:text-sm uppercase font-black tracking-widest text-text-muted">Account</p>
-                                    <p className="text-sm 2xl:text-base font-semibold text-text-primary">FT</p>
+                                    <p className="text-sm 2xl:text-base font-semibold text-text-primary truncate">
+                                        {firstName.charAt(0).toUpperCase() + firstName.slice(1)}
+                                    </p>
+                                    {profile?.pronouns && (
+                                        <p className="text-[10px] font-bold text-text-muted uppercase tracking-tighter">{profile.pronouns}</p>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -220,7 +229,7 @@ export default function Layout() {
                 </header>
 
                 {/* Page Content — fluid width */}
-                <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 tablet:p-6 xl:p-8 2xl:p-14 4k:p-16 pb-24 tablet:pb-10 relative">
+                <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pt-2 tablet:pt-3 xl:pt-4 2xl:pt-6 4k:pt-8 px-4 tablet:px-6 xl:px-8 2xl:px-14 4k:px-16 pb-24 tablet:pb-10 relative">
                     <div
                         key={location.pathname}
                         className="w-full max-w-full min-w-0 4k:max-w-[1600px] 4k:mx-auto animate-in fade-in slide-in-from-bottom-2 duration-200"

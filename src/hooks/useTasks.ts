@@ -49,7 +49,7 @@ export function useTasks(filters?: TaskFilters) {
         }
 
         if (filters?.dateFilter === 'any') {
-            result = result.filter(t => t.start_at || t.end_at)
+            // No date-based filtering applied, show all tasks matching other filters
         } else if (filters?.dateFilter === 'today') {
             const todayStart = new Date()
             todayStart.setHours(0, 0, 0, 0)

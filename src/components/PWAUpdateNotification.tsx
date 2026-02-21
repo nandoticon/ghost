@@ -5,8 +5,8 @@ export function PWAUpdateNotification() {
         needRefresh: [needRefresh],
         updateServiceWorker,
     } = useRegisterSW({
-        onRegistered(r: ServiceWorkerRegistration | undefined) {
-            console.log('SW Registered: ' + r)
+        onRegistered(_r: ServiceWorkerRegistration | undefined) {
+            console.log('Ghost PWA: Service Worker registered')
         },
         onRegisterError(error: unknown) {
             console.log('SW registration error', error)

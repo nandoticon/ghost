@@ -49,6 +49,10 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
     const [status, setStatus] = useState<Task['status']>('todo')
     const [estimatedEffort, setEstimatedEffort] = useState<number | null>(0)
 
+    // Refs for focus protection
+    const titleRef = useRef<HTMLTextAreaElement>(null)
+    const notesRef = useRef<HTMLTextAreaElement>(null)
+
     // UI state
     const [showMenu, setShowMenu] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
@@ -65,20 +69,28 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
 
     useEffect(() => {
         if (task) {
-            setTitle(task.title)
-            setNotes(task.notes || '')
-            setProjectId(task.project_id)
-            setToday(task.today)
-            setStartAt(task.start_at ? task.start_at.substring(0, 16) : '')
-            setEndAt(task.end_at ? task.end_at.substring(0, 16) : '')
-            setLocation(task.location)
-            setEnergy(task.energy)
-            setFocus(task.focus)
-            setRecurrence(task.recurrence)
-            setRecurrenceEndAt(task.recurrence_end_at || '')
-            setCompleted(task.completed)
-            setStatus(task.status)
-            setEstimatedEffort(task.estimated_effort || 0)
+            // Only update local state if the element isn't currently focused
+            // AND we don't have pending changes for that field
+            if (document.activeElement !== titleRef.current && !pendingUpdatesRef.current.title) {
+                setTitle(task.title)
+            }
+            if (document.activeElement !== notesRef.current && !pendingUpdatesRef.current.notes) {
+                setNotes(task.notes || '')
+            }
+
+            // For other fields, we check if they are in pendingUpdates before syncing from global
+            if (pendingUpdatesRef.current.project_id === undefined) setProjectId(task.project_id)
+            if (pendingUpdatesRef.current.today === undefined) setToday(task.today)
+            if (pendingUpdatesRef.current.start_at === undefined) setStartAt(task.start_at ? task.start_at.substring(0, 16) : '')
+            if (pendingUpdatesRef.current.end_at === undefined) setEndAt(task.end_at ? task.end_at.substring(0, 16) : '')
+            if (pendingUpdatesRef.current.location === undefined) setLocation(task.location)
+            if (pendingUpdatesRef.current.energy === undefined) setEnergy(task.energy)
+            if (pendingUpdatesRef.current.focus === undefined) setFocus(task.focus)
+            if (pendingUpdatesRef.current.recurrence === undefined) setRecurrence(task.recurrence)
+            if (pendingUpdatesRef.current.recurrence_end_at === undefined) setRecurrenceEndAt(task.recurrence_end_at || '')
+            if (pendingUpdatesRef.current.completed === undefined) setCompleted(task.completed)
+            if (pendingUpdatesRef.current.status === undefined) setStatus(task.status)
+            if (pendingUpdatesRef.current.estimated_effort === undefined) setEstimatedEffort(task.estimated_effort || 0)
         }
     }, [task])
 
@@ -329,11 +341,12 @@ Click save`
                         {/* Title & Description */}
                         <div className="space-y-6">
                             <textarea
+                                ref={titleRef}
                                 value={title}
                                 onChange={(e) => handleTitleChange(e.target.value)}
                                 placeholder="Task title"
                                 rows={1}
-                                className="bg-transparent text-3xl md:text-5xl font-black text-text-primary outline-none w-full resize-none focus:text-accent transition-colors py-2"
+                                className="bg-transparent text-xl md:text-2xl font-black text-text-primary outline-none w-full resize-none focus:text-accent transition-colors py-2"
                                 onInput={(e) => {
                                     const target = e.target as HTMLTextAreaElement;
                                     target.style.height = 'auto';
@@ -342,6 +355,7 @@ Click save`
                             />
 
                             <textarea
+                                ref={notesRef}
                                 value={notes}
                                 onChange={(e) => handleNotesChange(e.target.value)}
                                 placeholder="Add description, notes, or links..."
@@ -695,17 +709,15 @@ Click save`
 
                                 {recurrence && (
                                     <div className="mt-3 relative group animate-in fade-in slide-in-from-top-2 duration-300">
-                                        <input
-                                            type="date"
+                                        <DateTimePicker
                                             value={recurrenceEndAt}
-                                            onChange={(e) => {
-                                                setRecurrenceEndAt(e.target.value)
-                                                handleFieldUpdate('recurrence_end_at', e.target.value || null)
+                                            onChange={(val) => {
+                                                setRecurrenceEndAt(val)
+                                                handleFieldUpdate('recurrence_end_at', val || null)
                                             }}
-                                            className="w-full bg-surface/50 hover:bg-surface/80 border border-border/50 hover:border-border rounded-xl px-4 py-3 pl-10 text-xs text-text-primary outline-none transition-all"
+                                            placeholder="Ends Never"
+                                            className="bg-transparent hover:bg-surface-secondary/30 border-border/50 hover:border-border rounded-xl px-2 py-0.5"
                                         />
-                                        <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted pointer-events-none" />
-                                        {!recurrenceEndAt && <span className="absolute left-10 top-1/2 -translate-y-1/2 text-xs text-text-muted pointer-events-none font-medium">Ends Never</span>}
                                     </div>
                                 )}
                             </div>

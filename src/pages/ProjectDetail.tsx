@@ -143,7 +143,7 @@ export default function ProjectDetail() {
     }
 
     return (
-        <div className="max-w-[720px] 4k:max-w-[900px] mx-auto px-4 py-8 md:py-12 space-y-8 animate-in fade-in duration-500">
+        <div className="w-full max-w-full mx-auto px-4 pt-2 pb-8 tablet:pt-4 tablet:pb-12 space-y-8 animate-in fade-in duration-500">
             {/* Navigation */}
             <nav className="flex items-center justify-between">
                 <Link

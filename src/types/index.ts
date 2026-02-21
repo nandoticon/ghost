@@ -76,3 +76,11 @@ export interface TaskFilters {
     status?: 'all' | 'todo' | 'doing' | 'waiting' | 'done';
     dateFilter?: 'any' | 'today' | 'upcoming' | 'overdue';
 }
+
+export interface Profile {
+    id: string;
+    full_name: string | null;
+    pronouns: string | null;
+    created_at: string;
+    updated_at: string;
+}

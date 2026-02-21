@@ -10,6 +10,8 @@ interface TaskContextType {
     createTask: (task: Partial<Task>, isToday?: boolean) => Promise<Task | null>
     updateTask: (id: string, updates: Partial<Task>) => Promise<void>
     deleteTask: (id: string) => Promise<void>
+    batchUpdateTasks: (ids: string[], updates: Partial<Task>) => Promise<void>
+    batchDeleteTasks: (ids: string[]) => Promise<void>
     completeTask: (id: string, completed: boolean) => Promise<{ success: boolean; nextOccurrenceCreated?: boolean; nextOccurrenceDate?: string | null }>
     reorderTasks: (orderedIds: string[], isToday?: boolean) => Promise<void>
     refresh: () => Promise<void>
@@ -58,6 +60,45 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         fetchTasks()
     }, [fetchTasks])
+
+    // Realtime subscription
+    useEffect(() => {
+        if (!user) return
+
+        const channel = supabase
+            .channel('tasks-realtime')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'tasks',
+                    filter: `user_id=eq.${user.id}`
+                },
+                (payload) => {
+                    const { eventType, new: newRecord, old: oldRecord } = payload
+
+                    if (eventType === 'INSERT') {
+                        setTasks(prev => {
+                            // Avoid duplicates (e.g. if insert event arrives after optimistic set)
+                            if (prev.some(t => t.id === newRecord.id)) return prev
+                            // Filter out temporary tasks
+                            const filtered = prev.filter(t => !t.id.startsWith('temp-'))
+                            return [...filtered, newRecord as Task]
+                        })
+                    } else if (eventType === 'UPDATE') {
+                        setTasks(prev => prev.map(t => t.id === newRecord.id ? { ...t, ...newRecord } : t))
+                    } else if (eventType === 'DELETE') {
+                        setTasks(prev => prev.filter(t => t.id !== oldRecord.id))
+                    }
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
+    }, [user])
 
     const createTask = useCallback(async (task: Partial<Task>, isToday?: boolean) => {
         if (!user) return null
@@ -144,6 +185,44 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         }
     }, [fetchTasks])
 
+    const batchUpdateTasks = useCallback(async (ids: string[], updates: Partial<Task>) => {
+        // Sync logic for status/completed bridging
+        const finalUpdates = { ...updates }
+        if (updates.status !== undefined && (updates.completed === undefined)) {
+            finalUpdates.completed = updates.status === 'done'
+        } else if (updates.completed !== undefined && (updates.status === undefined)) {
+            finalUpdates.status = updates.completed ? 'done' : 'todo'
+        }
+
+        // Apply immediately to local state
+        setTasks(prev => prev.map(t => ids.includes(t.id) ? { ...t, ...finalUpdates, updated_at: new Date().toISOString() } : t))
+
+        const { error } = await supabase
+            .from('tasks')
+            .update({ ...finalUpdates, updated_at: new Date().toISOString() })
+            .in('id', ids)
+
+        if (error) {
+            console.error('Error batch updating tasks:', error)
+            fetchTasks()
+        }
+    }, [fetchTasks])
+
+    const batchDeleteTasks = useCallback(async (ids: string[]) => {
+        // Apply immediately to local state
+        setTasks(prev => prev.filter(t => !ids.includes(t.id)))
+
+        const { error } = await supabase
+            .from('tasks')
+            .delete()
+            .in('id', ids)
+
+        if (error) {
+            console.error('Error batch deleting tasks:', error)
+            fetchTasks()
+        }
+    }, [fetchTasks])
+
     const completeTask = useCallback(async (id: string, completed: boolean) => {
         const task = tasks.find(t => t.id === id)
         if (!task) return { success: false }
@@ -197,6 +276,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
     const reorderTasks = useCallback(async (orderedIds: string[], isToday?: boolean) => {
         const sortField = isToday ? 'sort_order_today' : 'sort_order'
+        const previousTasks = [...tasks]
 
         // Apply immediately to global state
         setTasks(prev => {
@@ -207,25 +287,26 @@ export function TaskProvider({ children }: { children: ReactNode }) {
                     newTasks[taskIndex] = { ...newTasks[taskIndex], [sortField]: index }
                 }
             })
-            // Since ordering applies locally in useTasks mostly via sorting, updating just the sortField works
             return newTasks
         })
 
-        const updates = orderedIds.map((id, index) =>
-            supabase
-                .from('tasks')
-                .update({ [sortField]: index })
-                .eq('id', id)
-        )
+        try {
+            const updates = orderedIds.map((id, index) =>
+                supabase
+                    .from('tasks')
+                    .update({ [sortField]: index, updated_at: new Date().toISOString() })
+                    .eq('id', id)
+            )
 
-        const results = await Promise.all(updates)
-        const error = results.find(r => r.error)
+            const results = await Promise.all(updates)
+            const error = results.find(r => r.error)
 
-        if (error) {
+            if (error) throw error.error
+        } catch (error) {
             console.error('Error reordering tasks:', error)
-            fetchTasks()
+            setTasks(previousTasks) // Rollback to reliable state
         }
-    }, [fetchTasks])
+    }, [tasks])
 
     return (
         <TaskContext.Provider
@@ -235,6 +316,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
                 createTask,
                 updateTask,
                 deleteTask,
+                batchUpdateTasks,
+                batchDeleteTasks,
                 completeTask,
                 reorderTasks,
                 refresh: fetchTasks

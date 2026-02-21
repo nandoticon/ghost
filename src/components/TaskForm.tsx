@@ -386,12 +386,12 @@ export const TaskForm = ({
 
                                 {recurrence && (
                                     <div className="flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300">
-                                        <span className="text-xs text-text-primary font-medium">End Repeat</span>
-                                        <input
-                                            type="date"
+                                        <span className="text-xs text-text-primary font-medium shrink-0 mr-4">End Repeat</span>
+                                        <DateTimePicker
                                             value={recurrenceEndAt}
-                                            onChange={(e) => setRecurrenceEndAt(e.target.value)}
-                                            className="bg-surface-secondary border border-border rounded-lg px-3 py-1 text-xs text-text-primary focus:border-accent outline-none [color-scheme:dark]"
+                                            onChange={setRecurrenceEndAt}
+                                            placeholder="Ends Never"
+                                            className="bg-surface-secondary border-border"
                                         />
                                     </div>
                                 )}

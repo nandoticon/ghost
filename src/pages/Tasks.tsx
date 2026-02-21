@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Plus, Filter, LayoutList, LayoutDashboard, AlertCircle, ChevronDown, Home, MapPin, Zap, ZapOff, Target, Layers, ChevronsUpDown } from 'lucide-react'
+import { Plus, Filter, LayoutList, LayoutDashboard, AlertCircle, ChevronDown, Home, MapPin, Zap, ZapOff, Target, Layers, ChevronsUpDown, RotateCcw, Trash2, Star, CheckCircle2, X } from 'lucide-react'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { useTasks } from '../hooks/useTasks'
 import { useProjects } from '../hooks/useProjects'
@@ -11,6 +11,7 @@ import { useToast } from '../components/Toast'
 import { Task, TaskFilters } from '../types'
 import { cn } from '../lib/cn'
 import { useShortcutContext } from '../context/ShortcutContext'
+import { useGlobalTasks } from '../context/TaskContext'
 
 const STORAGE_KEY = 'ghost_tasks_filters'
 
@@ -37,6 +38,11 @@ export default function Tasks() {
     const [isFormOpen, setIsFormOpen] = useState(false)
     const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
     const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list')
+
+    // Selection state
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+    const [lastSelectedId, setLastSelectedId] = useState<string | null>(null)
+    const { batchUpdateTasks, batchDeleteTasks } = useGlobalTasks()
 
     // Persist filters
     useEffect(() => {
@@ -87,7 +93,7 @@ export default function Tasks() {
     const clearFilters = () => setFilters(DEFAULT_FILTERS)
 
     const updateFilter = (updates: Partial<TaskFilters>) => {
-        setFilters(prev => ({ ...prev, ...updates }))
+        setFilters((prev: TaskFilters) => ({ ...prev, ...updates }))
     }
 
     const handleToggleComplete = useCallback(async (id: string, completed: boolean) => {
@@ -102,7 +108,37 @@ export default function Tasks() {
         updateTask(id, { today })
     }, [updateTask])
 
-    const handleTaskClick = useCallback(() => { }, [])
+    const handleTaskSelect = useCallback((taskId: string, event: React.MouseEvent) => {
+        const isSelected = selectedIds.has(taskId)
+
+        if (event.ctrlKey || event.metaKey) {
+            // Toggle selection
+            const next = new Set(selectedIds)
+            if (isSelected) next.delete(taskId)
+            else next.add(taskId)
+            setSelectedIds(next)
+            setLastSelectedId(taskId)
+        } else if (event.shiftKey && lastSelectedId) {
+            // Range selection
+            const currentIdx = tasks.findIndex(t => t.id === taskId)
+            const lastIdx = tasks.findIndex(t => t.id === lastSelectedId)
+
+            if (currentIdx !== -1 && lastIdx !== -1) {
+                const start = Math.min(currentIdx, lastIdx)
+                const end = Math.max(currentIdx, lastIdx)
+                const rangeIds = tasks.slice(start, end + 1).map(t => t.id)
+                setSelectedIds(new Set([...Array.from(selectedIds), ...rangeIds]))
+            }
+        } else {
+            // Normal click: Open sidebar immediately and clear selection
+            const task = tasks.find(t => t.id === taskId)
+            if (task) {
+                setActiveTaskId(task.id, task.short_id)
+                setSelectedIds(new Set())
+                setLastSelectedId(taskId)
+            }
+        }
+    }, [selectedIds, lastSelectedId, tasks, setActiveTaskId])
 
     const handleTitleClick = useCallback((t: Task) => setActiveTaskId(t.id, t.short_id), [setActiveTaskId])
 
@@ -121,7 +157,7 @@ export default function Tasks() {
     }, [tasks, filters.projectId, projects])
 
     return (
-        <div className="w-full max-w-full mx-auto px-4 py-8 md:py-12 space-y-8 animate-in fade-in duration-500">
+        <div className="w-full max-w-full mx-auto px-4 pt-2 pb-8 tablet:pt-4 tablet:pb-12 space-y-8 animate-in fade-in duration-500">
             <header className="flex items-center justify-between gap-4 flex-wrap">
                 <h1 className="text-4xl md:text-5xl xl:text-5xl 2xl:text-6xl font-black tracking-tightest title-gradient">Tasks</h1>
                 <div className="flex items-center gap-3">
@@ -179,7 +215,7 @@ export default function Tasks() {
                             </button>
                         )}
                         <button
-                            onClick={() => setIsFiltersExpanded((v) => !v)}
+                            onClick={() => setIsFiltersExpanded((v: boolean) => !v)}
                             className="inline-flex items-center gap-1 text-text-muted hover:text-text-primary transition-colors lowercase tracking-normal font-medium"
                         >
                             <ChevronsUpDown className="w-3.5 h-3.5" />
@@ -223,7 +259,7 @@ export default function Tasks() {
                     </div>
 
                     <button
-                        onClick={() => setIsFiltersExpanded((v) => !v)}
+                        onClick={() => setIsFiltersExpanded((v: boolean) => !v)}
                         className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-surface text-xs font-black uppercase tracking-wider text-text-muted hover:text-text-primary transition-colors"
                     >
                         {isFiltersExpanded ? 'Simple' : 'Advanced'}
@@ -312,7 +348,9 @@ export default function Tasks() {
                                                                     task={task}
                                                                     onToggleComplete={handleToggleComplete}
                                                                     onToggleToday={handleToggleToday}
-                                                                    onClick={handleTaskClick}
+                                                                    onClick={() => { }}
+                                                                    onSelect={handleTaskSelect}
+                                                                    isSelected={selectedIds.has(task.id)}
                                                                     onClickTitle={handleTitleClick}
                                                                     dragHandleProps={isReorderingEnabled ? provided.dragHandleProps : undefined}
                                                                     isDragging={snapshot.isDragging}
@@ -339,7 +377,90 @@ export default function Tasks() {
                 onSave={handleSave}
                 onCancel={() => setIsFormOpen(false)}
             />
+
+            {/* Batch Action Bar */}
+            {selectedIds.size > 0 && (
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-bottom-5 duration-300">
+                    <div className="bg-surface/95 backdrop-blur-md border border-border shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] rounded-2xl px-4 py-3 flex items-center space-x-6 ring-1 ring-white/10">
+                        <div className="flex items-center space-x-3 pr-4 border-r border-border">
+                            <button
+                                onClick={() => setSelectedIds(new Set())}
+                                className="p-1.5 hover:bg-surface-secondary rounded-lg text-text-muted transition-colors"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                            <span className="text-sm font-bold text-text-primary whitespace-nowrap">
+                                {selectedIds.size} selected
+                            </span>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                            <BatchActionBtn
+                                icon={<CheckCircle2 className="w-4 h-4" />}
+                                label="Complete"
+                                color="text-accent-warm"
+                                onClick={async () => {
+                                    await batchUpdateTasks(Array.from(selectedIds), { status: 'done', completed: true })
+                                    setSelectedIds(new Set())
+                                    showToast(`Marked ${selectedIds.size} tasks as done`, 'success')
+                                }}
+                            />
+                            <BatchActionBtn
+                                icon={<RotateCcw className="w-4 h-4" />}
+                                label="To-do"
+                                onClick={async () => {
+                                    await batchUpdateTasks(Array.from(selectedIds), { status: 'todo', completed: false })
+                                    setSelectedIds(new Set())
+                                    showToast(`Marked ${selectedIds.size} tasks as to-do`, 'success')
+                                }}
+                            />
+                            <BatchActionBtn
+                                icon={<Star className="w-4 h-4" />}
+                                label="Do Today"
+                                color="text-yellow-500"
+                                onClick={async () => {
+                                    await batchUpdateTasks(Array.from(selectedIds), { today: true })
+                                    setSelectedIds(new Set())
+                                    showToast(`Added ${selectedIds.size} tasks to Today`, 'success')
+                                }}
+                            />
+                            <BatchActionBtn
+                                icon={<Trash2 className="w-4 h-4" />}
+                                label="Delete"
+                                color="text-red-500"
+                                onClick={async () => {
+                                    if (confirm(`Delete ${selectedIds.size} tasks?`)) {
+                                        await batchDeleteTasks(Array.from(selectedIds))
+                                        setSelectedIds(new Set())
+                                        showToast(`Deleted ${selectedIds.size} tasks`, 'info')
+                                    }
+                                }}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
+    )
+}
+
+function BatchActionBtn({ icon, label, onClick, color = "text-text-muted" }: {
+    icon: React.ReactNode,
+    label: string,
+    onClick: () => void,
+    color?: string
+}) {
+    return (
+        <button
+            onClick={onClick}
+            className={cn(
+                "flex items-center space-x-2 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all hover:bg-surface-secondary active:scale-95 group",
+                color
+            )}
+        >
+            <span className="group-hover:scale-110 transition-transform">{icon}</span>
+            <span className="hidden sm:inline">{label}</span>
+        </button>
     )
 }
 

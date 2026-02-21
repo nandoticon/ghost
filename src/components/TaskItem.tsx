@@ -32,6 +32,8 @@ interface TaskItemProps {
     dragHandleProps?: DraggableProvidedDragHandleProps | null
     isDragging?: boolean
     hideDragHandle?: boolean
+    isSelected?: boolean
+    onSelect?: (taskId: string, event: React.MouseEvent) => void
 }
 
 export const TaskItem = React.memo<TaskItemProps>(({
@@ -44,7 +46,9 @@ export const TaskItem = React.memo<TaskItemProps>(({
     isDragging,
     hideDragHandle = false,
     onSnooze,
-    onFocus
+    onFocus,
+    isSelected,
+    onSelect
 }) => {
     const isCompleted = task.completed
 
@@ -88,9 +92,14 @@ export const TaskItem = React.memo<TaskItemProps>(({
                 isDragging
                     ? "bg-surface shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border-accent/30 scale-[1.03] z-50 ring-2 ring-accent/20"
                     : "hover:bg-surface hover:border-border/60 hover:shadow-lg hover:-translate-y-0.5",
-                isCompleted && "opacity-50"
+                isCompleted && "opacity-50",
+                isSelected && "bg-surface border-accent/40 shadow-[0_12px_40px_rgba(0,0,0,0.2)] -translate-y-0.5 ring-1 ring-accent/20"
             )}
-            onClick={() => onClickTitle ? onClickTitle(task) : onClick(task)}
+            onClick={(e) => {
+                if (onSelect) onSelect(task.id, e)
+                else if (onClickTitle) onClickTitle(task)
+                else onClick(task)
+            }}
         >
             {/* Project Color Side-Bar Indicator */}
             <div
@@ -134,10 +143,10 @@ export const TaskItem = React.memo<TaskItemProps>(({
             <div className="flex-1 min-w-0 flex flex-col justify-center">
                 <div className="flex items-center space-x-2 mb-1">
                     <span className={cn(
-                        "text-[15px] 2xl:text-[17px] font-heavy tracking-tight transition-all duration-300",
+                        "text-base 2xl:text-lg font-heavy tracking-tight transition-all duration-300",
                         isCompleted
                             ? "line-through text-text-muted decoration-text-muted/60"
-                            : "text-text-primary no-underline"
+                            : isSelected ? "text-accent" : "text-text-primary no-underline"
                     )}>
                         {task.title}
                     </span>
@@ -145,12 +154,12 @@ export const TaskItem = React.memo<TaskItemProps>(({
                         <RefreshCw className="w-3.5 h-3.5 text-text-muted shrink-0" />
                     )}
                     {task.today && !isCompleted && (
-                        <span className="text-xs 2xl:text-sm uppercase font-black tracking-widest text-accent-warm bg-accent-warm/10 px-2 py-0.5 rounded-full border border-accent-warm/10">
+                        <span className="text-[10px] 2xl:text-xs uppercase font-black tracking-widest text-accent-warm bg-accent-warm/10 px-1.5 py-0.5 rounded-full border border-accent-warm/10">
                             Today
                         </span>
                     )}
                     {isOverdue && (
-                        <span className="text-xs 2xl:text-sm uppercase font-black tracking-widest text-red-500 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/10">
+                        <span className="text-[10px] 2xl:text-xs uppercase font-black tracking-widest text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded-full border border-red-500/10">
                             Overdue
                         </span>
                     )}
@@ -160,11 +169,11 @@ export const TaskItem = React.memo<TaskItemProps>(({
                     {/* Project Name (if exists) */}
                     {task.project && (
                         <>
-                            <span className="text-xs 2xl:text-sm font-black uppercase tracking-widest text-text-muted/80">
+                            <span className="text-[10px] 2xl:text-[11px] font-black uppercase tracking-widest text-text-muted/80">
                                 {task.project.name}
                             </span>
                             {task.project.category?.name && (
-                                <span className="text-xs 2xl:text-sm uppercase tracking-widest font-black text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-full">
+                                <span className="text-[10px] 2xl:text-[11px] uppercase tracking-widest font-black text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-full">
                                     {task.project.category.name}
                                 </span>
                             )}

@@ -14,13 +14,15 @@ import { Task } from '../types'
 import { useShortcutContext } from '../context/ShortcutContext'
 import { useAuth } from '../hooks/useAuth'
 import { SuggestTaskModal } from '../components/SuggestTaskModal'
+import { useProfile } from '../hooks/useProfile'
 
 export default function Today() {
-    const { user } = useAuth()
+    const { user, loading: authLoading } = useAuth()
     const filters = useMemo(() => ({ today: true }), [])
     const { tasks, loading, createTask, updateTask, completeTask, reorderTasks, snoozeTask } = useTasks(filters)
     const { showToast } = useToast()
     const { setActiveTaskId } = useShortcutContext()
+    const { profile } = useProfile()
 
     const [isFormOpen, setIsFormOpen] = useState(false)
     const [isSuggestModalOpen, setIsSuggestModalOpen] = useState(false)
@@ -51,10 +53,13 @@ export default function Today() {
     }
 
     const displayName = useMemo(() => {
+        if (profile?.full_name) {
+            return profile.full_name.split(' ')[0]
+        }
         const raw = user?.email?.split('@')[0] ?? 'there'
         const firstToken = raw.split(/[._-]/)[0] || 'there'
         return firstToken.charAt(0).toUpperCase() + firstToken.slice(1)
-    }, [user?.email])
+    }, [user?.email, profile?.full_name])
 
     const greeting = useMemo(() => {
         const hour = new Date().getHours()
@@ -119,14 +124,18 @@ export default function Today() {
     const handleTitleClick = useCallback((t: Task) => setActiveTaskId(t.id, t.short_id), [setActiveTaskId])
 
     return (
-        <div className="w-full max-w-full mx-auto px-4 py-8 md:py-12 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="w-full max-w-full mx-auto px-4 pt-2 pb-8 tablet:pt-4 tablet:pb-12 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* Header */}
             <header className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="space-y-1">
                     <h1 className="text-4xl md:text-5xl xl:text-5xl 2xl:text-6xl font-black tracking-tightest title-gradient">
                         Today
                     </h1>
-                    <p className="text-xs md:text-sm uppercase tracking-widest font-black text-accent-warm/90">{greeting}</p>
+                    {authLoading ? (
+                        <div className="h-5 md:h-6 w-48 bg-surface-secondary animate-pulse rounded-lg mt-1" />
+                    ) : (
+                        <p className="text-xs md:text-sm uppercase tracking-widest font-black text-accent-warm/90">{greeting}</p>
+                    )}
                     <p className="text-sm md:text-base 2xl:text-lg text-text-muted font-medium">
                         {format(new Date(), 'EEEE, MMMM do')}
                     </p>

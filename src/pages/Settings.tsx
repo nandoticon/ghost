@@ -8,6 +8,8 @@ import { ExportImport } from '../components/ExportImport'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { useProjectCategories } from '../hooks/useProjectCategories'
 import { useProjects } from '../hooks/useProjects'
+import { useProfile } from '../hooks/useProfile'
+import React, { useEffect } from 'react'
 
 export default function Settings() {
     const { user } = useAuth()
@@ -25,6 +27,31 @@ export default function Settings() {
     const [newPassword, setNewPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
     const [isUpdatingPassword, setIsUpdatingPassword] = useState(false)
+
+    // Profile State
+    const { profile, loading: profileLoading, updateProfile } = useProfile()
+    const [fullName, setFullName] = useState('')
+    const [pronouns, setPronouns] = useState('')
+    const [isUpdatingProfile, setIsUpdatingProfile] = useState(false)
+
+    useEffect(() => {
+        if (profile) {
+            setFullName(profile.full_name || '')
+            setPronouns(profile.pronouns || '')
+        }
+    }, [profile])
+
+    const handleUpdateProfile = async () => {
+        setIsUpdatingProfile(true)
+        try {
+            await updateProfile({ full_name: fullName, pronouns })
+            showToast('Profile updated successfully', 'success')
+        } catch (error: unknown) {
+            showToast(error instanceof Error ? error.message : 'Failed to update profile', 'error')
+        } finally {
+            setIsUpdatingProfile(false)
+        }
+    }
 
     const handleUpdatePassword = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -153,7 +180,53 @@ export default function Settings() {
 
             {activeTab === 'account' ? (
                 <div className="space-y-6">
-                    {/* User Info */}
+                    {/* User Profile */}
+                    <section className="bg-surface border border-border rounded-3xl p-8 space-y-6">
+                        <div className="flex items-center space-x-3 mb-2">
+                            <User className="w-5 h-5 text-accent" />
+                            <h2 className="text-xl font-bold text-text-primary">Profile</h2>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] uppercase font-bold tracking-widest text-text-muted ml-1">Full Name</label>
+                                <input
+                                    type="text"
+                                    value={fullName}
+                                    onChange={(e) => setFullName(e.target.value)}
+                                    className="w-full bg-surface-secondary border border-border rounded-xl px-4 py-3 text-sm text-text-primary focus:border-accent/50 outline-none transition-all"
+                                    placeholder="Enter your name"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] uppercase font-bold tracking-widest text-text-muted ml-1">Pronouns</label>
+                                <select
+                                    value={pronouns}
+                                    onChange={(e) => setPronouns(e.target.value)}
+                                    className="w-full bg-surface-secondary border border-border rounded-xl px-4 py-3 text-sm text-text-primary focus:border-accent/50 outline-none transition-all cursor-pointer"
+                                >
+                                    <option value="">Select pronouns</option>
+                                    <option value="he/him">he/him</option>
+                                    <option value="she/her">she/her</option>
+                                    <option value="they/them">they/them</option>
+                                    <option value="he/they">he/they</option>
+                                    <option value="she/they">she/they</option>
+                                    <option value="other">other (prefer not to say)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={handleUpdateProfile}
+                            disabled={isUpdatingProfile || profileLoading}
+                            className="w-full md:w-fit px-8 py-3 bg-white text-black rounded-xl font-bold text-sm hover:bg-white/90 transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+                        >
+                            {isUpdatingProfile && <Loader2 className="w-4 h-4 animate-spin" />}
+                            <span>{isUpdatingProfile ? 'Saving...' : 'Save Profile'}</span>
+                        </button>
+                    </section>
+
+                    {/* Account Info */}
                     <section className="bg-surface border border-border rounded-3xl p-8 space-y-6">
                         <div className="flex items-center space-x-4">
                             <div className="w-12 h-12 bg-accent/10 rounded-2xl flex items-center justify-center border border-accent/20">

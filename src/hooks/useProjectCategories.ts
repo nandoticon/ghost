@@ -65,12 +65,14 @@ export function useProjectCategories() {
     const cleanedName = name.trim()
     if (!cleanedName) return null
 
+    const tempId = crypto.randomUUID()
     const nextSortOrder = categories.length > 0
       ? Math.max(...categories.map(c => c.sort_order || 0)) + 1
       : 0
 
     const now = new Date().toISOString()
-    const payload = {
+    const optimisticCategory: ProjectCategory = {
+      id: tempId,
       user_id: user.id,
       name: cleanedName,
       sort_order: nextSortOrder,
@@ -78,63 +80,84 @@ export function useProjectCategories() {
       updated_at: now,
     }
 
-    const { data, error } = await supabase
-      .from('project_categories')
-      .insert([payload])
-      .select('*')
-      .single()
+    // Optimistic Update
+    setCategories(prev => [...prev, optimisticCategory])
 
-    if (error) {
+    try {
+      const { data, error } = await supabase
+        .from('project_categories')
+        .insert([{
+          user_id: user.id,
+          name: cleanedName,
+          sort_order: nextSortOrder,
+        }])
+        .select('*')
+        .single()
+
+      if (error) throw error
+
+      // Swap temp ID
+      setCategories(prev => prev.map(c => (c.id === tempId ? data : c)))
+      return data
+    } catch (error) {
       console.error('Error creating category:', error)
+      setCategories(prev => prev.filter(c => c.id !== tempId))
       throw error
     }
-
-    setCategories(prev => [...prev, data])
-    return data
   }
 
   const updateCategory = async (id: string, name: string) => {
     const cleanedName = name.trim()
     if (!cleanedName) return
 
-    const { error } = await supabase
-      .from('project_categories')
-      .update({ name: cleanedName, updated_at: new Date().toISOString() })
-      .eq('id', id)
+    const previousCategories = [...categories]
 
-    if (error) {
+    // Optimistic Update
+    setCategories(prev => prev.map(c => (c.id === id ? { ...c, name: cleanedName } : c)))
+
+    try {
+      const { error } = await supabase
+        .from('project_categories')
+        .update({ name: cleanedName, updated_at: new Date().toISOString() })
+        .eq('id', id)
+
+      if (error) throw error
+    } catch (error) {
       console.error('Error updating category:', error)
+      setCategories(previousCategories)
       throw error
     }
-
-    setCategories(prev => prev.map(c => (c.id === id ? { ...c, name: cleanedName } : c)))
   }
 
   const deleteCategory = async (id: string) => {
     if (!user) return
+    const previousCategories = [...categories]
 
-    const { error: unlinkError } = await supabase
-      .from('projects')
-      .update({ category_id: null, updated_at: new Date().toISOString() })
-      .eq('user_id', user.id)
-      .eq('category_id', id)
+    // Optimistic Update
+    setCategories(prev => prev.filter(c => c.id !== id))
 
-    if (unlinkError) {
-      console.error('Error unlinking projects from category:', unlinkError)
-      throw unlinkError
-    }
+    try {
+      // First, handle the side effect (unlinking projects) - this is harder to roll back perfectly 
+      // but we'll try to keep the category if the deletion itself fails.
+      const { error: unlinkError } = await supabase
+        .from('projects')
+        .update({ category_id: null, updated_at: new Date().toISOString() })
+        .eq('user_id', user.id)
+        .eq('category_id', id)
 
-    const { error } = await supabase
-      .from('project_categories')
-      .delete()
-      .eq('id', id)
+      if (unlinkError) throw unlinkError
 
-    if (error) {
+      const { error } = await supabase
+        .from('project_categories')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+    } catch (error) {
       console.error('Error deleting category:', error)
+      setCategories(previousCategories)
       throw error
     }
-
-    setCategories(prev => prev.filter(c => c.id !== id))
   }
 
   return {
