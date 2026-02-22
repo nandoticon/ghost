@@ -1,5 +1,6 @@
 import { AlertTriangle, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { cn } from '../lib/cn'
 import { useModalA11y } from '../hooks/useModalA11y'
 
@@ -8,12 +9,14 @@ interface ConfirmOption {
     description?: string
     variant: 'danger' | 'default'
     onClick: () => void
+    disabled?: boolean
 }
 
 interface ConfirmModalProps {
     title: string
     description: string
     options: ConfirmOption[]
+    children?: ReactNode
     /** Called when the user cancels (X button or Cancel button) */
     onCancel?: () => void
     /** Alias for onCancel — either one works */
@@ -22,7 +25,7 @@ interface ConfirmModalProps {
     isOpen?: boolean
 }
 
-export function ConfirmModal({ title, description, options, onCancel, onClose, isOpen }: ConfirmModalProps) {
+export function ConfirmModal({ title, description, options, children, onCancel, onClose, isOpen }: ConfirmModalProps) {
     const externalClose = useMemo(() => (onCancel ?? onClose ?? (() => undefined)), [onCancel, onClose])
     const isControlled = typeof isOpen === 'boolean'
     const shouldBeOpen = isOpen !== false
@@ -117,12 +120,18 @@ export function ConfirmModal({ title, description, options, onCancel, onClose, i
                 </div>
 
                 <div className="px-6 pb-6 space-y-2">
+                    {children ? (
+                        <div className="pb-1">
+                            {children}
+                        </div>
+                    ) : null}
                     {options.map((opt, i) => (
                         <button
                             key={i}
                             onClick={opt.onClick}
+                            disabled={opt.disabled}
                             className={cn(
-                                "w-full flex flex-col items-start px-4 py-3 rounded-xl border transition-all text-left",
+                                "w-full flex flex-col items-start px-4 py-3 rounded-xl border transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed",
                                 opt.variant === 'danger'
                                     ? "border-red-500/30 bg-red-500/5 hover:bg-red-500/10 text-red-500"
                                     : "border-border bg-surface-secondary hover:bg-surface-secondary/80 text-text-primary"

@@ -12,19 +12,26 @@ import { SectionCard } from '../components/SectionCard'
 import { useProjectCategories } from '../hooks/useProjectCategories'
 import { useProjects } from '../hooks/useProjects'
 import { useProfile } from '../hooks/useProfile'
+import { useGlobalTasks } from '../context/TaskContext'
+import { useTimer } from '../context/TimerContext'
 import React, { useEffect } from 'react'
 
 export default function Settings() {
     const { user } = useAuth()
     const { showToast } = useToast()
-    const { categories, createCategory, updateCategory, deleteCategory } = useProjectCategories()
-    const { projects } = useProjects()
+    const { categories, createCategory, updateCategory, deleteCategory, refresh: refreshProjectCategories } = useProjectCategories()
+    const { projects, refresh: refreshProjects } = useProjects()
+    const { refresh: refreshTasks } = useGlobalTasks()
+    const { refreshActiveTimer } = useTimer()
     const [activeTab, setActiveTab] = useState<'account' | 'data' | 'projects'>('account')
     const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
+    const [showResetWorkspaceConfirm, setShowResetWorkspaceConfirm] = useState(false)
+    const [resetWorkspaceConfirmText, setResetWorkspaceConfirmText] = useState('')
     const [newCategoryName, setNewCategoryName] = useState('')
     const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
     const [editingCategoryName, setEditingCategoryName] = useState('')
     const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null)
+    const [isResettingWorkspaceData, setIsResettingWorkspaceData] = useState(false)
 
     // Password Change State
     const [newPassword, setNewPassword] = useState('')
@@ -91,6 +98,55 @@ export default function Settings() {
         }
     }
 
+    const handleResetWorkspaceData = async () => {
+        if (!user?.id) {
+            showToast('You must be signed in to reset workspace data', 'error')
+            return
+        }
+
+        setIsResettingWorkspaceData(true)
+        try {
+            const { error: timeSessionsError } = await supabase
+                .from('task_time_sessions')
+                .delete()
+                .eq('user_id', user.id)
+            if (timeSessionsError) throw timeSessionsError
+
+            const { error: tasksError } = await supabase
+                .from('tasks')
+                .delete()
+                .eq('user_id', user.id)
+            if (tasksError) throw tasksError
+
+            const { error: projectsError } = await supabase
+                .from('projects')
+                .delete()
+                .eq('user_id', user.id)
+            if (projectsError) throw projectsError
+
+            const { error: categoriesError } = await supabase
+                .from('project_categories')
+                .delete()
+                .eq('user_id', user.id)
+            if (categoriesError) throw categoriesError
+
+            localStorage.removeItem('ghost.timer.activeSession')
+            localStorage.removeItem('ghost.timer.queue')
+
+            showToast('Workspace reset complete. Account and profile info were preserved.', 'success')
+        } catch (error: unknown) {
+            showToast(error instanceof Error ? error.message : 'Failed to reset workspace data', 'error')
+        } finally {
+            await Promise.allSettled([
+                refreshTasks(),
+                refreshProjects(),
+                refreshProjectCategories(),
+                refreshActiveTimer(),
+            ])
+            setIsResettingWorkspaceData(false)
+        }
+    }
+
     const projectsByCategory = useMemo(() => {
         const counts = new Map<string, number>()
         for (const project of projects) {
@@ -99,6 +155,9 @@ export default function Settings() {
         }
         return counts
     }, [projects])
+
+    const resetWorkspacePhrase = 'DELETE ALL'
+    const isResetWorkspacePhraseValid = resetWorkspaceConfirmText.trim().toUpperCase() === resetWorkspacePhrase
 
     const handleCreateCategory = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -293,14 +352,34 @@ export default function Settings() {
                             <h2 className="text-lg sm:text-xl font-bold">Danger Zone</h2>
                         </div>
                         <div className="space-y-4">
-                            <p className="text-sm text-text-muted">Sensitive actions that affect account sessions.</p>
-                            <button
-                                onClick={() => setShowSignOutConfirm(true)}
-                                className="w-full sm:w-fit inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-red-500/10 border border-red-500/20 text-red-500 rounded-xl text-sm font-bold hover:bg-red-500/20 transition-all"
-                            >
-                                <LogOut className="w-4 h-4" />
-                                <span>Sign out of all sessions</span>
-                            </button>
+                            <p className="text-sm text-text-muted">Sensitive actions that affect account sessions or permanently remove workspace data.</p>
+                            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                                <button
+                                    onClick={() => setShowSignOutConfirm(true)}
+                                    className="w-full sm:w-fit inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-red-500/10 border border-red-500/20 text-red-500 rounded-xl text-sm font-bold hover:bg-red-500/20 transition-all"
+                                >
+                                    <LogOut className="w-4 h-4" />
+                                    <span>Sign out of all sessions</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setResetWorkspaceConfirmText('')
+                                        setShowResetWorkspaceConfirm(true)
+                                    }}
+                                    disabled={isResettingWorkspaceData}
+                                    className="w-full sm:w-fit inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-red-500/10 border border-red-500/20 text-red-500 rounded-xl text-sm font-bold hover:bg-red-500/20 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                    {isResettingWorkspaceData ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <Trash2 className="w-4 h-4" />
+                                    )}
+                                    <span>{isResettingWorkspaceData ? 'Resetting...' : 'Delete all workspace data'}</span>
+                                </button>
+                            </div>
+                            <p className="text-xs text-red-300/90">
+                                Deletes tasks, projects, subtasks, comments, task time tracking, and project categories. Keeps your login and profile info.
+                            </p>
                         </div>
                     </section>
                 </div>
@@ -483,6 +562,51 @@ export default function Settings() {
                     }
                 ]}
             />
+
+            <ConfirmModal
+                isOpen={showResetWorkspaceConfirm}
+                title="Reset workspace data?"
+                description="This permanently deletes all tasks, projects, time tracking sessions, and project categories. Your account and profile will stay."
+                onClose={() => {
+                    if (!isResettingWorkspaceData) {
+                        setResetWorkspaceConfirmText('')
+                        setShowResetWorkspaceConfirm(false)
+                    }
+                }}
+                options={[
+                    {
+                        label: isResettingWorkspaceData ? 'Resetting workspace...' : 'Delete all workspace data',
+                        description: 'Use this for a clean restart while keeping your login, email, name, and pronouns.',
+                        variant: 'danger',
+                        disabled: !isResetWorkspacePhraseValid || isResettingWorkspaceData,
+                        onClick: () => {
+                            if (isResettingWorkspaceData) return
+                            if (!isResetWorkspacePhraseValid) {
+                                showToast(`Type "${resetWorkspacePhrase}" to continue`, 'error')
+                                return
+                            }
+                            setResetWorkspaceConfirmText('')
+                            setShowResetWorkspaceConfirm(false)
+                            void handleResetWorkspaceData()
+                        }
+                    }
+                ]}
+            >
+                <div className="space-y-2">
+                    <FieldLabel>Type {resetWorkspacePhrase} to confirm</FieldLabel>
+                    <input
+                        type="text"
+                        value={resetWorkspaceConfirmText}
+                        onChange={(e) => setResetWorkspaceConfirmText(e.target.value)}
+                        placeholder={resetWorkspacePhrase}
+                        autoCapitalize="characters"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        className={fieldInputClassMd}
+                        disabled={isResettingWorkspaceData}
+                    />
+                </div>
+            </ConfirmModal>
         </div>
     )
 }
