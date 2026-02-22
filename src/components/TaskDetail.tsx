@@ -98,6 +98,8 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
         setIsClosing(true)
         closeTimerRef.current = window.setTimeout(() => {
             closeTimerRef.current = null
+            setIsClosing(false)
+            isClosingRef.current = false
             onClose()
         }, 140)
     }, [onClose])
@@ -407,9 +409,9 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                 } else if (showMenu) {
                     e.preventDefault()
                     setShowMenu(false)
+                } else {
+                    requestClose()
                 }
-                // We DON'T call requestClose() here because useModalA11y (via onClose)
-                // already handles the Escape key.
             }
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                 e.preventDefault()
@@ -448,6 +450,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
         onClose: requestClose,
         lockBodyScroll: true,
         trapFocus: true,
+        closeOnEscape: false,
     })
 
     if (!taskId && !isClosing) return null
@@ -502,7 +505,10 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
         <div className="fixed inset-0 z-50 flex justify-end overflow-hidden">
             {/* Backdrop */}
             <div
-                className="absolute inset-0 bg-background/60 backdrop-blur-sm animate-in fade-in duration-300"
+                className={cn(
+                    "absolute inset-0 bg-background/60 backdrop-blur-sm animate-in fade-in duration-300",
+                    isClosing && "animate-out fade-out duration-150"
+                )}
                 onClick={requestClose}
             />
 
