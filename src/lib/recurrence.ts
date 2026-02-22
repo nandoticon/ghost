@@ -42,7 +42,8 @@ export const getNextOccurrence = (task: Task, fromDate: Date): Date | null => {
 export const generateNextTask = (completedTask: Task): Partial<Task> | null => {
     if (!completedTask.recurrence) return null;
 
-    const fromDate = completedTask.end_at ? new Date(completedTask.end_at) : new Date();
+    const completionBase = completedTask.completed_at ? new Date(completedTask.completed_at) : new Date();
+    const fromDate = completedTask.end_at ? new Date(completedTask.end_at) : completionBase;
     const nextOccurrence = getNextOccurrence(completedTask, fromDate);
 
     if (!nextOccurrence) return null;
@@ -61,6 +62,7 @@ export const generateNextTask = (completedTask: Task): Partial<Task> | null => {
         recurrence_end_at: completedTask.recurrence_end_at,
         parent_task_id: completedTask.id,
         completed: false,
+        completed_at: null,
         today: false,
     };
 
@@ -70,9 +72,6 @@ export const generateNextTask = (completedTask: Task): Partial<Task> | null => {
 
     if (completedTask.end_at) {
         updates.end_at = new Date(new Date(completedTask.end_at).getTime() + shift).toISOString();
-    } else {
-        // Fallback if no end_at was set, use the next occurrence date
-        updates.end_at = nextOccurrence.toISOString();
     }
 
     return updates;

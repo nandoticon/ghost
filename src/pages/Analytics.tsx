@@ -110,6 +110,107 @@ export default function Analytics() {
 
     const totalSessions = closedSessions.length
     const averageSessionSeconds = totalSessions > 0 ? Math.floor(totalFocusedSeconds / totalSessions) : 0
+    const completedTasksInRange = useMemo(() => {
+        const fromMs = new Date(range.from).getTime()
+        const toMs = new Date(range.to).getTime()
+        return tasks.filter((t) => {
+            if (!t.completed || !t.completed_at) return false
+            const completedMs = new Date(t.completed_at).getTime()
+            return completedMs >= fromMs && completedMs <= toMs
+        })
+    }, [tasks, range.from, range.to])
+    const totalCompletedTasks = completedTasksInRange.length
+    const recurringCompletions = useMemo(
+        () => completedTasksInRange.filter((t) => !!t.parent_task_id).length,
+        [completedTasksInRange]
+    )
+    const completionDailyBuckets = useMemo(() => {
+        const byDay: Record<string, number> = {}
+
+        for (const task of completedTasksInRange) {
+            if (!task.completed_at) continue
+            const completed = new Date(task.completed_at)
+            const dayKey = `${completed.getFullYear()}-${String(completed.getMonth() + 1).padStart(2, '0')}-${String(completed.getDate()).padStart(2, '0')}`
+            byDay[dayKey] = (byDay[dayKey] ?? 0) + 1
+        }
+
+        return Object.entries(byDay)
+            .map(([key, count]) => {
+                const dt = new Date(`${key}T00:00:00`)
+                const label = dt.toLocaleDateString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                })
+                return { key, label, count }
+            })
+            .sort((a, b) => a.key.localeCompare(b.key))
+    }, [completedTasksInRange])
+    const completionStreak = useMemo(() => {
+        if (completionDailyBuckets.length === 0) return 0
+        const byDay = new Set(completionDailyBuckets.filter(d => d.count > 0).map(d => d.key))
+        let streak = 0
+        const cursor = new Date()
+        cursor.setHours(0, 0, 0, 0)
+
+        while (true) {
+            const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`
+            if (!byDay.has(key)) break
+            streak += 1
+            cursor.setDate(cursor.getDate() - 1)
+        }
+
+        return streak
+    }, [completionDailyBuckets])
+    const completionLast7Days = useMemo(() => {
+        const byDay = new Map(completionDailyBuckets.map(d => [d.key, d.count]))
+        return Array.from({ length: 7 }).map((_, idx) => {
+            const dt = subDays(new Date(), 6 - idx)
+            const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+            return {
+                key,
+                label: dt.toLocaleDateString(undefined, { weekday: 'short' }),
+                count: byDay.get(key) ?? 0,
+            }
+        })
+    }, [completionDailyBuckets])
+    const maxCompletionLast7 = Math.max(1, ...completionLast7Days.map(d => d.count))
+    const completionGroupedBuckets = useMemo(() => {
+        const grouped: Record<string, number> = {}
+
+        for (const task of completedTasksInRange) {
+            if (!task.completed_at) continue
+            const completed = new Date(task.completed_at)
+            if (granularity === 'weekly') {
+                const weekStart = getWeekStart(completed)
+                const key = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`
+                grouped[key] = (grouped[key] ?? 0) + 1
+            } else {
+                const key = `${completed.getFullYear()}-${String(completed.getMonth() + 1).padStart(2, '0')}`
+                grouped[key] = (grouped[key] ?? 0) + 1
+            }
+        }
+
+        return Object.entries(grouped)
+            .map(([key, count]) => {
+                if (granularity === 'weekly') {
+                    const dt = new Date(`${key}T00:00:00`)
+                    return {
+                        key,
+                        label: `Week of ${dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`,
+                        count,
+                    }
+                }
+                const [year, month] = key.split('-')
+                const dt = new Date(Number(year), Number(month) - 1, 1)
+                return {
+                    key,
+                    label: dt.toLocaleDateString(undefined, { month: 'short', year: 'numeric' }),
+                    count,
+                }
+            })
+            .sort((a, b) => a.key.localeCompare(b.key))
+    }, [completedTasksInRange, granularity])
+    const maxCompletionGrouped = Math.max(1, ...completionGroupedBuckets.map((d) => d.count))
     const uniqueActiveDays = useMemo(() => {
         const days = new Set<string>()
         for (const s of closedSessions) {
@@ -373,6 +474,83 @@ export default function Analytics() {
                 <KpiCard icon={<ListChecks className="w-4 h-4" />} label="Total Sessions" value={String(totalSessions)} />
                 <KpiCard icon={<Clock3 className="w-4 h-4" />} label="Average Session" value={formatDuration(averageSessionSeconds)} />
                 <KpiCard icon={<TrendingUp className="w-4 h-4" />} label="Consistency Rhythm" value={formatPercent(consistencyPercent)} />
+            </section>
+
+            <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <KpiCard icon={<ListChecks className="w-4 h-4" />} label="Tasks Completed" value={String(totalCompletedTasks)} />
+                <KpiCard icon={<CalendarDays className="w-4 h-4" />} label="Recurring Completions" value={String(recurringCompletions)} />
+            </section>
+
+            <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <KpiCard
+                    icon={<Flame className="w-4 h-4" />}
+                    label="Completion Streak"
+                    value={completionStreak === 0 ? 'Fresh start' : `${completionStreak} day${completionStreak === 1 ? '' : 's'}`}
+                />
+                <div className="bg-surface-secondary/20 border border-border/40 rounded-2xl p-5 space-y-4">
+                    <h2 className="text-sm uppercase tracking-widest font-black text-text-muted">Completion Trend (Last 7 Days)</h2>
+                    <div className="grid grid-cols-7 gap-2">
+                        {completionLast7Days.map((day) => {
+                            const intensity = day.count === 0 ? 0 : Math.max(0.12, day.count / maxCompletionLast7)
+                            return (
+                                <div key={day.key} className="space-y-1">
+                                    <div
+                                        className="h-14 rounded-xl border border-border/40"
+                                        style={{
+                                            backgroundColor: `color-mix(in srgb, var(--color-accent-warm) ${Math.round(intensity * 85)}%, var(--color-surface))`,
+                                        }}
+                                        title={`${day.label}: ${day.count} completed`}
+                                    />
+                                    <p className="text-[10px] text-center uppercase font-black tracking-wider text-text-muted">
+                                        {day.label.slice(0, 1)}
+                                    </p>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            </section>
+
+            <section className="bg-surface-secondary/20 border border-border/40 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <h2 className="text-sm uppercase tracking-widest font-black text-text-muted">
+                        Completed Tasks Trend
+                    </h2>
+                    <div className="inline-flex rounded-xl border border-border overflow-hidden">
+                        <button
+                            onClick={() => setGranularity('weekly')}
+                            className={granularity === 'weekly' ? 'px-3 py-1.5 text-xs font-black uppercase tracking-wider bg-accent-warm/15 text-accent-warm' : 'px-3 py-1.5 text-xs font-black uppercase tracking-wider text-text-muted bg-surface hover:text-text-primary'}
+                        >
+                            Weekly
+                        </button>
+                        <button
+                            onClick={() => setGranularity('monthly')}
+                            className={granularity === 'monthly' ? 'px-3 py-1.5 text-xs font-black uppercase tracking-wider bg-accent-warm/15 text-accent-warm' : 'px-3 py-1.5 text-xs font-black uppercase tracking-wider text-text-muted bg-surface hover:text-text-primary'}
+                        >
+                            Monthly
+                        </button>
+                    </div>
+                </div>
+                {completionGroupedBuckets.length === 0 ? (
+                    <p className="text-text-muted">No completed tasks yet in this range.</p>
+                ) : (
+                    <div className="space-y-2">
+                        {completionGroupedBuckets.map((bucket) => (
+                            <div key={bucket.key} className="flex items-center gap-3">
+                                <span className="w-32 md:w-44 text-xs text-text-muted font-semibold truncate">{bucket.label}</span>
+                                <div className="flex-1 h-2.5 bg-surface rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full rounded-full bg-gradient-to-r from-accent-warm to-orange-300"
+                                        style={{ width: `${Math.max(2, (bucket.count / maxCompletionGrouped) * 100)}%` }}
+                                    />
+                                </div>
+                                <span className="w-16 text-right text-xs text-text-primary font-bold tabular-nums">
+                                    {bucket.count}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </section>
 
             <section className="grid grid-cols-1 md:grid-cols-3 gap-4">

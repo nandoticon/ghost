@@ -29,6 +29,7 @@ export interface Task {
     title: string;
     notes: string | null;
     completed: boolean;
+    completed_at: string | null;
     status: 'todo' | 'doing' | 'waiting' | 'done';
     today: boolean;
     project_id: string | null;

@@ -22,6 +22,7 @@ const TASK_SELECT = `
     parent_task_id,
     status,
     completed,
+    completed_at,
     estimated_effort,
     sort_order,
     sort_order_today,
@@ -202,6 +203,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
             sort_order: maxSortOrder,
             sort_order_today: maxSortOrderToday,
             completed: false,
+            completed_at: null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
         }
@@ -244,6 +246,9 @@ export function TaskProvider({ children }: { children: ReactNode }) {
             finalUpdates.completed = updates.status === 'done'
         } else if (updates.completed !== undefined && updates.status === undefined) {
             finalUpdates.status = updates.completed ? 'done' : 'todo'
+        }
+        if (finalUpdates.completed !== undefined && finalUpdates.completed_at === undefined) {
+            finalUpdates.completed_at = finalUpdates.completed ? new Date().toISOString() : null
         }
 
         setTasks(prev => prev.map(t => t.id === id ? { ...t, ...finalUpdates, updated_at: new Date().toISOString() } : t))
@@ -302,6 +307,9 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         } else if (updates.completed !== undefined && (updates.status === undefined)) {
             finalUpdates.status = updates.completed ? 'done' : 'todo'
         }
+        if (finalUpdates.completed !== undefined && finalUpdates.completed_at === undefined) {
+            finalUpdates.completed_at = finalUpdates.completed ? new Date().toISOString() : null
+        }
 
         // Apply immediately to local state
         setTasks(prev => prev.map(t => ids.includes(t.id) ? { ...t, ...finalUpdates, updated_at: new Date().toISOString() } : t))
@@ -350,13 +358,14 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         const previousTask = { ...task }
 
         const newStatus = completed ? 'done' : 'todo'
-        setTasks(prev => prev.map(t => t.id === id ? { ...t, completed, status: newStatus, updated_at: new Date().toISOString() } : t))
+        const completedAt = completed ? new Date().toISOString() : null
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, completed, completed_at: completedAt, status: newStatus, updated_at: new Date().toISOString() } : t))
 
         try {
             await withRetry(async () => {
                 const { error } = await supabase
                     .from('tasks')
-                    .update({ completed, status: newStatus, updated_at: new Date().toISOString() })
+                    .update({ completed, completed_at: completedAt, status: newStatus, updated_at: new Date().toISOString() })
                     .eq('id', id)
                 if (error) throw error
             })
@@ -376,6 +385,24 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         if (completed && task.recurrence) {
             const nextTaskData = generateNextTask(task)
             if (nextTaskData) {
+                const tempNextId = `temp-rec-${Math.random()}`
+                const nowIso = new Date().toISOString()
+                const optimisticNextTask = {
+                    ...task,
+                    ...nextTaskData,
+                    id: tempNextId,
+                    completed: false,
+                    completed_at: null,
+                    status: 'todo',
+                    created_at: nowIso,
+                    updated_at: nowIso,
+                } as Task
+
+                // Optimistic recurrence UX: show next occurrence immediately.
+                setTasks(prev => [...prev, optimisticNextTask])
+                nextOccurrenceCreated = true
+                nextOccurrenceDate = nextTaskData.end_at || null
+
                 try {
                     const { data: nextTask } = await withRetry(async () => {
                         const result = await supabase
@@ -387,14 +414,16 @@ export function TaskProvider({ children }: { children: ReactNode }) {
                         return result
                     })
 
-                    nextOccurrenceCreated = true
-                    nextOccurrenceDate = nextTask?.end_at || null
-
                     if (nextTask) {
-                        setTasks(prev => [...prev, nextTask as unknown as Task])
+                        setTasks(prev => prev.map(t => t.id === tempNextId ? nextTask as unknown as Task : t))
+                        nextOccurrenceDate = nextTask?.end_at || nextOccurrenceDate
                     }
                 } catch (insertError) {
                     console.error('Error creating next occurrence:', insertError)
+                    setTasks(prev => prev.filter(t => t.id !== tempNextId))
+                    nextOccurrenceCreated = false
+                    nextOccurrenceDate = null
+                    showToast('Recurring task was completed, but next occurrence could not be created.', 'error')
                 }
             }
         }
