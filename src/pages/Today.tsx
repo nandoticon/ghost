@@ -19,6 +19,7 @@ import { useProfile } from '../hooks/useProfile'
 import { useTimer } from '../context/TimerContext'
 import { listSessionsByRange } from '../lib/timeTracking'
 import { cn } from '../lib/cn'
+import { useTaskById } from '../hooks/useTaskById'
 
 const DAILY_BUDGET_OPTIONS_HOURS = [2, 4, 6, 8, 10, 12] as const
 const DEFAULT_DAILY_BUDGET_HOURS = 6
@@ -57,6 +58,7 @@ export default function Today() {
     const { setActiveTaskId } = useShortcutContext()
     const { profile } = useProfile()
     const { activeSession, elapsedSeconds, stopTimer } = useTimer()
+    const { task: activeTimerTask } = useTaskById(activeSession?.task_id ?? null)
 
     const [isFormOpen, setIsFormOpen] = useState(false)
     const [isSuggestModalOpen, setIsSuggestModalOpen] = useState(false)
@@ -324,6 +326,36 @@ export default function Today() {
 
             {/* Progress/Capacity Bar */}
             <div className={isFocusPanelCollapsed ? "space-y-2.5 bg-surface-secondary/20 border border-border/40 rounded-2xl p-3.5" : "space-y-2.5 bg-surface-secondary/20 border border-border/40 rounded-2xl p-3.5 md:p-4"}>
+                {activeSession && (
+                    <div className="rounded-xl border border-emerald-300/20 bg-emerald-400/5 px-3 py-2.5">
+                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                            <div className="min-w-0">
+                                <div className="text-[10px] md:text-xs uppercase tracking-[0.18em] font-black text-emerald-200/90">
+                                    Active Timer · {formatHoursMins(elapsedSeconds)}
+                                </div>
+                                <div className="truncate text-sm md:text-base font-bold text-text-primary">
+                                    {activeTimerTask?.title || 'Focus timer running'}
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {activeSession.task_id && (
+                                    <button
+                                        onClick={() => setActiveTaskId(activeSession.task_id, activeTimerTask?.short_id)}
+                                        className="touch-target px-3 py-1.5 rounded-lg border border-border/60 bg-surface/70 text-text-primary text-sm md:text-xs font-bold uppercase tracking-wider hover:border-accent/40 hover:text-accent transition-colors"
+                                    >
+                                        Open Task
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => void stopTimer()}
+                                    className="touch-target px-3 py-1.5 rounded-lg border border-emerald-300/25 bg-emerald-400/10 text-emerald-300 text-sm md:text-xs font-bold uppercase tracking-wider hover:bg-emerald-400/15 transition-colors"
+                                >
+                                    Stop Timer
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 <div className="flex items-center justify-between gap-2 text-sm md:text-xs text-text-muted min-w-0">
                     <div className="flex items-center justify-between md:justify-start md:gap-2 min-w-0">
                         <div className="flex items-center gap-2">
@@ -395,12 +427,9 @@ export default function Today() {
                                 </span>
                                 <span className="text-text-primary font-black text-sm md:text-base">{formatHoursMins(focusedTodaySeconds)}</span>
                                 {activeSession && isFocusPanelDetailed && (
-                                    <button
-                                        onClick={() => void stopTimer()}
-                                        className="touch-target px-3 py-1 rounded-lg bg-emerald-400/10 border border-emerald-300/20 text-emerald-300 font-bold uppercase tracking-wider text-sm md:text-xs hover:bg-emerald-400/15 transition-colors"
-                                    >
-                                        Stop Active Timer
-                                    </button>
+                                    <span className="hidden md:inline text-emerald-200 font-black uppercase tracking-widest text-xs">
+                                        Timer Running
+                                    </span>
                                 )}
                             </div>
                         </div>

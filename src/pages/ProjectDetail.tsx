@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom'
+import type { Location } from 'react-router-dom'
 import {
     ChevronLeft,
     MoreVertical,
@@ -29,6 +30,7 @@ import { Filter, LayoutList } from 'lucide-react'
 export default function ProjectDetail() {
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
+    const location = useLocation()
     const { projects, updateProject, deleteProject, loading: projectsLoading } = useProjects()
     const { categories } = useProjectCategories()
 
@@ -128,7 +130,10 @@ export default function ProjectDetail() {
 
     const handleTaskSave = async (taskData: Partial<Task>) => {
         try {
-            await createTask({ ...taskData, project_id: id })
+            if (!project) {
+                throw new Error('Project not loaded')
+            }
+            await createTask({ ...taskData, project_id: project.id })
             showToast('Task added to project', 'success')
             setIsTaskFormOpen(false)
         } catch (_error) {
@@ -142,9 +147,14 @@ export default function ProjectDetail() {
         setIsClosingPanel(true)
         closeTimerRef.current = window.setTimeout(() => {
             closeTimerRef.current = null
+            const routeState = location.state as { backgroundLocation?: Location } | undefined
+            if (routeState?.backgroundLocation) {
+                navigate(-1)
+                return
+            }
             navigate('/projects')
         }, 150)
-    }, [navigate])
+    }, [navigate, location.state])
 
     useEffect(() => () => {
         if (closeTimerRef.current) {
@@ -173,7 +183,7 @@ export default function ProjectDetail() {
         <div className="fixed inset-0 z-40 flex justify-end overflow-hidden">
             <button
                 type="button"
-                aria-label="Close project panel"
+                aria-label="Dismiss project panel backdrop"
                 onClick={requestClose}
                 className={cn(
                     "absolute inset-0 bg-background/60 backdrop-blur-sm",
@@ -206,6 +216,7 @@ export default function ProjectDetail() {
                     <button
                         onClick={() => setShowMenu(!showMenu)}
                         className="p-2 hover:bg-surface-secondary rounded-xl text-text-muted hover:text-text-primary transition-colors"
+                        aria-label="Project actions"
                     >
                         <MoreVertical className="w-5 h-5" />
                     </button>

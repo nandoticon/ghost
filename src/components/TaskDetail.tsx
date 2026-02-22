@@ -44,6 +44,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
     const { activeSession, elapsedSeconds, toggleTimer, isSyncing: isTimerSyncing } = useTimer()
     const resolvedTaskId = task?.id ?? null
     const isTimerActiveForTask = activeSession?.task_id === resolvedTaskId
+    const isAnotherTaskTimerActive = Boolean(activeSession && resolvedTaskId && activeSession.task_id !== resolvedTaskId)
 
     // Local state
     const [title, setTitle] = useState('')
@@ -654,7 +655,13 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                 )}
                             >
                                 {isTimerActiveForTask ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                                <span>{isTimerActiveForTask ? formatElapsed(elapsedSeconds) : 'Start Timer'}</span>
+                                <span>
+                                    {isTimerActiveForTask
+                                        ? formatElapsed(elapsedSeconds)
+                                        : isAnotherTaskTimerActive
+                                            ? 'Switch Timer'
+                                            : 'Start Timer'}
+                                </span>
                             </button>
 
                             <button
@@ -872,7 +879,13 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                                 aria-live="polite"
                             >
                                 {isTimerActiveForTask ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                                <span>{isTimerActiveForTask ? `Stop · ${formatElapsed(elapsedSeconds)}` : 'Start Focus Timer'}</span>
+                                <span>
+                                    {isTimerActiveForTask
+                                        ? `Stop · ${formatElapsed(elapsedSeconds)}`
+                                        : isAnotherTaskTimerActive
+                                            ? 'Switch Focus Timer'
+                                            : 'Start Focus Timer'}
+                                </span>
                             </button>
 
                             <div className="grid grid-cols-2 gap-2">

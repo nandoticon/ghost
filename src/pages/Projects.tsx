@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { Plus, Folder, ChevronDown, ChevronRight, MoreVertical, Filter, LayoutGrid, LayoutList, SortAsc, CheckCircle2, Search, Pin, PinOff, ArchiveRestore, Archive, ChevronsUpDown } from 'lucide-react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { useProjects } from '../hooks/useProjects'
 import { useTasks } from '../hooks/useTasks'
 import { useProjectCategories } from '../hooks/useProjectCategories'
@@ -11,6 +11,7 @@ import { FilterPanelShell } from '../components/FilterPanelShell'
 import { useToast } from '../components/Toast'
 import { Project } from '../types'
 import { cn } from '../lib/cn'
+import { compactStatusBadge, iconActionButton, interactiveListCardHover, interactiveListCardShell } from '../components/cardTokens'
 
 type SortOption = 'name' | 'progress' | 'tasks' | 'newest'
 type ViewMode = 'grid' | 'list'
@@ -849,13 +850,18 @@ const ProjectListItem = React.memo<{
     isPinned?: boolean,
     isArchived?: boolean
 }) {
+    const location = useLocation()
     const lastActivityLabel = stats.lastActivityAt
         ? new Date(stats.lastActivityAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
         : 'No activity'
 
     return (
-        <div className="group relative flex items-center bg-surface-secondary/30 hover:bg-surface border border-border/40 hover:border-accent/40 rounded-2xl p-3 sm:p-4 transition-all hover:shadow-lg gap-3 sm:gap-6">
-            <Link to={`/projects/${project.short_id || project.id}`} className="absolute inset-0 z-[5] rounded-2xl" />
+        <div className={cn(interactiveListCardShell, interactiveListCardHover, "flex items-center rounded-2xl p-3 sm:p-4 gap-3 sm:gap-6")}>
+            <Link
+                to={`/projects/${project.short_id || project.id}`}
+                state={{ backgroundLocation: location }}
+                className="absolute inset-0 z-[5] rounded-2xl"
+            />
 
             <div
                 className="w-1.5 self-stretch rounded-full shrink-0"
@@ -873,7 +879,7 @@ const ProjectListItem = React.memo<{
                         </span>
                     )}
                     <span className={cn(
-                        "px-2 py-0.5 text-[10px] rounded-full uppercase tracking-widest font-black border",
+                        compactStatusBadge,
                         project.status === 'completed'
                             ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
                             : project.status === 'active'
@@ -883,12 +889,12 @@ const ProjectListItem = React.memo<{
                         {project.status === 'completed' ? 'Completed' : project.status === 'active' ? 'Active' : 'Backlog'}
                     </span>
                     {isArchived && (
-                        <span className="px-2 py-0.5 text-[10px] rounded-full border border-text-muted/20 bg-text-muted/5 text-text-muted uppercase tracking-widest font-black">
+                        <span className={cn(compactStatusBadge, "border-text-muted/20 bg-text-muted/5 text-text-muted")}>
                             Archived
                         </span>
                     )}
                     {isPinned && (
-                        <span className="px-2 py-0.5 text-[10px] rounded-full border border-yellow-400/20 bg-yellow-400/10 text-yellow-300 uppercase tracking-widest font-black">
+                        <span className={cn(compactStatusBadge, "border-yellow-400/20 bg-yellow-400/10 text-yellow-300")}>
                             Pinned
                         </span>
                     )}
@@ -922,7 +928,7 @@ const ProjectListItem = React.memo<{
                         e.preventDefault()
                         onTogglePinned()
                     }}
-                    className="p-1.5 sm:p-2 hover:bg-surface-secondary rounded-xl text-text-muted hover:text-yellow-300 transition-all"
+                    className={cn(iconActionButton, "hover:text-yellow-300")}
                     title={isPinned ? 'Unpin project' : 'Pin project'}
                 >
                     {isPinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
@@ -932,7 +938,7 @@ const ProjectListItem = React.memo<{
                         e.preventDefault()
                         onArchive()
                     }}
-                    className="p-1.5 sm:p-2 hover:bg-surface-secondary rounded-xl text-text-muted hover:text-text-primary transition-all"
+                    className={cn(iconActionButton, "hover:text-text-primary")}
                     title={isArchived ? 'Unarchive project' : 'Archive project'}
                 >
                     {isArchived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
@@ -942,7 +948,7 @@ const ProjectListItem = React.memo<{
                         e.preventDefault()
                         onEdit(project)
                     }}
-                    className="p-1.5 sm:p-2 hover:bg-surface-secondary rounded-xl text-text-muted hover:text-text-primary transition-all"
+                    className={cn(iconActionButton, "hover:text-text-primary")}
                 >
                     <MoreVertical className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
@@ -973,6 +979,7 @@ const ProjectCard = React.memo<{
     onArchive: () => void,
     isArchived?: boolean
 }) {
+    const location = useLocation()
     return (
         <div className="group relative flex flex-col bg-surface border border-border/60 rounded-3xl p-7 2xl:p-9 hover:border-accent/40 transition-all hover:shadow-[0_32px_64px_-16px_rgba(0,0,0,0.4)] hover:-translate-y-2 overflow-hidden min-h-[320px] 2xl:min-h-[360px]">
             {/* Background noise texture */}
@@ -984,7 +991,11 @@ const ProjectCard = React.memo<{
                 style={{ backgroundColor: project.color || '#7c6aff' }}
             />
 
-            <Link to={`/projects/${project.short_id || project.id}`} className="absolute inset-0 z-[5] rounded-3xl" />
+            <Link
+                to={`/projects/${project.short_id || project.id}`}
+                state={{ backgroundLocation: location }}
+                className="absolute inset-0 z-[5] rounded-3xl"
+            />
 
             <div className="relative z-10 flex-1 flex flex-col space-y-7 pointer-events-none">
                 <div className="flex items-start justify-between min-h-[64px]">

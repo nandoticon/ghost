@@ -4,6 +4,7 @@ import { useTimer } from '../context/TimerContext'
 import { useTaskById } from '../hooks/useTaskById'
 import { cn } from '../lib/cn'
 import { useShortcutContext } from '../context/ShortcutContext'
+import { useGlobalTasks } from '../context/TaskContext'
 
 type CornerAnchor = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 
@@ -26,8 +27,10 @@ function formatElapsed(seconds: number) {
 export function FloatingTimerPill() {
     const { activeSession, elapsedSeconds, stopTimer, isSyncing } = useTimer()
     const taskId = activeSession?.task_id ?? null
+    const { tasks } = useGlobalTasks()
     const { task } = useTaskById(taskId)
     const { setActiveTaskId } = useShortcutContext()
+    const titleCacheRef = useRef<Record<string, { title: string; shortId?: string | null }>>({})
 
     const [anchor, setAnchor] = useState<CornerAnchor>(() => {
         const raw = localStorage.getItem(STORAGE_KEY)
@@ -57,10 +60,32 @@ export function FloatingTimerPill() {
         }
     }, [activeSession])
 
+    const taskFromContext = useMemo(() => {
+        if (!taskId) return null
+        return tasks.find((candidate) => candidate.id === taskId || candidate.short_id === taskId) ?? null
+    }, [taskId, tasks])
+
+    useEffect(() => {
+        if (!taskId) return
+        const nextTitle = taskFromContext?.title?.trim() || task?.title?.trim()
+        if (!nextTitle) return
+        titleCacheRef.current[taskId] = {
+            title: nextTitle,
+            shortId: taskFromContext?.short_id ?? task?.short_id ?? null,
+        }
+    }, [taskId, taskFromContext?.title, taskFromContext?.short_id, task?.title, task?.short_id])
+
     const title = useMemo(() => {
         if (!taskId) return 'Focus timer'
-        return task?.title?.trim() || 'Focus timer'
-    }, [taskId, task?.title])
+        return (
+            taskFromContext?.title?.trim() ||
+            task?.title?.trim() ||
+            titleCacheRef.current[taskId]?.title ||
+            'Focus timer'
+        )
+    }, [taskId, taskFromContext?.title, task?.title])
+
+    const taskShortId = taskFromContext?.short_id ?? task?.short_id ?? titleCacheRef.current[taskId || '']?.shortId ?? null
 
     if (!activeSession) return null
 
@@ -150,7 +175,7 @@ export function FloatingTimerPill() {
                         data-pill-open
                         onClick={() => {
                             if (Date.now() < suppressClickUntilRef.current) return
-                            if (taskId) setActiveTaskId(taskId, task?.short_id)
+                            if (taskId) setActiveTaskId(taskId, taskShortId)
                         }}
                         className="min-w-0 text-left"
                         aria-label={taskId ? 'Open running task' : 'Running timer'}
@@ -184,4 +209,3 @@ export function FloatingTimerPill() {
         </div>
     )
 }
-

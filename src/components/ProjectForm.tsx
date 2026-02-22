@@ -100,7 +100,9 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
     return (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 pb-[env(safe-area-inset-bottom)] md:p-4">
             {/* Backdrop */}
-            <div
+            <button
+                type="button"
+                aria-label="Dismiss project form backdrop"
                 className="absolute inset-0 bg-background/80 backdrop-blur-md animate-in fade-in duration-300"
                 onClick={onCancel}
             />

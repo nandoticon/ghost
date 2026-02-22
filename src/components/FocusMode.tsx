@@ -16,6 +16,7 @@ export const FocusMode: React.FC<FocusModeProps> = ({ task, onClose, onComplete 
     const [showStopAndCompleteConfirm, setShowStopAndCompleteConfirm] = useState(false)
     const { activeSession, elapsedSeconds, toggleTimer, stopTimer, isSyncing } = useTimer()
     const isTimerActiveForTask = activeSession?.task_id === task.id
+    const isOtherTaskTimerActive = Boolean(activeSession && activeSession.task_id !== task.id)
 
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000)
@@ -134,6 +135,12 @@ export const FocusMode: React.FC<FocusModeProps> = ({ task, onClose, onComplete 
 
                 {/* Action Button */}
                 <div className="pt-12">
+                    {isOtherTaskTimerActive && (
+                        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-400/10 px-4 py-2 text-xs font-black uppercase tracking-widest text-emerald-200">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>Another task timer is running</span>
+                        </div>
+                    )}
                     <div className="flex items-center justify-center mb-5">
                         <button
                             onClick={() => void toggleTimer(task.id, 'focus_mode')}
@@ -147,7 +154,13 @@ export const FocusMode: React.FC<FocusModeProps> = ({ task, onClose, onComplete 
                             )}
                         >
                             {isTimerActiveForTask ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                            <span>{isTimerActiveForTask ? 'Stop Focus Timer' : 'Start Focus Timer'}</span>
+                            <span>
+                                {isTimerActiveForTask
+                                    ? 'Stop Focus Timer'
+                                    : isOtherTaskTimerActive
+                                        ? 'Switch Focus Timer'
+                                        : 'Start Focus Timer'}
+                            </span>
                             {isTimerActiveForTask && (
                                 <span className="tabular-nums text-emerald-200">{formatElapsed(elapsedSeconds)}</span>
                             )}

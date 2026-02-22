@@ -22,6 +22,7 @@ import { Task } from '../types'
 import { cn } from '../lib/cn'
 import { format, isToday, isPast, startOfDay } from 'date-fns'
 import { useTimer } from '../context/TimerContext'
+import { interactiveListCardShell, interactiveListCardHover, interactiveListCardSelected } from './cardTokens'
 
 interface TaskItemProps {
     task: Task
@@ -55,6 +56,7 @@ export const TaskItem = React.memo<TaskItemProps>(({
     const isCompleted = task.completed
     const { activeSession, toggleTimer, isSyncing } = useTimer()
     const isTimerActiveForTask = activeSession?.task_id === task.id
+    const isAnotherTimerActive = Boolean(activeSession && activeSession.task_id !== task.id)
     const [liveElapsedSeconds, setLiveElapsedSeconds] = useState(0)
 
     useEffect(() => {
@@ -139,6 +141,16 @@ export const TaskItem = React.memo<TaskItemProps>(({
         e.stopPropagation()
         onToggleToday(task.id, !task.today)
     }
+    const timerActionLabel = isTimerActiveForTask
+        ? 'Stop timer'
+        : isAnotherTimerActive
+            ? 'Switch timer'
+            : 'Start timer'
+    const timerAriaLabel = isTimerActiveForTask
+        ? 'Stop focus timer for task'
+        : isAnotherTimerActive
+            ? 'Switch active timer to this task'
+            : 'Start focus timer for task'
 
     const openTask = () => {
         if (onClickTitle) {
@@ -151,12 +163,13 @@ export const TaskItem = React.memo<TaskItemProps>(({
     return (
         <div
             className={cn(
-                "group relative flex items-start md:items-center gap-2 md:gap-4 px-3 md:px-4 py-3 md:py-4 2xl:py-5 rounded-2xl border border-border/40 bg-surface-secondary/30 transition-all cursor-pointer overflow-hidden min-w-0",
+                interactiveListCardShell,
+                "flex items-start md:items-center gap-2 md:gap-4 px-3 md:px-4 py-3 md:py-4 2xl:py-5 cursor-pointer overflow-hidden min-w-0",
                 isDragging
                     ? "bg-surface shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border-accent/30 scale-[1.03] z-50 ring-2 ring-accent/20"
-                    : "hover:bg-surface hover:border-accent/40 hover:shadow-lg hover:-translate-y-0.5",
+                    : cn(interactiveListCardHover, "hover:-translate-y-0.5"),
                 isCompleted && "opacity-60",
-                isSelected && "bg-surface border-accent/40 shadow-[0_12px_40px_rgba(0,0,0,0.2)] -translate-y-0.5 ring-1 ring-accent/20"
+                isSelected && cn(interactiveListCardSelected, "-translate-y-0.5")
             )}
             onClick={(e) => {
                 if (onSelect) onSelect(task.id, e)
@@ -308,8 +321,8 @@ export const TaskItem = React.memo<TaskItemProps>(({
                                     : "text-text-muted bg-surface-secondary/35 border-border/60 hover:text-emerald-300 hover:border-emerald-300/30",
                                 isSyncing && "opacity-60 cursor-not-allowed"
                             )}
-                            title={isTimerActiveForTask ? "Stop timer" : "Start timer"}
-                            aria-label={isTimerActiveForTask ? "Stop focus timer for task" : "Start focus timer for task"}
+                            title={timerActionLabel}
+                            aria-label={timerAriaLabel}
                         >
                             {isTimerActiveForTask ? (
                                 <Pause className="w-[18px] h-[18px]" />
@@ -366,8 +379,8 @@ export const TaskItem = React.memo<TaskItemProps>(({
                                 : "text-text-muted md:opacity-0 md:pointer-events-none md:group-hover:opacity-100 md:group-hover:pointer-events-auto hover:text-emerald-300 hover:bg-surface-secondary",
                             isSyncing && "opacity-60 cursor-not-allowed"
                         )}
-                        title={isTimerActiveForTask ? "Stop timer" : "Start timer"}
-                        aria-label={isTimerActiveForTask ? "Stop focus timer for task" : "Start focus timer for task"}
+                        title={timerActionLabel}
+                        aria-label={timerAriaLabel}
                     >
                         {isTimerActiveForTask ? (
                             <Pause className="w-5 h-5 2xl:w-6 2xl:h-6" />
