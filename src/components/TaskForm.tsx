@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
     X,
     ChevronDown,
@@ -20,6 +20,7 @@ import { DateTimePicker } from './DateTimePicker'
 import { StatusMenu, StatusOptions } from './StatusMenu'
 import { useProjects } from '../hooks/useProjects'
 import { useModalA11y } from '../hooks/useModalA11y'
+import { FieldLabel, fieldSelectClass } from './FormField'
 
 interface TaskFormProps {
     task?: Task
@@ -51,6 +52,8 @@ export const TaskForm = ({
     const [recurrenceEndAt, setRecurrenceEndAt] = useState(task?.recurrence_end_at || '')
     const [status, setStatus] = useState<Task['status']>(task?.status || 'todo')
     const [estimatedEffort, setEstimatedEffort] = useState(task?.estimated_effort || 0)
+    const [isClosing, setIsClosing] = useState(false)
+    const [isRendered, setIsRendered] = useState(isOpen)
 
     const { projects, createProject } = useProjects()
     const [submitting, setSubmitting] = useState(false)
@@ -62,6 +65,44 @@ export const TaskForm = ({
     const formRef = useRef<HTMLFormElement>(null)
     const titleInputRef = useRef<HTMLInputElement>(null)
     const notesTextareaRef = useRef<HTMLTextAreaElement>(null)
+    const closeTimerRef = useRef<number | null>(null)
+    const closingRef = useRef(false)
+    const prevOpenRef = useRef(isOpen)
+
+    const requestClose = useCallback(() => {
+        if (closingRef.current) return
+        closingRef.current = true
+        setIsClosing(true)
+        closeTimerRef.current = window.setTimeout(() => {
+            closeTimerRef.current = null
+            setIsClosing(false)
+            setIsRendered(false)
+            onCancel()
+        }, 140)
+    }, [onCancel])
+
+    useEffect(() => {
+        const wasOpen = prevOpenRef.current
+        prevOpenRef.current = isOpen
+
+        if (isOpen && !wasOpen) {
+            if (closeTimerRef.current) {
+                window.clearTimeout(closeTimerRef.current)
+                closeTimerRef.current = null
+            }
+            closingRef.current = false
+            setIsClosing(false)
+            setIsRendered(true)
+        } else if (!isOpen && wasOpen) {
+            if (isRendered && !isClosing) {
+                requestClose()
+            }
+        }
+    }, [isOpen, isRendered, isClosing, requestClose])
+
+    useEffect(() => () => {
+        if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current)
+    }, [])
 
     useEffect(() => {
         // Reset form if task changes
@@ -82,7 +123,7 @@ export const TaskForm = ({
             setRecurrenceEndAt(task.recurrence_end_at || '')
             setStatus(task.status || 'todo')
             setEstimatedEffort(task.estimated_effort || 0)
-        } else {
+        } else if (isOpen && !isClosing) {
             setTitle('')
             setNotes('')
             setProjectId(defaultProjectId || '')
@@ -99,13 +140,13 @@ export const TaskForm = ({
         setProjectQuery('')
         setShowProjectPicker(false)
 
-        if (isOpen) {
+        if (isOpen && !isClosing) {
             window.setTimeout(() => {
                 if (formRef.current) formRef.current.scrollTop = 0
                 titleInputRef.current?.focus()
             }, 40)
         }
-    }, [task, isOpen, defaultProjectId, defaultToday])
+    }, [task, isOpen, isClosing, defaultProjectId, defaultToday])
 
     useEffect(() => {
         if (!isOpen) return
@@ -114,24 +155,24 @@ export const TaskForm = ({
         window.history.pushState({ ...state, ghostOverlay: 'task-form' }, '')
 
         const handlePopState = () => {
-            onCancel()
+            requestClose()
         }
 
         window.addEventListener('popstate', handlePopState)
         return () => {
             window.removeEventListener('popstate', handlePopState)
         }
-    }, [isOpen, onCancel])
+    }, [isOpen, requestClose])
 
     const { modalRef } = useModalA11y<HTMLDivElement>({
-        isOpen,
-        onClose: onCancel,
+        isOpen: isRendered || isClosing,
+        onClose: requestClose,
         initialFocusRef: titleInputRef,
         lockBodyScroll: true,
         trapFocus: true,
     })
 
-    if (!isOpen) return null
+    if (!isRendered && !isClosing) return null
 
     const filteredProjects = projects.filter((p) =>
         p.name.toLowerCase().includes(projectQuery.toLowerCase())
@@ -196,12 +237,20 @@ export const TaskForm = ({
     return (
         <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] md:p-6 transition-all animate-in fade-in duration-200">
             <div
-                className="absolute inset-0 bg-background/75 backdrop-blur-md"
-                onClick={onCancel}
+                className={cn(
+                    "absolute inset-0 bg-background/75 backdrop-blur-md",
+                    isClosing ? "animate-out fade-out duration-150" : "animate-in fade-in duration-150"
+                )}
+                onClick={requestClose}
             />
             <div
                 ref={modalRef}
-                className="relative w-full max-w-xl 4k:max-w-2xl bg-surface border-t md:border border-border rounded-t-[2rem] md:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] md:max-h-[85vh] animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-300"
+                className={cn(
+                    "relative w-full max-w-xl 4k:max-w-2xl bg-surface border-t md:border border-border rounded-t-[2rem] md:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] md:max-h-[85vh]",
+                    isClosing
+                        ? "animate-out fade-out slide-out-to-bottom-2 md:slide-out-to-bottom-0 md:zoom-out-95 duration-150"
+                        : "animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-180"
+                )}
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"
@@ -214,7 +263,7 @@ export const TaskForm = ({
                         {task ? 'Edit Task' : 'New Task'}
                     </h2>
                     <button
-                        onClick={onCancel}
+                        onClick={requestClose}
                         className="touch-target flex items-center justify-center p-1 rounded-full hover:bg-surface-secondary transition-colors"
                         aria-label="Close task form"
                     >
@@ -249,7 +298,7 @@ export const TaskForm = ({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Project Selector */}
                         <div className="space-y-2">
-                            <label className="text-sm md:text-xs uppercase font-bold tracking-widest text-text-muted">Project</label>
+                            <FieldLabel className="text-sm md:text-xs ml-0">Project</FieldLabel>
                             <div className="relative">
                                 <button
                                     type="button"
@@ -334,7 +383,7 @@ export const TaskForm = ({
 
                         {/* Today Toggle */}
                         <div className="space-y-2">
-                            <label className="text-sm md:text-xs uppercase font-bold tracking-widest text-text-muted">Schedule</label>
+                            <FieldLabel className="text-sm md:text-xs ml-0">Schedule</FieldLabel>
                             <button
                                 type="button"
                                 onClick={() => setToday(!today)}
@@ -363,7 +412,7 @@ export const TaskForm = ({
                     {/* Dates */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-sm md:text-xs uppercase font-bold tracking-widest text-text-muted">Start</label>
+                            <FieldLabel className="text-sm md:text-xs ml-0">Start</FieldLabel>
                             <DateTimePicker
                                 value={startAt}
                                 onChange={setStartAt}
@@ -372,7 +421,7 @@ export const TaskForm = ({
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-sm md:text-xs uppercase font-bold tracking-widest text-text-muted">End</label>
+                            <FieldLabel className="text-sm md:text-xs ml-0">End</FieldLabel>
                             <DateTimePicker
                                 value={endAt}
                                 onChange={setEndAt}
@@ -517,7 +566,7 @@ export const TaskForm = ({
                                     <select
                                         value={recurrence || ''}
                                         onChange={(e) => setRecurrence((e.target.value || null) as 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly' | null)}
-                                        className="touch-target bg-surface-secondary border border-border rounded-lg px-3 py-1.5 text-sm md:text-xs text-text-primary focus:border-accent outline-none appearance-none cursor-pointer"
+                                        className={cn(fieldSelectClass, "touch-target rounded-lg px-3 py-1.5 text-sm md:text-xs w-auto min-w-[8rem]")}
                                     >
                                         <option value="">None</option>
                                         <option value="daily">Daily</option>
@@ -548,7 +597,7 @@ export const TaskForm = ({
                 <div className="p-7 border-t border-border bg-surface/85 backdrop-blur flex justify-end space-x-3">
                     <button
                         type="button"
-                        onClick={onCancel}
+                        onClick={requestClose}
                         className="px-6 py-2 text-sm font-medium text-text-muted hover:text-text-primary transition-colors"
                     >
                         Cancel

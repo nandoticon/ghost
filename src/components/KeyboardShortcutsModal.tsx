@@ -35,26 +35,69 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 
 export const KeyboardShortcutsModal: React.FC = () => {
     const { isModalOpen, setModalOpen } = useShortcutContext()
+    const [isClosing, setIsClosing] = React.useState(false)
+    const [isRendered, setIsRendered] = React.useState(isModalOpen)
+    const closeTimerRef = React.useRef<number | null>(null)
+    const closingRef = React.useRef(false)
+    const prevOpenRef = React.useRef(isModalOpen)
 
-    if (!isModalOpen) return null
+    const requestClose = React.useCallback(() => {
+        if (closingRef.current) return
+        closingRef.current = true
+        setIsClosing(true)
+        closeTimerRef.current = window.setTimeout(() => {
+            closeTimerRef.current = null
+            setIsClosing(false)
+            setIsRendered(false)
+            setModalOpen(false)
+        }, 140)
+    }, [setModalOpen])
+
+    React.useEffect(() => {
+        const wasOpen = prevOpenRef.current
+        prevOpenRef.current = isModalOpen
+
+        if (isModalOpen && !wasOpen) {
+            if (closeTimerRef.current) {
+                window.clearTimeout(closeTimerRef.current)
+                closeTimerRef.current = null
+            }
+            closingRef.current = false
+            setIsClosing(false)
+            setIsRendered(true)
+        } else if (!isModalOpen && wasOpen) {
+            if (isRendered && !isClosing) {
+                requestClose()
+            }
+        }
+    }, [isModalOpen, isRendered, isClosing, requestClose])
+
+    React.useEffect(() => () => {
+        if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current)
+    }, [])
+
+    if (!isRendered && !isClosing) return null
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 md:p-6">
             <div
-                className="absolute inset-0 bg-background/80 backdrop-blur-md animate-in fade-in duration-300"
-                onClick={() => setModalOpen(false)}
+                className={cn(
+                    "absolute inset-0 bg-background/80 backdrop-blur-md",
+                    isClosing ? "animate-out fade-out duration-150" : "animate-in fade-in duration-300"
+                )}
+                onClick={requestClose}
             />
 
             <div
                 className={cn(
                     "relative w-full max-w-2xl bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden",
-                    "animate-in zoom-in-95 fade-in duration-150"
+                    isClosing ? "animate-out zoom-out-95 fade-out duration-150" : "animate-in zoom-in-95 fade-in duration-150"
                 )}
             >
                 <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-surface-secondary/50">
                     <h2 className="text-sm font-bold uppercase tracking-widest text-text-primary">Keyboard Shortcuts</h2>
                     <button
-                        onClick={() => setModalOpen(false)}
+                        onClick={requestClose}
                         className="p-1 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors"
                     >
                         <X className="w-4 h-4" />

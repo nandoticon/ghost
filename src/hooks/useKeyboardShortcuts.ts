@@ -36,13 +36,7 @@ export const useKeyboardShortcuts = () => {
                 return
             }
 
-            // Escape to close everything
-            if (e.key === 'Escape') {
-                setModalOpen(false)
-                setQuickCaptureOpen(false)
-                setActiveTaskId(null)
-                return
-            }
+
 
             // Global Shortcuts
             const key = e.key.toLowerCase()

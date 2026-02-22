@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
@@ -21,6 +22,7 @@ export function ProjectCategoriesProvider({ children }: { children: ReactNode })
     const [categories, setCategories] = useState<ProjectCategory[]>([])
     const [loading, setLoading] = useState(true)
     const { user } = useAuth()
+    const userId = user?.id ?? null
     const seedAttemptedRef = useRef(false)
 
     const seedDefaultsIfNeeded = useCallback(async (userId: string) => {
@@ -41,7 +43,7 @@ export function ProjectCategoriesProvider({ children }: { children: ReactNode })
     }, [])
 
     const fetchCategories = useCallback(async () => {
-        if (!user) {
+        if (!userId) {
             setCategories([])
             setLoading(false)
             return
@@ -52,18 +54,18 @@ export function ProjectCategoriesProvider({ children }: { children: ReactNode })
             const { data, error } = await supabase
                 .from('project_categories')
                 .select('*')
-                .eq('user_id', user.id)
+                .eq('user_id', userId)
                 .order('sort_order', { ascending: true })
 
             if (error) throw error
 
             const list = data || []
             if (list.length === 0) {
-                await seedDefaultsIfNeeded(user.id)
+                await seedDefaultsIfNeeded(userId)
                 const seeded = await supabase
                     .from('project_categories')
                     .select('*')
-                    .eq('user_id', user.id)
+                    .eq('user_id', userId)
                     .order('sort_order', { ascending: true })
                 if (seeded.error) throw seeded.error
                 setCategories(seeded.data || [])
@@ -75,7 +77,7 @@ export function ProjectCategoriesProvider({ children }: { children: ReactNode })
         } finally {
             setLoading(false)
         }
-    }, [user, seedDefaultsIfNeeded])
+    }, [userId, seedDefaultsIfNeeded])
 
     useEffect(() => {
         seedAttemptedRef.current = false
@@ -83,7 +85,7 @@ export function ProjectCategoriesProvider({ children }: { children: ReactNode })
     }, [fetchCategories])
 
     const createCategory = useCallback(async (name: string) => {
-        if (!user) return null
+        if (!userId) return null
         const cleanedName = name.trim()
         if (!cleanedName) return null
 
@@ -95,7 +97,7 @@ export function ProjectCategoriesProvider({ children }: { children: ReactNode })
         const now = new Date().toISOString()
         const optimisticCategory: ProjectCategory = {
             id: tempId,
-            user_id: user.id,
+            user_id: userId,
             name: cleanedName,
             sort_order: nextSortOrder,
             created_at: now,
@@ -108,7 +110,7 @@ export function ProjectCategoriesProvider({ children }: { children: ReactNode })
             const { data, error } = await supabase
                 .from('project_categories')
                 .insert([{
-                    user_id: user.id,
+                    user_id: userId,
                     name: cleanedName,
                     sort_order: nextSortOrder,
                 }])
@@ -124,7 +126,7 @@ export function ProjectCategoriesProvider({ children }: { children: ReactNode })
             setCategories(prev => prev.filter(c => c.id !== tempId))
             throw error
         }
-    }, [user, categories])
+    }, [userId, categories])
 
     const updateCategory = useCallback(async (id: string, name: string) => {
         const cleanedName = name.trim()
@@ -148,7 +150,7 @@ export function ProjectCategoriesProvider({ children }: { children: ReactNode })
     }, [categories])
 
     const deleteCategory = useCallback(async (id: string) => {
-        if (!user) return
+        if (!userId) return
         const previousCategories = [...categories]
         setCategories(prev => prev.filter(c => c.id !== id))
 
@@ -156,7 +158,7 @@ export function ProjectCategoriesProvider({ children }: { children: ReactNode })
             const { error: unlinkError } = await supabase
                 .from('projects')
                 .update({ category_id: null, updated_at: new Date().toISOString() })
-                .eq('user_id', user.id)
+                .eq('user_id', userId)
                 .eq('category_id', id)
 
             if (unlinkError) throw unlinkError
@@ -172,7 +174,7 @@ export function ProjectCategoriesProvider({ children }: { children: ReactNode })
             setCategories(previousCategories)
             throw error
         }
-    }, [user, categories])
+    }, [userId, categories])
 
     const value = useMemo<ProjectCategoriesContextType>(() => ({
         categories,
@@ -193,3 +195,4 @@ export function useProjectCategories() {
     }
     return context
 }
+

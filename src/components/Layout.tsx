@@ -11,7 +11,7 @@ import { KeyboardShortcutsModal } from './KeyboardShortcutsModal'
 import { OfflineBanner } from './OfflineBanner'
 import { InstallPrompt } from './InstallPrompt'
 import { PWAUpdateNotification } from './PWAUpdateNotification'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useShortcutContext } from '../context/ShortcutContext'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useTimer } from '../context/TimerContext'
@@ -22,6 +22,7 @@ export default function Layout() {
     const { user } = useAuth()
     const navigate = useNavigate()
     const {
+        isModalOpen,
         isQuickCaptureOpen,
         setQuickCaptureOpen,
         activeTaskId,
@@ -46,6 +47,29 @@ export default function Layout() {
         lastShownTimerError.current = lastError
     }, [lastError, showToast])
 
+    const handleEscape = useCallback((e: KeyboardEvent) => {
+        if (e.key !== 'Escape') return
+
+        // If a modal is open, let the modal or useModalA11y handle the escape key.
+        // We only handle global UI elements that don't have their own focus trap/escape handler.
+        if (isModalOpen || activeTaskId || isQuickCaptureOpen) return
+
+        if (isMobileSearchOpen) {
+            e.preventDefault()
+            setIsMobileSearchOpen(false)
+            return
+        }
+        if (isAccountMenuOpen) {
+            e.preventDefault()
+            setIsAccountMenuOpen(false)
+        }
+    }, [isModalOpen, activeTaskId, isQuickCaptureOpen, isMobileSearchOpen, isAccountMenuOpen])
+
+    useEffect(() => {
+        window.addEventListener('keydown', handleEscape)
+        return () => window.removeEventListener('keydown', handleEscape)
+    }, [handleEscape])
+
     const navItems = [
         { to: '/today', icon: Calendar, label: 'Today' },
         { to: '/tasks', icon: CheckSquare, label: 'Tasks' },
@@ -58,7 +82,6 @@ export default function Layout() {
         navigate('/login')
     }
 
-    // Derive user initials for avatar
     const initials = user?.email
         ? user.email.slice(0, 2).toUpperCase()
         : '?'
@@ -69,12 +92,8 @@ export default function Layout() {
             <div className="absolute inset-0 pointer-events-none opacity-25">
                 <div className="relative w-full h-full surface-texture" />
             </div>
-            {/* Sidebar — Hidden on mobile */}
             <aside className="hidden tablet:flex w-[250px] 2xl:w-[320px] 4k:w-[380px] flex-col border-r border-border bg-surface shrink-0 relative overflow-hidden surface-texture">
-                {/* Top accent line */}
                 <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-accent via-accent/60 to-transparent" />
-
-                {/* Brand */}
                 <div className="px-6 pt-8 pb-6 2xl:px-8">
                     <div className="flex items-center gap-2">
                         <Ghost className="w-7 h-7 text-accent opacity-90" />
@@ -85,12 +104,12 @@ export default function Layout() {
                     <p className="text-xs 2xl:text-sm font-black uppercase tracking-widest text-text-muted/50 mt-1">Task Manager</p>
                 </div>
 
-                {/* Search */}
                 <div className="px-4 2xl:px-5 mb-4">
-                    <SearchBar onTaskClick={(id) => setActiveTaskId(id)} />
+                    <SearchBar onTaskClick={(id) => {
+                        setActiveTaskId(id)
+                    }} />
                 </div>
 
-                {/* Nav */}
                 <div className="px-4 2xl:px-5 mb-2">
                     <p className="text-xs 2xl:text-sm font-black uppercase tracking-widest text-text-muted/40">Navigation</p>
                 </div>
@@ -118,15 +137,15 @@ export default function Layout() {
                         </NavLink>
                     ))}
 
-                    {/* Divider — Quick Actions */}
                     <div className="pt-4 pb-2 px-2">
                         <div className="h-px bg-border/50" />
                         <p className="text-xs 2xl:text-sm font-black uppercase tracking-widest text-text-muted/40 mt-3">Quick Actions</p>
                     </div>
 
-                    {/* New Task */}
                     <button
-                        onClick={() => setQuickCaptureOpen(true)}
+                        onClick={() => {
+                            setQuickCaptureOpen(true)
+                        }}
                         className="flex items-center justify-between w-full px-3 py-2.5 2xl:py-3 rounded-xl text-sm 2xl:text-base font-semibold text-text-muted hover:text-text-primary hover:bg-surface-secondary transition-all group"
                     >
                         <span className="flex items-center space-x-3">
@@ -137,10 +156,8 @@ export default function Layout() {
                     </button>
                 </nav>
 
-                {/* Bottom user section */}
                 {user && (
                     <div className="p-4 2xl:p-5 border-t border-border">
-                        {/* User identity */}
                         <div className="flex items-center justify-between px-1 mb-3">
                             <div className="flex items-center space-x-3 min-w-0">
                                 <div className="w-10 h-10 2xl:w-11 2xl:h-11 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center shrink-0 shadow-inner">
@@ -153,7 +170,6 @@ export default function Layout() {
                             </div>
                         </div>
 
-                        {/* Footer tools */}
                         <div className="flex items-center justify-between mt-2 pt-3 border-t border-border/40 px-1 relative">
                             <ThemeSwitcher />
                             <div className="w-10 h-10 2xl:w-11 2xl:h-11 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center shrink-0 shadow-inner">
@@ -165,7 +181,7 @@ export default function Layout() {
                                     aria-haspopup="menu"
                                     aria-expanded={isAccountMenuOpen}
                                 >
-                                    <MoreHorizontal className="w-5 h-5 2xl:w-6 2xl:h-6" />
+                                    < MoreHorizontal className="w-5 h-5 2xl:w-6 2xl:h-6" />
                                 </button>
                             </div>
 
@@ -216,9 +232,7 @@ export default function Layout() {
                 )}
             </aside>
 
-            {/* Main content area */}
             <div className="flex-1 flex flex-col min-w-0 min-h-0 h-full relative">
-                {/* Mobile Top Bar */}
                 <header className="tablet:hidden flex items-center justify-between px-5 h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-surface/70 backdrop-blur-md border-b border-border sticky top-0 z-40">
                     <h1 className="text-xl font-black tracking-tightest text-text-primary">Ghost</h1>
                     <div className="flex items-center gap-1">
@@ -249,7 +263,6 @@ export default function Layout() {
                     )}
                 </header>
 
-                {/* Page Content — fluid width */}
                 <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-3 tablet:p-5 xl:p-7 2xl:p-12 4k:p-14 pb-[calc(5.75rem+env(safe-area-inset-bottom))] tablet:pb-9 relative">
                     <div
                         key={location.pathname}
@@ -259,90 +272,90 @@ export default function Layout() {
                     </div>
                 </main>
 
-                {/* Bottom Nav — Mobile only */}
                 <nav
                     className="tablet:hidden fixed inset-x-0 bottom-0 z-50 bg-surface border-t border-border h-[calc(4.35rem+env(safe-area-inset-bottom))] pt-1 pb-[max(0.35rem,env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
                     aria-label="Bottom navigation"
                 >
                     <div className="flex h-full items-end">
-                    {/* Left nav items */}
-                    {navItems.slice(0, 2).map((item) => (
-                        <NavLink
-                            key={item.to}
-                            to={item.to}
-                            onMouseEnter={() => prefetchRoute(item.to)}
-                            onFocus={() => prefetchRoute(item.to)}
-                            className={({ isActive }) =>
-                                cn(
-                                    "flex-1 flex justify-center transition-colors relative",
-                                    isActive ? "text-accent" : "text-text-muted"
-                                )
-                            }
-                            aria-label={item.label}
-                        >
-                            {({ isActive }) => (
-                                <span className={cn(
-                                    "touch-target flex flex-col items-center justify-center gap-1 px-2 py-1 rounded-xl transition-all min-w-[56px]",
-                                    isActive ? "bg-accent/10" : ""
-                                )}>
-                                    <item.icon className={cn("w-5 h-5", isActive && "fill-current")} />
-                                    <span className="text-[13px] font-bold">{item.to === '/today' ? 'Today' : item.label}</span>
-                                    {isActive && <span className="absolute bottom-1 w-1 h-1 rounded-full bg-accent" />}
-                                </span>
-                            )}
-                        </NavLink>
-                    ))}
+                        {navItems.slice(0, 2).map((item) => (
+                            <NavLink
+                                key={item.to}
+                                to={item.to}
+                                onMouseEnter={() => prefetchRoute(item.to)}
+                                onFocus={() => prefetchRoute(item.to)}
+                                className={({ isActive }) =>
+                                    cn(
+                                        "flex-1 flex justify-center transition-colors relative",
+                                        isActive ? "text-accent" : "text-text-muted"
+                                    )
+                                }
+                                aria-label={item.label}
+                            >
+                                {({ isActive }) => (
+                                    <span className={cn(
+                                        "touch-target flex flex-col items-center justify-center gap-1 px-2 py-1 rounded-xl transition-all min-w-[56px]",
+                                        isActive ? "bg-accent/10" : ""
+                                    )}>
+                                        <item.icon className={cn("w-5 h-5", isActive && "fill-current")} />
+                                        <span className="text-[13px] font-bold">{item.to === '/today' ? 'Today' : item.label}</span>
+                                    </span>
+                                )}
+                            </NavLink>
+                        ))}
 
-                    {/* Center FAB */}
-                    <div className="flex-none px-1.5 pb-0.5">
-                        <button
-                            onClick={() => setQuickCaptureOpen(true)}
-                            className="touch-target w-[3.25rem] h-[3.25rem] bg-accent text-white rounded-full flex items-center justify-center shadow-lg shadow-accent/30 active:scale-95 transition-all"
-                            aria-label="Quick add task"
-                            title="Quick add task"
-                        >
-                            <Plus className="w-5 h-5" />
-                        </button>
-                    </div>
+                        <div className="flex-none px-1.5 pb-0.5">
+                            <button
+                                onClick={() => {
+                                    setQuickCaptureOpen(true)
+                                }}
+                                className="touch-target w-[3.25rem] h-[3.25rem] bg-accent text-white rounded-full flex items-center justify-center shadow-lg shadow-accent/30 active:scale-95 transition-all"
+                                aria-label="Quick add task"
+                                title="Quick add task"
+                            >
+                                <Plus className="w-5 h-5" />
+                            </button>
+                        </div>
 
-                    {/* Right nav items */}
-                    {navItems.slice(2).map((item) => (
-                        <NavLink
-                            key={item.to}
-                            to={item.to}
-                            onMouseEnter={() => prefetchRoute(item.to)}
-                            onFocus={() => prefetchRoute(item.to)}
-                            className={({ isActive }) =>
-                                cn(
-                                    "flex-1 flex justify-center transition-colors relative",
-                                    isActive ? "text-accent" : "text-text-muted"
-                                )
-                            }
-                            aria-label={item.label}
-                        >
-                            {({ isActive }) => (
-                                <span className={cn(
-                                    "touch-target flex flex-col items-center justify-center gap-1 px-2 py-1 rounded-xl transition-all min-w-[56px]",
-                                    isActive ? "bg-accent/10" : ""
-                                )}>
-                                    <item.icon className={cn("w-5 h-5", isActive && "fill-current")} />
-                                    <span className="text-[13px] font-bold">{item.label}</span>
-                                    {isActive && <span className="absolute bottom-1 w-1 h-1 rounded-full bg-accent" />}
-                                </span>
-                            )}
-                        </NavLink>
-                    ))}
+                        {navItems.slice(2).map((item) => (
+                            <NavLink
+                                key={item.to}
+                                to={item.to}
+                                onMouseEnter={() => prefetchRoute(item.to)}
+                                onFocus={() => prefetchRoute(item.to)}
+                                className={({ isActive }) =>
+                                    cn(
+                                        "flex-1 flex justify-center transition-colors relative",
+                                        isActive ? "text-accent" : "text-text-muted"
+                                    )
+                                }
+                                aria-label={item.label}
+                            >
+                                {({ isActive }) => (
+                                    <span className={cn(
+                                        "touch-target flex flex-col items-center justify-center gap-1 px-2 py-1 rounded-xl transition-all min-w-[56px]",
+                                        isActive ? "bg-accent/10" : ""
+                                    )}>
+                                        <item.icon className={cn("w-5 h-5", isActive && "fill-current")} />
+                                        <span className="text-[13px] font-bold">{item.label}</span>
+                                    </span>
+                                )}
+                            </NavLink>
+                        ))}
                     </div>
                 </nav>
 
                 {/* Overlays */}
                 <QuickCapture
                     isOpen={isQuickCaptureOpen}
-                    onClose={() => setQuickCaptureOpen(false)}
+                    onClose={() => {
+                        setQuickCaptureOpen(false)
+                    }}
                 />
                 <TaskDetail
                     taskId={activeTaskId}
-                    onClose={() => setActiveTaskId(null)}
+                    onClose={() => {
+                        setActiveTaskId(null)
+                    }}
                 />
                 <KeyboardShortcutsModal />
                 <OfflineBanner />

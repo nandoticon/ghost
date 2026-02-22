@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { Task } from '../types'
@@ -92,10 +93,11 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     const [tasks, setTasks] = useState<Task[]>([])
     const [loading, setLoading] = useState(true)
     const { user } = useAuth()
+    const userId = user?.id ?? null
     const { showToast } = useToast()
 
     const fetchTasks = useCallback(async () => {
-        if (!user) {
+        if (!userId) {
             setLoading(false)
             setTasks([])
             return
@@ -106,7 +108,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
             const { data, error } = await supabase
                 .from('tasks')
                 .select(TASK_SELECT)
-                .eq('user_id', user.id)
+                .eq('user_id', userId)
                 // Optionally we can order by created_at or sort_order here, 
                 // but client-side filtering/sorting will reorder anyway.
                 .order('sort_order', { ascending: true })
@@ -118,7 +120,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         } finally {
             setLoading(false)
         }
-    }, [user])
+    }, [userId])
 
     useEffect(() => {
         fetchTasks()
@@ -126,7 +128,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
     // Realtime subscription
     useEffect(() => {
-        if (!user) return
+        if (!userId) return
 
         const upsertTaskWithRelations = async (taskId: string) => {
             const { data, error } = await supabase
@@ -155,7 +157,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
                     event: '*',
                     schema: 'public',
                     table: 'tasks',
-                    filter: `user_id=eq.${user.id}`
+                    filter: `user_id=eq.${userId}`
                 },
                 (payload) => {
                     const { eventType, new: newRecord, old: oldRecord } = payload
@@ -182,10 +184,10 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         return () => {
             supabase.removeChannel(channel)
         }
-    }, [user])
+    }, [userId])
 
     const createTask = useCallback(async (task: Partial<Task>, isToday?: boolean) => {
-        if (!user) return null
+        if (!userId) return null
 
         // Calculate max sort order from global tasks using client-side derivation
         const activeTasks = tasks.filter(t => !t.completed)
@@ -199,7 +201,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
         const newTask = {
             ...task,
-            user_id: user.id,
+            user_id: userId,
             sort_order: maxSortOrder,
             sort_order_today: maxSortOrderToday,
             completed: false,
@@ -234,7 +236,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
             fetchTasks()
             return null
         }
-    }, [user, tasks, fetchTasks, showToast])
+    }, [userId, tasks, fetchTasks, showToast])
 
     const updateTask = useCallback(async (id: string, updates: Partial<Task>) => {
         const previousTask = tasks.find(t => t.id === id)
@@ -407,7 +409,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
                     const { data: nextTask } = await withRetry(async () => {
                         const result = await supabase
                             .from('tasks')
-                            .insert([{ ...nextTaskData, user_id: user?.id }])
+                            .insert([{ ...nextTaskData, user_id: userId }])
                             .select(TASK_SELECT)
                             .single()
                         if (result.error) throw result.error
@@ -429,7 +431,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         }
 
         return { success: true, nextOccurrenceCreated, nextOccurrenceDate }
-    }, [tasks, fetchTasks, user, showToast])
+    }, [tasks, fetchTasks, userId, showToast])
 
     const reorderTasks = useCallback(async (orderedIds: string[], isToday?: boolean) => {
         const sortField = isToday ? 'sort_order_today' : 'sort_order'
@@ -503,3 +505,4 @@ export function useGlobalTasks() {
     }
     return context
 }
+

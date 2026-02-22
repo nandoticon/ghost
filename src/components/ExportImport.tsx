@@ -4,6 +4,7 @@ import { format, differenceInDays } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import { useToast } from './Toast'
 import { cn } from '../lib/cn'
+import { SectionCard } from './SectionCard'
 
 type JsonValue = string | number | boolean | null | undefined
 type JsonRecord = Record<string, JsonValue>
@@ -251,76 +252,82 @@ export function ExportImport() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
             {/* Backup Status */}
-            <section className={cn(
-                "p-6 rounded-3xl border transition-all",
+            <SectionCard className={cn(
+                "p-4 sm:p-6 rounded-2xl sm:rounded-3xl border transition-all",
                 backupOverdue
                     ? "bg-amber-500/5 border-amber-500/20"
                     : "bg-surface border-border"
             )}>
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex items-center space-x-3 sm:space-x-4 min-w-0">
                         <div className={cn(
-                            "w-10 h-10 rounded-xl flex items-center justify-center border",
+                            "w-10 h-10 rounded-xl flex items-center justify-center border shrink-0",
                             backupOverdue ? "bg-amber-500/10 border-amber-500/20" : "bg-surface-secondary border-border"
                         )}>
                             <History className={cn("w-5 h-5", backupOverdue ? "text-amber-500" : "text-text-muted")} />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <p className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Last Backup</p>
-                            <p className="text-sm font-medium text-white">
+                            <p className="text-sm font-medium text-white break-words">
                                 {lastExport ? format(new Date(lastExport), 'MMM d, yyyy · HH:mm') : 'Never'}
                             </p>
                         </div>
                     </div>
                     {backupOverdue && (
-                        <div className="flex items-center space-x-2 text-amber-500 bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/20">
+                        <div className="inline-flex items-center space-x-2 text-amber-500 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20 self-start sm:self-auto">
                             <AlertCircle className="w-4 h-4" />
                             <span className="text-[10px] font-bold uppercase tracking-wider">Consider backing up</span>
                         </div>
                     )}
                 </div>
-            </section>
+            </SectionCard>
 
             {/* Export Actions */}
-            <section className="bg-surface border border-border rounded-3xl p-8 space-y-6">
-                <div className="flex items-center space-x-3 text-accent">
+            <SectionCard className="space-y-4 sm:space-y-6">
+                <div className="flex items-center gap-3 text-accent">
                     <Download className="w-5 h-5" />
-                    <h2 className="text-xl font-bold text-white">Export Data</h2>
+                    <h2 className="text-lg sm:text-xl font-bold text-white">Export Data</h2>
                 </div>
+                <p className="text-xs sm:text-sm text-text-muted -mt-1">
+                    Create a full backup or export tasks for spreadsheets and external analysis.
+                </p>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                     <button
                         onClick={handleExportJSON}
                         disabled={isExporting}
-                        className="flex flex-col items-start p-6 bg-surface-secondary/50 border border-border rounded-2xl hover:border-accent/50 hover:bg-accent/5 transition-all group"
+                        className="flex flex-col items-start p-4 sm:p-6 bg-surface-secondary/50 border border-border rounded-2xl hover:border-accent/50 hover:bg-accent/5 transition-all group min-h-[150px] sm:min-h-[unset]"
                     >
-                        <FileJson className="w-8 h-8 text-accent mb-4 group-hover:scale-110 transition-transform" />
+                        <FileJson className="w-7 h-7 sm:w-8 sm:h-8 text-accent mb-3 sm:mb-4 group-hover:scale-110 transition-transform" />
                         <h3 className="font-bold text-white mb-1">JSON Export</h3>
-                        <p className="text-xs text-text-muted">Full backup including categories, projects, tasks, comments, and subtasks.</p>
+                        <p className="text-xs text-text-muted text-left leading-relaxed">Full backup including categories, projects, tasks, comments, and subtasks.</p>
                         {isExporting && <Loader2 className="w-4 h-4 animate-spin mt-4 text-accent" />}
                     </button>
 
                     <button
                         onClick={handleExportCSV}
                         disabled={isExporting}
-                        className="flex flex-col items-start p-6 bg-surface-secondary/50 border border-border rounded-2xl hover:border-white/50 hover:bg-white/5 transition-all group"
+                        className="flex flex-col items-start p-4 sm:p-6 bg-surface-secondary/50 border border-border rounded-2xl hover:border-white/50 hover:bg-white/5 transition-all group min-h-[150px] sm:min-h-[unset]"
                     >
-                        <FileText className="w-8 h-8 text-text-muted group-hover:text-white mb-4 group-hover:scale-110 transition-transform" />
+                        <FileText className="w-7 h-7 sm:w-8 sm:h-8 text-text-muted group-hover:text-white mb-3 sm:mb-4 group-hover:scale-110 transition-transform" />
                         <h3 className="font-bold text-white mb-1">CSV Export</h3>
-                        <p className="text-xs text-text-muted">Tasks only. Ideal for spreadsheets and external analysis.</p>
+                        <p className="text-xs text-text-muted text-left leading-relaxed">Tasks only. Ideal for spreadsheets and external analysis.</p>
                         {isExporting && <Loader2 className="w-4 h-4 animate-spin mt-4 text-white" />}
                     </button>
                 </div>
-            </section>
+            </SectionCard>
 
             {/* Import Action */}
-            <section className="bg-surface border border-border rounded-3xl p-8 space-y-6">
-                <div className="flex items-center space-x-3 text-white">
+            <SectionCard className="space-y-4 sm:space-y-6">
+                <div className="flex items-center gap-3 text-white">
                     <Upload className="w-5 h-5" />
-                    <h2 className="text-xl font-bold">Import Data</h2>
+                    <h2 className="text-lg sm:text-xl font-bold">Import Data</h2>
                 </div>
+                <p className="text-xs sm:text-sm text-text-muted -mt-1">
+                    Import a Ghost JSON backup. Imported items are added alongside existing data.
+                </p>
 
                 {!importPreview ? (
                     <div className="relative">
@@ -334,18 +341,18 @@ export function ExportImport() {
                         />
                         <label
                             htmlFor="import-upload"
-                            className="flex flex-col items-center justify-center p-12 bg-surface-secondary/30 border-2 border-dashed border-border rounded-3xl hover:border-accent transition-all cursor-pointer group"
+                            className="flex flex-col items-center justify-center p-6 sm:p-12 bg-surface-secondary/30 border-2 border-dashed border-border rounded-2xl sm:rounded-3xl hover:border-accent transition-all cursor-pointer group text-center"
                         >
-                            <div className="w-16 h-16 bg-accent/10 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                                <Upload className="w-8 h-8 text-accent" />
+                            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-accent/10 rounded-full flex items-center justify-center mb-3 sm:mb-4 group-hover:scale-110 transition-transform">
+                                <Upload className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />
                             </div>
-                            <span className="font-bold text-white">Click to upload JSON</span>
-                            <span className="text-xs text-text-muted mt-2">Only .json files exported from Ghost are supported.</span>
+                            <span className="font-bold text-white">Upload Ghost JSON</span>
+                            <span className="text-xs text-text-muted mt-2 leading-relaxed">Tap to choose a file. Only `.json` files exported from Ghost are supported.</span>
                         </label>
                     </div>
                 ) : (
-                    <div className="space-y-6 bg-surface-secondary/50 border border-border rounded-2xl p-6 animate-in zoom-in-95 duration-200">
-                        <div className="flex items-center justify-between">
+                    <div className="space-y-4 sm:space-y-6 bg-surface-secondary/50 border border-border rounded-2xl p-4 sm:p-6 animate-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between gap-3">
                             <h3 className="font-bold text-white">Import Preview</h3>
                             <button
                                 onClick={() => setImportPreview(null)}
@@ -356,26 +363,26 @@ export function ExportImport() {
                             </button>
                         </div>
 
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="p-4 bg-surface rounded-xl border border-border">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
+                            <div className="p-3 sm:p-4 bg-surface rounded-xl border border-border">
                                 <p className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Categories</p>
-                                <p className="text-xl font-bold text-white">{importPreview.project_categories?.length || 0}</p>
+                                <p className="text-lg sm:text-xl font-bold text-white">{importPreview.project_categories?.length || 0}</p>
                             </div>
-                            <div className="p-4 bg-surface rounded-xl border border-border">
+                            <div className="p-3 sm:p-4 bg-surface rounded-xl border border-border">
                                 <p className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Projects</p>
-                                <p className="text-xl font-bold text-white">{importPreview.projects?.length || 0}</p>
+                                <p className="text-lg sm:text-xl font-bold text-white">{importPreview.projects?.length || 0}</p>
                             </div>
-                            <div className="p-4 bg-surface rounded-xl border border-border">
+                            <div className="p-3 sm:p-4 bg-surface rounded-xl border border-border">
                                 <p className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Tasks</p>
-                                <p className="text-xl font-bold text-white">{importPreview.tasks?.length || 0}</p>
+                                <p className="text-lg sm:text-xl font-bold text-white">{importPreview.tasks?.length || 0}</p>
                             </div>
-                            <div className="p-4 bg-surface rounded-xl border border-border">
+                            <div className="p-3 sm:p-4 bg-surface rounded-xl border border-border">
                                 <p className="text-[10px] uppercase font-bold tracking-widest text-text-muted">Comments</p>
-                                <p className="text-xl font-bold text-white">{importPreview.comments?.length || 0}</p>
+                                <p className="text-lg sm:text-xl font-bold text-white">{importPreview.comments?.length || 0}</p>
                             </div>
                         </div>
 
-                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex items-start space-x-3">
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 sm:p-4 flex items-start space-x-3">
                             <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                             <p className="text-xs text-amber-200/80 leading-relaxed">
                                 Import will <strong className="text-amber-500">ADD</strong> these items alongside your existing data.
@@ -384,23 +391,23 @@ export function ExportImport() {
                         </div>
 
                         {importProgress && (
-                            <div className="flex items-center space-x-3 text-accent bg-accent/10 p-3 rounded-lg border border-accent/20">
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                <span className="text-xs font-bold uppercase tracking-wider">{importProgress}</span>
+                            <div className="flex items-start sm:items-center space-x-3 text-accent bg-accent/10 p-3 rounded-lg border border-accent/20">
+                                <Loader2 className="w-4 h-4 animate-spin mt-0.5 sm:mt-0 shrink-0" />
+                                <span className="text-xs font-bold uppercase tracking-wider leading-relaxed break-words">{importProgress}</span>
                             </div>
                         )}
 
                         <button
                             onClick={performImport}
                             disabled={isImporting}
-                            className="w-full py-4 bg-accent text-white rounded-xl font-bold hover:opacity-90 transition-all flex items-center justify-center space-x-2 shadow-lg shadow-accent/20"
+                            className="w-full py-3.5 sm:py-4 bg-accent text-white rounded-xl font-bold hover:opacity-90 transition-all flex items-center justify-center space-x-2 shadow-lg shadow-accent/20"
                         >
                             {!isImporting && <CheckCircle2 className="w-5 h-5" />}
                             <span>{isImporting ? 'Importing...' : 'Confirm & Import Data'}</span>
                         </button>
                     </div>
                 )}
-            </section>
+            </SectionCard>
         </div>
     )
 }

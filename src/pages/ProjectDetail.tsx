@@ -37,6 +37,12 @@ export default function ProjectDetail() {
         if (!project?.category_id) return null
         return categories.find((category) => category.id === project.category_id)?.name || null
     }, [categories, project?.category_id])
+    const projectStatusLabel = useMemo(() => {
+        if (!project) return ''
+        if (project.status === 'backlog') return 'Backlog'
+        if (project.status === 'active') return 'Active'
+        return 'Completed'
+    }, [project])
 
     // Filters for the task list
     const [filters, setFilters] = useState<TaskFilters>({
@@ -230,11 +236,28 @@ export default function ProjectDetail() {
                         )}
 
                         <div className="mt-2 space-y-2">
-                            {projectCategoryName && (
-                                <div className="inline-flex items-center px-2.5 py-1 rounded-full border border-accent/25 bg-accent/10 text-xs font-black uppercase tracking-widest text-accent">
-                                    {projectCategoryName}
+                            <div className="flex items-center gap-2 flex-wrap">
+                                {projectCategoryName && (
+                                    <div className="inline-flex items-center px-2.5 py-1 rounded-full border border-accent/25 bg-accent/10 text-xs font-black uppercase tracking-widest text-accent">
+                                        {projectCategoryName}
+                                    </div>
+                                )}
+                                <div className={cn(
+                                    "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-widest border",
+                                    project.status === 'completed'
+                                        ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
+                                        : project.status === 'active'
+                                            ? "border-blue-400/20 bg-blue-400/10 text-blue-300"
+                                            : "border-text-muted/20 bg-text-muted/5 text-text-muted"
+                                )}>
+                                    {projectStatusLabel}
                                 </div>
-                            )}
+                                {project.status === 'completed' && project.completed_at && (
+                                    <div className="text-xs text-text-muted">
+                                        Completed {new Date(project.completed_at).toLocaleDateString()}
+                                    </div>
+                                )}
+                            </div>
                             {isEditingInline ? (
                                 <textarea
                                     value={editDesc}

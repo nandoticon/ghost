@@ -90,6 +90,13 @@
     font-weight: 800;
   }
 
+  /* Native select dropdown menus (desktop) don't reliably inherit themed colors */
+  option,
+  optgroup {
+    background-color: var(--color-surface);
+    color: var(--color-text-primary);
+  }
+
   /* Prevent iOS zoom-on-focus for small form control text */
   @media (max-width: 767px) {
     .dark {

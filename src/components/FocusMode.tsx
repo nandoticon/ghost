@@ -3,6 +3,7 @@ import { X, CheckCircle2, Clock, Zap, Target, Layers, Home, MapPin, Play, Pause 
 import { Task } from '../types'
 import { cn } from '../lib/cn'
 import { useTimer } from '../context/TimerContext'
+import { ConfirmModal } from './ConfirmModal'
 
 interface FocusModeProps {
     task: Task
@@ -12,6 +13,7 @@ interface FocusModeProps {
 
 export const FocusMode: React.FC<FocusModeProps> = ({ task, onClose, onComplete }) => {
     const [currentTime, setCurrentTime] = useState(new Date())
+    const [showStopAndCompleteConfirm, setShowStopAndCompleteConfirm] = useState(false)
     const { activeSession, elapsedSeconds, toggleTimer, stopTimer, isSyncing } = useTimer()
     const isTimerActiveForTask = activeSession?.task_id === task.id
 
@@ -39,10 +41,8 @@ export const FocusMode: React.FC<FocusModeProps> = ({ task, onClose, onComplete 
 
     const handleComplete = async () => {
         if (isTimerActiveForTask) {
-            const shouldStop = window.confirm('Stop timer and mark this task complete?')
-            if (shouldStop) {
-                await stopTimer()
-            }
+            setShowStopAndCompleteConfirm(true)
+            return
         }
 
         onComplete(task.id, true)
@@ -174,6 +174,27 @@ export const FocusMode: React.FC<FocusModeProps> = ({ task, onClose, onComplete 
                     Ghost Deep Work Engine
                 </span>
             </div>
+
+            <ConfirmModal
+                isOpen={showStopAndCompleteConfirm}
+                title="Stop timer and complete task?"
+                description="Your active focus timer will be stopped, then this task will be marked complete."
+                options={[
+                    {
+                        label: 'Stop Timer and Complete',
+                        description: 'Finish the timer session and mark this task as done.',
+                        variant: 'default',
+                        onClick: async () => {
+                            await stopTimer()
+                            setShowStopAndCompleteConfirm(false)
+                            onComplete(task.id, true)
+                            onClose()
+                        }
+                    }
+                ]}
+                onCancel={() => setShowStopAndCompleteConfirm(false)}
+                onClose={() => setShowStopAndCompleteConfirm(false)}
+            />
         </div>
     )
 }

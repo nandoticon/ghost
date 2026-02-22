@@ -67,14 +67,19 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [completionPulse, setCompletionPulse] = useState(false)
     const [isGeneratingSubtasks, setIsGeneratingSubtasks] = useState(false)
+    const [isClosing, setIsClosing] = useState(false)
     const [taskSessions, setTaskSessions] = useState<TimeSession[]>([])
     const [isLoadingSessions, setIsLoadingSessions] = useState(false)
     const [isSavingSession, setIsSavingSession] = useState(false)
     const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null)
+    const [sessionDeleteConfirm, setSessionDeleteConfirm] = useState<TimeSession | null>(null)
     const [isSessionEditorOpen, setIsSessionEditorOpen] = useState(false)
     const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
     const [sessionStartInput, setSessionStartInput] = useState('')
     const [sessionEndInput, setSessionEndInput] = useState('')
+    const closeTimerRef = useRef<number | null>(null)
+    const isClosingRef = useRef(false)
+    const prevTaskIdRef = useRef(taskId)
 
     // Custom Popover states
     const [showProjectPicker, setShowProjectPicker] = useState(false)
@@ -86,6 +91,43 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
     const contentScrollRef = useRef<HTMLDivElement>(null)
     const titleTextareaRef = useRef<HTMLTextAreaElement>(null)
     const titleInputRef = useRef<HTMLInputElement>(null)
+
+    const requestClose = useCallback(() => {
+        if (isClosingRef.current) return
+        isClosingRef.current = true
+        setIsClosing(true)
+        closeTimerRef.current = window.setTimeout(() => {
+            closeTimerRef.current = null
+            onClose()
+        }, 140)
+    }, [onClose])
+
+    useEffect(() => {
+        const wasOpen = Boolean(prevTaskIdRef.current)
+        const isNowOpen = Boolean(taskId)
+        prevTaskIdRef.current = taskId
+
+        if (isNowOpen && !wasOpen) {
+            if (closeTimerRef.current) {
+                window.clearTimeout(closeTimerRef.current)
+                closeTimerRef.current = null
+            }
+            isClosingRef.current = false
+            setIsClosing(false)
+        } else if (!isNowOpen && wasOpen) {
+            if (!isClosingRef.current) {
+                requestClose()
+            }
+        }
+    }, [taskId, requestClose])
+
+    useEffect(() => {
+        return () => {
+            if (closeTimerRef.current) {
+                window.clearTimeout(closeTimerRef.current)
+            }
+        }
+    }, [])
 
     useEffect(() => {
         if (task) {
@@ -243,9 +285,12 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
 
     const handleDeleteSession = async (session: TimeSession) => {
         if (!session.id || session.ended_at === null) return
-        const confirmed = window.confirm('Delete this tracked session? This cannot be undone.')
-        if (!confirmed) return
+        setSessionDeleteConfirm(session)
+    }
 
+    const confirmDeleteSession = async () => {
+        const session = sessionDeleteConfirm
+        if (!session?.id || session.ended_at === null) return
         setDeletingSessionId(session.id)
         try {
             await deleteSession(session.id)
@@ -253,6 +298,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                 closeSessionEditor()
             }
             showToast('Tracked session deleted', 'success')
+            setSessionDeleteConfirm(null)
             await loadTaskSessions()
         } catch (error) {
             console.error('Failed to delete tracked session:', error)
@@ -349,23 +395,33 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                if (showProjectPicker) setShowProjectPicker(false)
-                else if (showRecurrencePicker) setShowRecurrencePicker(false)
-                else if (showStatusPicker) setShowStatusPicker(false)
-                else if (showMenu) setShowMenu(false)
-                else onClose()
+                if (showProjectPicker) {
+                    e.preventDefault()
+                    setShowProjectPicker(false)
+                } else if (showRecurrencePicker) {
+                    e.preventDefault()
+                    setShowRecurrencePicker(false)
+                } else if (showStatusPicker) {
+                    e.preventDefault()
+                    setShowStatusPicker(false)
+                } else if (showMenu) {
+                    e.preventDefault()
+                    setShowMenu(false)
+                }
+                // We DON'T call requestClose() here because useModalA11y (via onClose)
+                // already handles the Escape key.
             }
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                 e.preventDefault()
                 if (resolvedTaskId) {
                     completeTask(resolvedTaskId, !completed)
-                    onClose()
+                    requestClose()
                 }
             }
         }
         window.addEventListener('keydown', handleKeyDown)
         return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [onClose, showProjectPicker, showRecurrencePicker, showStatusPicker, showMenu, resolvedTaskId, completed, completeTask])
+    }, [requestClose, showProjectPicker, showRecurrencePicker, showStatusPicker, showMenu, resolvedTaskId, completed, completeTask])
 
     useEffect(() => {
         if (!resolvedTaskId) return
@@ -389,12 +445,12 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
 
     const { modalRef } = useModalA11y<HTMLDivElement>({
         isOpen: Boolean(taskId),
-        onClose,
+        onClose: requestClose,
         lockBodyScroll: true,
         trapFocus: true,
     })
 
-    if (!taskId) return null
+    if (!taskId && !isClosing) return null
 
     const filteredProjects = projects.filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase()))
     const canCreateProject = projectSearch.trim().length > 0 && !projects.some(
@@ -447,7 +503,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
             {/* Backdrop */}
             <div
                 className="absolute inset-0 bg-background/60 backdrop-blur-sm animate-in fade-in duration-300"
-                onClick={onClose}
+                onClick={requestClose}
             />
 
             {/* Slide-over Panel */}
@@ -455,7 +511,9 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                 ref={modalRef}
                 className={cn(
                     "relative flex flex-col bg-surface border-l border-border h-full w-full max-w-[900px] shadow-2xl overflow-hidden overflow-x-hidden",
-                    "animate-in slide-in-from-right duration-300"
+                    isClosing
+                        ? "animate-out fade-out duration-150"
+                        : "animate-in slide-in-from-right duration-200 ease-out"
                 )}
                 role="dialog"
                 aria-modal="true"
@@ -505,7 +563,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                             aria-label="Task title"
                         />
                         <span className="hidden sm:inline text-xs font-mono text-text-muted/60 tracking-wider shrink-0">
-                            {task?.short_id || taskId.substring(0, 8)}
+                            {task?.short_id || taskId?.substring(0, 8)}
                         </span>
                         {/* Saving Indicator */}
                         <div className="hidden sm:flex ml-1 md:ml-3 items-center h-4 shrink-0">
@@ -560,7 +618,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                             )}
                         </div>
                         <button
-                            onClick={onClose}
+                            onClick={requestClose}
                             className="touch-target flex items-center justify-center p-2 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors"
                             aria-label="Close task details"
                         >
@@ -1252,6 +1310,28 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                     />
                 )
             )}
+
+            <ConfirmModal
+                isOpen={Boolean(sessionDeleteConfirm)}
+                title="Delete tracked session?"
+                description="This cannot be undone."
+                options={[
+                    {
+                        label: deletingSessionId === sessionDeleteConfirm?.id ? 'Deleting...' : 'Delete Session',
+                        description: 'Permanently remove this tracked time entry.',
+                        variant: 'danger',
+                        onClick: () => { void confirmDeleteSession() }
+                    }
+                ]}
+                onCancel={() => {
+                    if (deletingSessionId) return
+                    setSessionDeleteConfirm(null)
+                }}
+                onClose={() => {
+                    if (deletingSessionId) return
+                    setSessionDeleteConfirm(null)
+                }}
+            />
         </div>
     )
 }

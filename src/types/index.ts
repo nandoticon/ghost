@@ -4,6 +4,8 @@ export interface Project {
     name: string;
     description: string | null;
     color: string;
+    status: 'backlog' | 'active' | 'completed';
+    completed_at: string | null;
     category_id: string | null;
     category?: Pick<ProjectCategory, 'id' | 'name'> | null;
     sort_order: number;

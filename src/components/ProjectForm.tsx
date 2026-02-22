@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react'
-import { X, Check, Trash2, AlertTriangle } from 'lucide-react'
+import { X, Check, Trash2 } from 'lucide-react'
 import { Project, ProjectCategory } from '../types'
 import { cn } from '../lib/cn'
 import { useRef } from 'react'
+import { ConfirmModal } from './ConfirmModal'
+import { FieldLabel, fieldInputClass, fieldSelectClass, fieldTextareaClass } from './FormField'
 
 interface ProjectFormProps {
     isOpen: boolean
     project?: Project
+    defaultCategoryId?: string | null
     categories: ProjectCategory[]
     onSave: (project: Partial<Project>) => Promise<void>
     onCancel: () => void
@@ -27,6 +30,7 @@ const PRESET_COLORS = [
 export const ProjectForm: React.FC<ProjectFormProps> = ({
     isOpen,
     project,
+    defaultCategoryId,
     categories,
     onSave,
     onCancel,
@@ -35,6 +39,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
     const [color, setColor] = useState(PRESET_COLORS[0])
+    const [status, setStatus] = useState<Project['status']>('backlog')
     const [categoryId, setCategoryId] = useState('')
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
@@ -49,15 +54,17 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
             if (!nameFocused) setName(project.name)
             if (!descriptionFocused) setDescription(project.description || '')
             setColor(project.color || PRESET_COLORS[0])
+            setStatus(project.status || 'backlog')
             setCategoryId(project.category_id || '')
         } else {
             setName('')
             setDescription('')
             setColor(PRESET_COLORS[0])
-            setCategoryId('')
+            setStatus('backlog')
+            setCategoryId(defaultCategoryId || '')
         }
         setShowDeleteConfirm(false)
-    }, [project, isOpen])
+    }, [project, isOpen, defaultCategoryId])
 
     if (!isOpen) return null
 
@@ -71,6 +78,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                 name: name.trim(),
                 description: description.trim() || null,
                 color,
+                status,
                 category_id: categoryId || null
             })
         } finally {
@@ -113,9 +121,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                     <div className="space-y-4">
                         {/* Name Input */}
                         <div className="space-y-1.5">
-                            <label className="text-[10px] uppercase font-bold tracking-widest text-text-muted ml-1">
-                                Project Name
-                            </label>
+                            <FieldLabel>Project Name</FieldLabel>
                             <input
                                 ref={nameInputRef}
                                 autoFocus
@@ -123,35 +129,31 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 placeholder="e.g. Work, Personal, Fitness"
-                                className="w-full bg-surface-secondary border border-border rounded-xl px-4 py-3 text-text-primary focus:border-accent focus:ring-1 focus:ring-accent outline-none transition-all"
+                                className={cn(fieldInputClass, 'focus:border-accent focus:ring-1 focus:ring-accent')}
                                 required
                             />
                         </div>
 
                         {/* Description Input */}
                         <div className="space-y-1.5">
-                            <label className="text-[10px] uppercase font-bold tracking-widest text-text-muted ml-1">
-                                Description
-                            </label>
+                            <FieldLabel>Description</FieldLabel>
                             <textarea
                                 ref={descriptionTextareaRef}
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="What's this project about?"
                                 rows={3}
-                                className="w-full bg-surface-secondary border border-border rounded-xl px-4 py-3 text-text-primary focus:border-accent focus:ring-1 focus:ring-accent outline-none transition-all resize-none"
+                                className={cn(fieldTextareaClass, 'focus:border-accent focus:ring-1 focus:ring-accent')}
                             />
                         </div>
 
                         {/* Category Selector */}
                         <div className="space-y-1.5">
-                            <label className="text-[10px] uppercase font-bold tracking-widest text-text-muted ml-1">
-                                Category
-                            </label>
+                            <FieldLabel>Category</FieldLabel>
                             <select
                                 value={categoryId}
                                 onChange={(e) => setCategoryId(e.target.value)}
-                                className="w-full bg-surface-secondary border border-border rounded-xl px-4 py-3 text-text-primary focus:border-accent focus:ring-1 focus:ring-accent outline-none transition-all"
+                                className={cn(fieldSelectClass, 'focus:border-accent focus:ring-1 focus:ring-accent')}
                             >
                                 <option value="">No Category</option>
                                 {categories.map((category) => (
@@ -162,11 +164,22 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                             </select>
                         </div>
 
+                        <div className="space-y-1.5">
+                            <FieldLabel>Status</FieldLabel>
+                            <select
+                                value={status}
+                                onChange={(e) => setStatus(e.target.value as Project['status'])}
+                                className={cn(fieldSelectClass, 'focus:border-accent focus:ring-1 focus:ring-accent')}
+                            >
+                                <option value="backlog">Backlog</option>
+                                <option value="active">Active</option>
+                                <option value="completed">Completed</option>
+                            </select>
+                        </div>
+
                         {/* Color Picker */}
                         <div className="space-y-3">
-                            <label className="text-[10px] uppercase font-bold tracking-widest text-text-muted ml-1">
-                                Theme Color
-                            </label>
+                            <FieldLabel>Theme Color</FieldLabel>
                             <div className="flex flex-wrap gap-2.5">
                                 {PRESET_COLORS.map((c) => (
                                     <button
@@ -223,34 +236,22 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                     </div>
                 </form>
 
-                {/* Deletion Confirmation Overlay */}
-                {showDeleteConfirm && (
-                    <div className="absolute inset-0 z-10 bg-background flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-200">
-                        <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-4">
-                            <AlertTriangle className="w-8 h-8 text-red-500" />
-                        </div>
-                        <h3 className="text-lg font-bold text-white mb-2">Delete Project?</h3>
-                        <p className="text-sm text-text-muted mb-8 max-w-[240px]">
-                            This will remove the project from all associated tasks. <span className="text-white font-medium">Tasks will not be deleted.</span>
-                        </p>
-                        <div className="flex flex-col w-full space-y-3">
-                            <button
-                                onClick={handleDelete}
-                                disabled={isSubmitting}
-                                className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl transition-all active:scale-[0.98]"
-                            >
-                                {isSubmitting ? 'Deleting...' : 'Yes, Delete Project'}
-                            </button>
-                            <button
-                                onClick={() => setShowDeleteConfirm(false)}
-                                className="w-full bg-surface-secondary text-white font-bold py-3 rounded-xl hover:bg-surface-secondary/80 transition-all"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                )}
             </div>
+            <ConfirmModal
+                isOpen={showDeleteConfirm}
+                title="Delete Project?"
+                description="This removes the project from associated tasks. Tasks will not be deleted."
+                options={[
+                    {
+                        label: isSubmitting ? 'Deleting...' : 'Delete Project',
+                        description: 'Permanently remove this project only.',
+                        variant: 'danger',
+                        onClick: () => { void handleDelete() }
+                    }
+                ]}
+                onCancel={() => !isSubmitting && setShowDeleteConfirm(false)}
+                onClose={() => !isSubmitting && setShowDeleteConfirm(false)}
+            />
         </div>
     )
 }

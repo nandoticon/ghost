@@ -4,9 +4,11 @@ interface EmptyStateProps {
     icon: LucideIcon
     title: string
     description: string
+    actionLabel?: string
+    onAction?: () => void
 }
 
-export function EmptyState({ icon: Icon, title, description }: EmptyStateProps) {
+export function EmptyState({ icon: Icon, title, description, actionLabel, onAction }: EmptyStateProps) {
     return (
         <div className="flex flex-col items-center justify-center py-20 px-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-700 relative overflow-hidden">
             {/* Gradient mesh background */}
@@ -33,6 +35,14 @@ export function EmptyState({ icon: Icon, title, description }: EmptyStateProps) 
             <p className="text-text-muted text-sm max-w-[280px] mx-auto leading-relaxed">
                 {description}
             </p>
+            {actionLabel && onAction && (
+                <button
+                    onClick={onAction}
+                    className="mt-5 px-4 py-2 rounded-xl bg-accent text-white text-sm font-bold hover:bg-accent/90 transition-colors"
+                >
+                    {actionLabel}
+                </button>
+            )}
         </div>
     )
 }

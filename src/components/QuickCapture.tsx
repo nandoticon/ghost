@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Plus, X, Folder, Calendar } from 'lucide-react'
 import { useTasks } from '../hooks/useTasks'
 import { useProjects } from '../hooks/useProjects'
@@ -6,6 +6,7 @@ import { useProjectCategories } from '../hooks/useProjectCategories'
 import { useToast } from './Toast'
 import { cn } from '../lib/cn'
 import { useModalA11y } from '../hooks/useModalA11y'
+import { fieldSelectClass } from './FormField'
 
 interface QuickCaptureProps {
     isOpen: boolean
@@ -20,16 +21,51 @@ export function QuickCapture({ isOpen, onClose }: QuickCaptureProps) {
     const [title, setTitle] = useState('')
     const [projectId, setProjectId] = useState<string | null>(null)
     const [today, setToday] = useState(true)
+    const [isClosing, setIsClosing] = useState(false)
+    const [isRendered, setIsRendered] = useState(isOpen)
     const inputRef = useRef<HTMLInputElement>(null)
+    const closeTimerRef = useRef<number | null>(null)
+    const closingRef = useRef(false)
+    const prevOpenRef = useRef(isOpen)
+
+    const requestClose = useCallback(() => {
+        if (closingRef.current) return
+        closingRef.current = true
+        setIsClosing(true)
+        closeTimerRef.current = window.setTimeout(() => {
+            closeTimerRef.current = null
+            setIsClosing(false)
+            setIsRendered(false)
+            onClose()
+        }, 140)
+    }, [onClose])
 
     useEffect(() => {
-        if (isOpen) {
+        const wasOpen = prevOpenRef.current
+        prevOpenRef.current = isOpen
+
+        if (isOpen && !wasOpen) {
+            if (closeTimerRef.current) {
+                window.clearTimeout(closeTimerRef.current)
+                closeTimerRef.current = null
+            }
+            closingRef.current = false
+            setIsClosing(false)
+            setIsRendered(true)
             setTitle('')
             setProjectId(null)
             setToday(true)
             setTimeout(() => inputRef.current?.focus(), 50)
+        } else if (!isOpen && wasOpen) {
+            if (isRendered && !isClosing) {
+                requestClose()
+            }
         }
-    }, [isOpen])
+    }, [isOpen, isRendered, isClosing, requestClose])
+
+    useEffect(() => () => {
+        if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current)
+    }, [])
 
     const categoryMap = new Map(categories.map((category) => [category.id, category.name]))
     const selectedProject = projectId ? projects.find((project) => project.id === projectId) : null
@@ -46,33 +82,41 @@ export function QuickCapture({ isOpen, onClose }: QuickCaptureProps) {
             today: today
         })
         showToast('Task captured ✓', 'success')
-        onClose()
+        requestClose()
     }
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Escape') onClose()
+        if (e.key === 'Escape') requestClose()
     }
 
     const { modalRef } = useModalA11y<HTMLDivElement>({
         isOpen,
-        onClose,
+        onClose: requestClose,
         initialFocusRef: inputRef,
         lockBodyScroll: true,
         trapFocus: true,
     })
 
-    if (!isOpen) return null
+    if (!isOpen && !isClosing && !isRendered) return null
 
     return (
         <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-6">
             <div
-                className="absolute inset-0 bg-background/80 backdrop-blur-sm animate-in fade-in duration-300"
-                onClick={onClose}
+                className={cn(
+                    "absolute inset-0 bg-background/80 backdrop-blur-sm",
+                    isClosing ? "animate-out fade-out duration-150" : "animate-in fade-in duration-150"
+                )}
+                onClick={requestClose}
             />
 
             <div
                 ref={modalRef}
-                className="relative w-full max-w-xl xl:max-w-2xl bg-surface border border-border rounded-t-2xl md:rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden max-h-[88dvh] md:max-h-[min(85dvh,760px)] flex flex-col"
+                className={cn(
+                    "relative w-full max-w-xl xl:max-w-2xl bg-surface border border-border rounded-t-2xl md:rounded-2xl shadow-2xl overflow-hidden max-h-[88dvh] md:max-h-[min(85dvh,760px)] flex flex-col",
+                    isClosing
+                        ? "animate-out fade-out slide-out-to-bottom-2 md:slide-out-to-bottom-0 md:zoom-out-95 duration-150"
+                        : "animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-180"
+                )}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="quick-capture-title"
@@ -86,7 +130,7 @@ export function QuickCapture({ isOpen, onClose }: QuickCaptureProps) {
                         </div>
                         <button
                             type="button"
-                            onClick={onClose}
+                            onClick={requestClose}
                             className="touch-target flex items-center justify-center p-1 hover:bg-surface-secondary rounded-lg text-text-muted hover:text-text-primary transition-colors"
                             aria-label="Close quick capture"
                         >
@@ -111,7 +155,8 @@ export function QuickCapture({ isOpen, onClose }: QuickCaptureProps) {
                                 value={projectId || ''}
                                 onChange={(e) => setProjectId(e.target.value || null)}
                                 className={cn(
-                                    "touch-target w-full pl-8 pr-8 py-2 rounded-full text-sm md:text-xs font-bold uppercase tracking-wider border border-border bg-surface-secondary transition-all appearance-none cursor-pointer text-ellipsis",
+                                    fieldSelectClass,
+                                    "touch-target w-full pl-8 pr-8 py-2 rounded-full text-sm md:text-xs font-bold uppercase tracking-wider transition-all appearance-none text-ellipsis",
                                     projectId ? "border-accent/50 text-accent" : "text-text-muted hover:text-white"
                                 )}
                                 aria-label="Select project for quick capture"
@@ -159,7 +204,7 @@ export function QuickCapture({ isOpen, onClose }: QuickCaptureProps) {
                         <div className="flex items-center justify-end space-x-3 order-1 sm:order-2">
                             <button
                                 type="button"
-                                onClick={onClose}
+                                onClick={requestClose}
                                 className="px-4 py-2 text-sm font-bold text-text-muted hover:text-text-primary transition-colors"
                             >
                                 Cancel

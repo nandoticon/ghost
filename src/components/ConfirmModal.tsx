@@ -1,4 +1,5 @@
 import { AlertTriangle, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '../lib/cn'
 import { useModalA11y } from '../hooks/useModalA11y'
 
@@ -22,8 +23,51 @@ interface ConfirmModalProps {
 }
 
 export function ConfirmModal({ title, description, options, onCancel, onClose, isOpen }: ConfirmModalProps) {
-    const handleClose = onCancel ?? onClose ?? (() => undefined)
-    const isVisible = isOpen !== false
+    const externalClose = useMemo(() => (onCancel ?? onClose ?? (() => undefined)), [onCancel, onClose])
+    const isControlled = typeof isOpen === 'boolean'
+    const shouldBeOpen = isOpen !== false
+    const [isRendered, setIsRendered] = useState(shouldBeOpen)
+    const [isClosing, setIsClosing] = useState(false)
+    const closeTimerRef = useRef<number | null>(null)
+    const closingRef = useRef(false)
+    const prevOpenRef = useRef(shouldBeOpen)
+
+    const handleClose = useCallback(() => {
+        if (closingRef.current) return
+        closingRef.current = true
+        setIsClosing(true)
+        closeTimerRef.current = window.setTimeout(() => {
+            closeTimerRef.current = null
+            setIsClosing(false)
+            if (!isControlled) setIsRendered(false)
+            externalClose()
+        }, 140)
+    }, [externalClose, isControlled])
+
+    useEffect(() => {
+        const wasOpen = prevOpenRef.current
+        prevOpenRef.current = shouldBeOpen
+
+        if (shouldBeOpen && !wasOpen) {
+            if (closeTimerRef.current) {
+                window.clearTimeout(closeTimerRef.current)
+                closeTimerRef.current = null
+            }
+            closingRef.current = false
+            setIsClosing(false)
+            setIsRendered(true)
+        } else if (!shouldBeOpen && wasOpen) {
+            if (isControlled && isRendered && !isClosing) {
+                handleClose()
+            }
+        }
+    }, [shouldBeOpen, isControlled, isRendered, isClosing, handleClose])
+
+    useEffect(() => () => {
+        if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current)
+    }, [])
+
+    const isVisible = shouldBeOpen || isClosing || isRendered
     const { modalRef } = useModalA11y<HTMLDivElement>({
         isOpen: isVisible,
         onClose: handleClose,
@@ -31,21 +75,28 @@ export function ConfirmModal({ title, description, options, onCancel, onClose, i
         trapFocus: true,
     })
 
-    // If isOpen is explicitly provided, use it as a gate
     if (!isVisible) return null
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div
+            className={cn(
+                "fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm",
+                isClosing ? "animate-out fade-out duration-150" : "animate-in fade-in duration-150"
+            )}
+            onClick={handleClose}
+        >
             <div
                 ref={modalRef}
-                className="relative w-full max-w-sm bg-surface border border-border rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200"
+                className={cn(
+                    "relative w-full max-w-sm bg-surface border border-border rounded-2xl shadow-2xl",
+                    isClosing ? "animate-out zoom-out-95 duration-150" : "animate-in zoom-in-95 duration-180"
+                )}
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="confirm-modal-title"
                 tabIndex={-1}
             >
-                {/* Header */}
                 <div className="flex items-start justify-between p-6 pb-4">
                     <div className="flex items-center space-x-3">
                         <div className="p-2 bg-red-500/10 rounded-xl shrink-0">
@@ -65,7 +116,6 @@ export function ConfirmModal({ title, description, options, onCancel, onClose, i
                     </button>
                 </div>
 
-                {/* Actions */}
                 <div className="px-6 pb-6 space-y-2">
                     {options.map((opt, i) => (
                         <button

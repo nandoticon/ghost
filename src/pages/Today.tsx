@@ -71,6 +71,16 @@ export default function Today() {
     // Split tasks
     const remainingTasks = useMemo(() => tasks.filter(t => !t.completed), [tasks])
     const completedTasks = useMemo(() => tasks.filter(t => t.completed), [tasks])
+    const completedTodayCount = useMemo(() => {
+        const now = new Date()
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+        const endOfToday = startOfToday + 24 * 60 * 60 * 1000
+        return completedTasks.filter((task) => {
+            if (!task.completed_at) return false
+            const completedAtMs = new Date(task.completed_at).getTime()
+            return completedAtMs >= startOfToday && completedAtMs < endOfToday
+        }).length
+    }, [completedTasks])
 
     const totalCount = tasks.length
     const completedCount = completedTasks.length
@@ -297,14 +307,14 @@ export default function Today() {
                 <div className="flex items-center gap-3">
                     <button
                         onClick={() => setIsSuggestModalOpen(true)}
-                        className="flex items-center space-x-2 px-5 py-2.5 2xl:px-6 2xl:py-3 bg-surface-secondary hover:bg-surface-secondary/80 border border-border/50 text-white rounded-full text-sm 2xl:text-base font-bold transition-all active:scale-95 shadow-lg shadow-black/10"
+                        className="flex items-center space-x-2 px-4 sm:px-5 py-2.5 2xl:px-6 2xl:py-3 bg-surface-secondary hover:bg-surface-secondary/80 border border-border/50 text-white rounded-full text-xs sm:text-sm 2xl:text-base font-bold transition-all active:scale-95 shadow-lg shadow-black/10"
                     >
                         <Sparkles className="w-4 h-4 2xl:w-5 2xl:h-5 text-accent-warm" />
                         <span className="hidden md:inline">Magic Suggestion</span>
                     </button>
                     <button
                         onClick={() => setIsFormOpen(true)}
-                        className="hidden md:flex items-center space-x-2 px-5 py-2.5 2xl:px-6 2xl:py-3 bg-accent hover:bg-accent/90 text-white rounded-full text-sm 2xl:text-base font-bold transition-all active:scale-95 shadow-lg shadow-accent/20"
+                        className="hidden md:flex items-center space-x-2 px-4 sm:px-5 py-2.5 2xl:px-6 2xl:py-3 bg-accent hover:bg-accent/90 text-white rounded-full text-xs sm:text-sm 2xl:text-base font-bold transition-all active:scale-95 shadow-lg shadow-accent/20"
                     >
                         <Plus className="w-4 h-4 2xl:w-5 2xl:h-5" />
                         <span>Add Task</span>
@@ -554,11 +564,11 @@ export default function Today() {
                                 {isCompletedExpanded ? <ChevronDown className="w-4 h-4 2xl:w-5 2xl:h-5" /> : <ChevronRight className="w-4 h-4 2xl:w-5 2xl:h-5" />}
                                 <div className="flex flex-col items-start">
                                     <span className="text-sm md:text-xs 2xl:text-sm font-black uppercase tracking-widest text-accent-warm">
-                                        Daily Wins · {completedCount}
+                                        Daily Wins · {completedTodayCount}
                                     </span>
                                     {isCompletedExpanded && (
                                         <span className="text-xs 2xl:text-xs font-bold text-text-muted/70 lowercase italic">
-                                            {completedCount === 0 ? "Let's get some wins!" : `${completedCount} tasks crushed today! 🏆`}
+                                            {completedTodayCount === 0 ? "Let's get some wins!" : `${completedTodayCount} tasks crushed today! 🏆`}
                                         </span>
                                     )}
                                 </div>

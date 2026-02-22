@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useCallback } from 'react'
 import { X, CheckCircle2, AlertCircle, Info } from 'lucide-react'
 import { cn } from '../lib/cn'
@@ -90,3 +91,4 @@ export function useToast() {
     if (!context) throw new Error('useToast must be used within ToastProvider')
     return context
 }
+

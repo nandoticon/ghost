@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
@@ -19,9 +20,10 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     const [projects, setProjects] = useState<Project[]>([])
     const [loading, setLoading] = useState(true)
     const { user } = useAuth()
+    const userId = user?.id ?? null
 
     const fetchProjects = useCallback(async () => {
-        if (!user) {
+        if (!userId) {
             setLoading(false)
             setProjects([])
             return
@@ -31,8 +33,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         try {
             const { data, error } = await supabase
                 .from('projects')
-                .select('id,user_id,name,description,color,category_id,sort_order,archived,short_id,created_at,updated_at')
-                .eq('user_id', user.id)
+                .select('id,user_id,name,description,color,status,completed_at,category_id,sort_order,archived,short_id,created_at,updated_at')
+                .eq('user_id', userId)
                 .order('sort_order', { ascending: true })
 
             if (error) throw error
@@ -42,14 +44,14 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         } finally {
             setLoading(false)
         }
-    }, [user])
+    }, [userId])
 
     useEffect(() => {
         void fetchProjects()
     }, [fetchProjects])
 
     const createProject = useCallback(async (project: Partial<Project>) => {
-        if (!user) return null
+        if (!userId) return null
         const tempId = crypto.randomUUID()
         const maxSortOrder = projects.length > 0
             ? Math.max(...projects.map(p => p.sort_order || 0)) + 1
@@ -60,7 +62,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
             name: project.name || 'Untitled Project',
             description: project.description || '',
             color: project.color || '#7c6aff',
-            user_id: user.id,
+            status: project.status || 'backlog',
+            completed_at: project.status === 'completed' ? (project.completed_at || new Date().toISOString()) : null,
+            user_id: userId,
             category_id: project.category_id ?? null,
             sort_order: maxSortOrder,
             archived: false,
@@ -70,12 +74,22 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
         setProjects(prev => [...prev, optimisticProject])
 
+        const nowIso = new Date().toISOString()
+        const finalProjectInsert = {
+            ...project,
+            status: project.status || 'backlog',
+            completed_at:
+                project.status === 'completed'
+                    ? (project.completed_at || nowIso)
+                    : null
+        }
+
         try {
             const { data, error } = await supabase
                 .from('projects')
                 .insert([{
-                    ...project,
-                    user_id: user.id,
+                    ...finalProjectInsert,
+                    user_id: userId,
                     sort_order: maxSortOrder,
                     archived: false
                 }])
@@ -91,16 +105,21 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
             setProjects(prev => prev.filter(p => p.id !== tempId))
             return null
         }
-    }, [user, projects])
+    }, [userId, projects])
 
     const updateProject = useCallback(async (id: string, updates: Partial<Project>) => {
         const previousProjects = [...projects]
-        setProjects(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p))
+        const nowIso = new Date().toISOString()
+        const finalUpdates = { ...updates }
+        if (updates.status !== undefined && updates.completed_at === undefined) {
+            finalUpdates.completed_at = updates.status === 'completed' ? nowIso : null
+        }
+        setProjects(prev => prev.map(p => p.id === id ? { ...p, ...finalUpdates } : p))
 
         try {
             const { error } = await supabase
                 .from('projects')
-                .update({ ...updates, updated_at: new Date().toISOString() })
+                .update({ ...finalUpdates, updated_at: nowIso })
                 .eq('id', id)
 
             if (error) throw error
@@ -146,3 +165,4 @@ export function useProjects() {
     }
     return context
 }
+

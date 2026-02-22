@@ -4,6 +4,8 @@ import { subDays } from 'date-fns'
 import { listSessionsByRange, TimeSession } from '../lib/timeTracking'
 import { useGlobalTasks } from '../context/TaskContext'
 import { DateTimePicker } from '../components/DateTimePicker'
+import { PageHeader } from '../components/PageHeader'
+import { SectionCard } from '../components/SectionCard'
 
 const PRESETS = ['7d', '30d', '90d', 'custom'] as const
 
@@ -395,36 +397,36 @@ export default function Analytics() {
     const maxGrouped = Math.max(1, ...groupedBuckets.map((d) => d.seconds))
 
     return (
-        <div className="w-full max-w-full mx-auto px-3 py-6 md:py-10 space-y-7 animate-in fade-in duration-500">
-            <header className="flex items-center justify-between gap-4 flex-wrap">
-                <div>
-                    <h1 className="text-4xl md:text-5xl xl:text-5xl 2xl:text-6xl font-black tracking-tightest title-gradient">
-                        Analytics
-                    </h1>
-                    <p className="text-sm md:text-base text-text-muted font-medium mt-1">
-                        Gentle progress view for your focus habits
-                    </p>
-                </div>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                    {PRESETS.map((option) => (
-                        <button
-                            key={option}
-                            onClick={() => setPreset(option)}
-                            className={[
-                                'px-3 py-2 rounded-xl border text-xs uppercase tracking-widest font-black transition-colors',
-                                preset === option
-                                    ? 'bg-accent/15 border-accent/40 text-accent'
-                                    : 'bg-surface border-border text-text-muted hover:text-text-primary',
-                            ].join(' ')}
-                        >
-                            {option === 'custom' ? 'Custom' : option.toUpperCase()}
-                        </button>
-                    ))}
+        <div className="w-full max-w-full mx-auto px-2.5 sm:px-3 py-4 sm:py-6 md:py-10 space-y-5 sm:space-y-7 animate-in fade-in duration-500">
+            <header className="space-y-3">
+                <PageHeader
+                    title="Analytics"
+                    subtitle="Gentle progress view for your focus habits"
+                    compact
+                    subtitleStyle="body"
+                    className="border-0 pb-0"
+                />
+                <SectionCard tone="muted" compact className="p-2.5 sm:p-3 space-y-2">
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                        {PRESETS.map((option) => (
+                            <button
+                                key={option}
+                                onClick={() => setPreset(option)}
+                                className={[
+                                    'px-3 py-2 rounded-xl border text-[11px] sm:text-xs uppercase tracking-widest font-black transition-colors whitespace-nowrap shrink-0',
+                                    preset === option
+                                        ? 'bg-accent/15 border-accent/40 text-accent'
+                                        : 'bg-surface border-border text-text-muted hover:text-text-primary',
+                                ].join(' ')}
+                            >
+                                {option === 'custom' ? 'Custom' : option.toUpperCase()}
+                            </button>
+                        ))}
+                    </div>
                     <button
                         onClick={() => setHideRankings((v) => !v)}
                         className={[
-                            'px-3 py-2 rounded-xl border text-xs uppercase tracking-widest font-black transition-colors',
+                            'w-full sm:w-auto px-3 py-2 rounded-xl border text-[11px] sm:text-xs uppercase tracking-widest font-black transition-colors',
                             hideRankings
                                 ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-300'
                                 : 'bg-surface border-border text-text-muted hover:text-text-primary',
@@ -432,11 +434,11 @@ export default function Analytics() {
                     >
                         {hideRankings ? 'Show Rankings' : 'Hide Rankings'}
                     </button>
-                </div>
+                </SectionCard>
             </header>
 
-            <section className="bg-accent/8 border border-accent/25 rounded-2xl p-4">
-                <p className="text-sm md:text-base font-semibold text-text-primary">
+            <section className="bg-accent/8 border border-accent/25 rounded-2xl p-3 sm:p-4">
+                <p className="text-sm md:text-base font-semibold text-text-primary leading-snug">
                     {encouragement}
                 </p>
                 <p className="text-xs text-text-muted mt-1">
@@ -445,7 +447,7 @@ export default function Analytics() {
             </section>
 
             {preset === 'custom' && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-surface-secondary/20 border border-border/40 rounded-2xl p-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-3 bg-surface-secondary/20 border border-border/40 rounded-2xl p-3 sm:p-4">
                     <DateTimePicker
                         value={customFrom}
                         onChange={setCustomFrom}
@@ -462,40 +464,40 @@ export default function Analytics() {
                     />
                     <button
                         onClick={() => void refresh()}
-                        className="px-4 py-2 rounded-xl bg-accent text-white font-bold uppercase tracking-wider text-xs"
+                        className="px-4 py-2.5 rounded-xl bg-accent text-white font-bold uppercase tracking-wider text-xs"
                     >
                         Apply Range
                     </button>
                 </div>
             )}
 
-            <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <section className="grid grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-4">
                 <KpiCard icon={<Timer className="w-4 h-4" />} label="Total Focused Time" value={formatDuration(totalFocusedSeconds)} />
                 <KpiCard icon={<ListChecks className="w-4 h-4" />} label="Total Sessions" value={String(totalSessions)} />
                 <KpiCard icon={<Clock3 className="w-4 h-4" />} label="Average Session" value={formatDuration(averageSessionSeconds)} />
                 <KpiCard icon={<TrendingUp className="w-4 h-4" />} label="Consistency Rhythm" value={formatPercent(consistencyPercent)} />
             </section>
 
-            <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <section className="grid grid-cols-2 gap-2.5 sm:gap-4">
                 <KpiCard icon={<ListChecks className="w-4 h-4" />} label="Tasks Completed" value={String(totalCompletedTasks)} />
                 <KpiCard icon={<CalendarDays className="w-4 h-4" />} label="Recurring Completions" value={String(recurringCompletions)} />
             </section>
 
-            <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <section className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                 <KpiCard
                     icon={<Flame className="w-4 h-4" />}
                     label="Completion Streak"
                     value={completionStreak === 0 ? 'Fresh start' : `${completionStreak} day${completionStreak === 1 ? '' : 's'}`}
                 />
-                <div className="bg-surface-secondary/20 border border-border/40 rounded-2xl p-5 space-y-4">
+                <SectionCard tone="muted" compact className="sm:p-5 space-y-3 sm:space-y-4">
                     <h2 className="text-sm uppercase tracking-widest font-black text-text-muted">Completion Trend (Last 7 Days)</h2>
-                    <div className="grid grid-cols-7 gap-2">
+                    <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
                         {completionLast7Days.map((day) => {
                             const intensity = day.count === 0 ? 0 : Math.max(0.12, day.count / maxCompletionLast7)
                             return (
                                 <div key={day.key} className="space-y-1">
                                     <div
-                                        className="h-14 rounded-xl border border-border/40"
+                                        className="h-12 sm:h-14 rounded-lg sm:rounded-xl border border-border/40"
                                         style={{
                                             backgroundColor: `color-mix(in srgb, var(--color-accent-warm) ${Math.round(intensity * 85)}%, var(--color-surface))`,
                                         }}
@@ -508,24 +510,24 @@ export default function Analytics() {
                             )
                         })}
                     </div>
-                </div>
+                </SectionCard>
             </section>
 
-            <section className="bg-surface-secondary/20 border border-border/40 rounded-2xl p-5 space-y-4">
+            <SectionCard tone="muted" compact className="sm:p-5 space-y-3 sm:space-y-4">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                     <h2 className="text-sm uppercase tracking-widest font-black text-text-muted">
                         Completed Tasks Trend
                     </h2>
-                    <div className="inline-flex rounded-xl border border-border overflow-hidden">
+                    <div className="inline-flex rounded-xl border border-border overflow-hidden w-full sm:w-auto">
                         <button
                             onClick={() => setGranularity('weekly')}
-                            className={granularity === 'weekly' ? 'px-3 py-1.5 text-xs font-black uppercase tracking-wider bg-accent-warm/15 text-accent-warm' : 'px-3 py-1.5 text-xs font-black uppercase tracking-wider text-text-muted bg-surface hover:text-text-primary'}
+                            className={granularity === 'weekly' ? 'flex-1 sm:flex-none px-3 py-2 text-xs font-black uppercase tracking-wider bg-accent-warm/15 text-accent-warm' : 'flex-1 sm:flex-none px-3 py-2 text-xs font-black uppercase tracking-wider text-text-muted bg-surface hover:text-text-primary'}
                         >
                             Weekly
                         </button>
                         <button
                             onClick={() => setGranularity('monthly')}
-                            className={granularity === 'monthly' ? 'px-3 py-1.5 text-xs font-black uppercase tracking-wider bg-accent-warm/15 text-accent-warm' : 'px-3 py-1.5 text-xs font-black uppercase tracking-wider text-text-muted bg-surface hover:text-text-primary'}
+                            className={granularity === 'monthly' ? 'flex-1 sm:flex-none px-3 py-2 text-xs font-black uppercase tracking-wider bg-accent-warm/15 text-accent-warm' : 'flex-1 sm:flex-none px-3 py-2 text-xs font-black uppercase tracking-wider text-text-muted bg-surface hover:text-text-primary'}
                         >
                             Monthly
                         </button>
@@ -536,24 +538,24 @@ export default function Analytics() {
                 ) : (
                     <div className="space-y-2">
                         {completionGroupedBuckets.map((bucket) => (
-                            <div key={bucket.key} className="flex items-center gap-3">
-                                <span className="w-32 md:w-44 text-xs text-text-muted font-semibold truncate">{bucket.label}</span>
+                            <div key={bucket.key} className="grid grid-cols-[minmax(0,1fr)_auto] sm:flex sm:items-center gap-2 sm:gap-3">
+                                <span className="text-xs text-text-muted font-semibold truncate sm:w-44">{bucket.label}</span>
                                 <div className="flex-1 h-2.5 bg-surface rounded-full overflow-hidden">
                                     <div
                                         className="h-full rounded-full bg-gradient-to-r from-accent-warm to-orange-300"
                                         style={{ width: `${Math.max(2, (bucket.count / maxCompletionGrouped) * 100)}%` }}
                                     />
                                 </div>
-                                <span className="w-16 text-right text-xs text-text-primary font-bold tabular-nums">
+                                <span className="w-12 sm:w-16 text-right text-xs text-text-primary font-bold tabular-nums">
                                     {bucket.count}
                                 </span>
                             </div>
                         ))}
                     </div>
                 )}
-            </section>
+            </SectionCard>
 
-            <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <section className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
                 {hideRankings ? (
                     <KpiCard
                         icon={<Folder className="w-4 h-4" />}
@@ -579,23 +581,23 @@ export default function Analytics() {
                 />
             </section>
 
-            <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                <div className="bg-surface-secondary/20 border border-border/40 rounded-2xl p-5 space-y-4">
+            <section className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
+                <SectionCard tone="muted" compact className="sm:p-5 space-y-3 sm:space-y-4">
                     <div className="flex items-center justify-between gap-3 flex-wrap">
                         <h2 className="text-sm uppercase tracking-widest font-black text-text-muted flex items-center gap-2">
                             <BarChart3 className="w-4 h-4" />
                             Focus Trend
                         </h2>
-                        <div className="inline-flex rounded-xl border border-border overflow-hidden">
+                        <div className="inline-flex rounded-xl border border-border overflow-hidden w-full sm:w-auto">
                             <button
                                 onClick={() => setGranularity('weekly')}
-                                className={granularity === 'weekly' ? 'px-3 py-1.5 text-xs font-black uppercase tracking-wider bg-accent/15 text-accent' : 'px-3 py-1.5 text-xs font-black uppercase tracking-wider text-text-muted bg-surface hover:text-text-primary'}
+                                className={granularity === 'weekly' ? 'flex-1 sm:flex-none px-3 py-2 text-xs font-black uppercase tracking-wider bg-accent/15 text-accent' : 'flex-1 sm:flex-none px-3 py-2 text-xs font-black uppercase tracking-wider text-text-muted bg-surface hover:text-text-primary'}
                             >
                                 Weekly
                             </button>
                             <button
                                 onClick={() => setGranularity('monthly')}
-                                className={granularity === 'monthly' ? 'px-3 py-1.5 text-xs font-black uppercase tracking-wider bg-accent/15 text-accent' : 'px-3 py-1.5 text-xs font-black uppercase tracking-wider text-text-muted bg-surface hover:text-text-primary'}
+                                className={granularity === 'monthly' ? 'flex-1 sm:flex-none px-3 py-2 text-xs font-black uppercase tracking-wider bg-accent/15 text-accent' : 'flex-1 sm:flex-none px-3 py-2 text-xs font-black uppercase tracking-wider text-text-muted bg-surface hover:text-text-primary'}
                             >
                                 Monthly
                             </button>
@@ -608,32 +610,32 @@ export default function Analytics() {
                     ) : (
                         <div className="space-y-2">
                             {groupedBuckets.map((bucket) => (
-                                <div key={bucket.key} className="flex items-center gap-3">
-                                    <span className="w-28 md:w-36 text-xs text-text-muted font-semibold truncate">{bucket.label}</span>
+                                <div key={bucket.key} className="grid grid-cols-[minmax(0,1fr)_auto] sm:flex sm:items-center gap-2 sm:gap-3">
+                                    <span className="text-xs text-text-muted font-semibold truncate sm:w-36">{bucket.label}</span>
                                     <div className="flex-1 h-2.5 bg-surface rounded-full overflow-hidden">
                                         <div
                                             className="h-full rounded-full bg-gradient-to-r from-accent to-accent-warm"
                                             style={{ width: `${Math.max(2, (bucket.seconds / maxGrouped) * 100)}%` }}
                                         />
                                     </div>
-                                    <span className="w-20 text-right text-xs text-text-primary font-bold tabular-nums">
+                                    <span className="w-16 sm:w-20 text-right text-xs text-text-primary font-bold tabular-nums">
                                         {formatDuration(bucket.seconds)}
                                     </span>
                                 </div>
                             ))}
                         </div>
                     )}
-                </div>
+                </SectionCard>
 
-                <div className="bg-surface-secondary/20 border border-border/40 rounded-2xl p-5 space-y-4">
+                <SectionCard tone="muted" compact className="sm:p-5 space-y-3 sm:space-y-4">
                     <h2 className="text-sm uppercase tracking-widest font-black text-text-muted">Last 7 Days</h2>
-                    <div className="grid grid-cols-7 gap-2">
+                    <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
                         {last7Days.map((day) => {
                             const intensity = day.seconds === 0 ? 0 : Math.max(0.12, day.seconds / maxLast7)
                             return (
                                 <div key={day.key} className="space-y-1">
                                     <div
-                                        className="h-14 rounded-xl border border-border/40"
+                                        className="h-12 sm:h-14 rounded-lg sm:rounded-xl border border-border/40"
                                         style={{
                                             backgroundColor: `color-mix(in srgb, var(--color-accent) ${Math.round(intensity * 85)}%, var(--color-surface))`,
                                         }}
@@ -646,18 +648,18 @@ export default function Analytics() {
                             )
                         })}
                     </div>
-                </div>
+                </SectionCard>
             </section>
 
             {hideRankings ? (
-                <section className="bg-surface-secondary/20 border border-border/40 rounded-2xl p-5">
+                <SectionCard tone="muted" compact className="p-5">
                     <p className="text-sm text-text-muted">
                         Rankings are hidden. You can re-enable them anytime from the `Show Rankings` toggle.
                     </p>
-                </section>
+                </SectionCard>
             ) : (
                 <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                    <div className="bg-surface-secondary/20 border border-border/40 rounded-2xl p-5 space-y-4">
+                    <SectionCard tone="muted" compact className="sm:p-5 space-y-3 sm:space-y-4">
                         <h2 className="text-sm uppercase tracking-widest font-black text-text-muted">Top Tasks by Focus Time</h2>
                         {loading ? (
                             <p className="text-text-muted">Loading...</p>
@@ -683,9 +685,9 @@ export default function Analytics() {
                                 ))}
                             </div>
                         )}
-                    </div>
+                    </SectionCard>
 
-                    <div className="bg-surface-secondary/20 border border-border/40 rounded-2xl p-5 space-y-4">
+                    <SectionCard tone="muted" compact className="sm:p-5 space-y-3 sm:space-y-4">
                         <h2 className="text-sm uppercase tracking-widest font-black text-text-muted">Top Projects by Focus Time</h2>
                         {loading ? (
                             <p className="text-text-muted">Loading...</p>
@@ -711,11 +713,11 @@ export default function Analytics() {
                                 ))}
                             </div>
                         )}
-                    </div>
+                    </SectionCard>
                 </section>
             )}
 
-            <section className="bg-surface-secondary/20 border border-border/40 rounded-2xl p-5 space-y-4">
+            <SectionCard tone="muted" compact className="sm:p-5 space-y-3 sm:space-y-4">
                 <h2 className="text-sm uppercase tracking-widest font-black text-text-muted">Recent Sessions</h2>
                 {loading ? (
                     <p className="text-text-muted">Loading...</p>
@@ -738,19 +740,19 @@ export default function Analytics() {
                         ))}
                     </div>
                 )}
-            </section>
+            </SectionCard>
         </div>
     )
 }
 
 function KpiCard({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
     return (
-        <div className="bg-surface-secondary/20 border border-border/40 rounded-2xl p-4 space-y-2">
-            <div className="text-xs uppercase tracking-widest font-black text-text-muted flex items-center gap-2">
+        <SectionCard tone="muted" compact className="space-y-1.5 sm:space-y-2 min-w-0">
+            <div className="text-[10px] sm:text-xs uppercase tracking-widest font-black text-text-muted flex items-center gap-1.5 sm:gap-2 min-w-0">
                 {icon}
-                <span>{label}</span>
+                <span className="truncate">{label}</span>
             </div>
-            <p className="text-lg md:text-xl font-black text-text-primary">{value}</p>
-        </div>
+            <p className="text-base sm:text-lg md:text-xl font-black text-text-primary leading-tight break-words">{value}</p>
+        </SectionCard>
     )
 }

@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Plus, Filter, LayoutList, LayoutDashboard, AlertCircle, ChevronDown, Home, MapPin, Zap, ZapOff, Target, Layers, ChevronsUpDown, RotateCcw, Trash2, Star, CheckCircle2, X } from 'lucide-react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { Plus, Filter, LayoutList, LayoutDashboard, ChevronDown, ChevronsUpDown, RotateCcw, Trash2, Star, CheckCircle2, X } from 'lucide-react'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { useTasks } from '../hooks/useTasks'
 import { useProjects } from '../hooks/useProjects'
@@ -8,6 +8,9 @@ import { TaskForm } from '../components/TaskForm'
 import { KanbanBoard } from '../components/KanbanBoard'
 import { EmptyState } from '../components/EmptyState'
 import { useToast } from '../components/Toast'
+import { ConfirmModal } from '../components/ConfirmModal'
+import { PageHeader } from '../components/PageHeader'
+import { FilterPanelShell } from '../components/FilterPanelShell'
 import { Task, TaskFilters } from '../types'
 import { cn } from '../lib/cn'
 import { useShortcutContext } from '../context/ShortcutContext'
@@ -62,6 +65,7 @@ export default function Tasks() {
 
     const [isFormOpen, setIsFormOpen] = useState(false)
     const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
+    const filtersPanelRef = useRef<HTMLDivElement | null>(null)
     const [viewMode, setViewMode] = useState<'list' | 'kanban'>(() => (searchParams.get('view') === 'kanban' ? 'kanban' : 'list'))
     const [taskFormDefaults, setTaskFormDefaults] = useState<{ defaultProjectId?: string | null; defaultToday?: boolean }>({})
     const [statusGroupCollapses, setStatusGroupCollapses] = useState<StatusCollapseState>(() => {
@@ -76,6 +80,7 @@ export default function Tasks() {
     // Selection state
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
     const [lastSelectedId, setLastSelectedId] = useState<string | null>(null)
+    const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
     const { batchUpdateTasks, batchDeleteTasks } = useGlobalTasks()
 
     // Persist filters
@@ -119,6 +124,19 @@ export default function Tasks() {
             filters.focus !== null
         ].filter(Boolean).length
     }, [filters])
+    const activeFilterSummary = useMemo(() => {
+        const parts: string[] = []
+        if (filters.status && filters.status !== 'all') parts.push(`status: ${filters.status}`)
+        if (filters.dateFilter && filters.dateFilter !== 'any') parts.push(`date: ${filters.dateFilter}`)
+        if (filters.projectId) {
+            const projectName = projects.find((p) => p.id === filters.projectId)?.name || 'project'
+            parts.push(`project: ${projectName}`)
+        }
+        if (filters.location) parts.push(`location: ${filters.location}`)
+        if (filters.energy) parts.push(`energy: ${filters.energy}`)
+        if (filters.focus) parts.push(`focus: ${filters.focus}`)
+        return parts
+    }, [filters, projects])
 
     const isReorderingEnabled = !hasActiveFilters
 
@@ -145,7 +163,9 @@ export default function Tasks() {
         }
     }
 
-    const clearFilters = () => setFilters(DEFAULT_FILTERS)
+    const clearFilters = () => {
+        setFilters(DEFAULT_FILTERS)
+    }
 
     const updateFilter = (updates: Partial<TaskFilters>) => {
         setFilters((prev: TaskFilters) => ({ ...prev, ...updates }))
@@ -270,6 +290,11 @@ export default function Tasks() {
         const onKeyDown = (e: KeyboardEvent) => {
             const target = e.target as HTMLElement | null
             if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+            if (e.key === 'Escape' && isFiltersExpanded) {
+                e.preventDefault()
+                setIsFiltersExpanded(false)
+                return
+            }
             if (!e.altKey) return
 
             if (e.key.toLowerCase() === 'v') {
@@ -291,13 +316,29 @@ export default function Tasks() {
         }
         window.addEventListener('keydown', onKeyDown)
         return () => window.removeEventListener('keydown', onKeyDown)
-    }, [statusGroupOrder, toggleStatusGroup])
+    }, [statusGroupOrder, toggleStatusGroup, isFiltersExpanded])
+
+    useEffect(() => {
+        if (!isFiltersExpanded) return
+
+        const onPointerDown = (e: PointerEvent) => {
+            const target = e.target as Node | null
+            if (!target) return
+            if (filtersPanelRef.current?.contains(target)) return
+            setIsFiltersExpanded(false)
+        }
+
+        document.addEventListener('pointerdown', onPointerDown)
+        return () => document.removeEventListener('pointerdown', onPointerDown)
+    }, [isFiltersExpanded])
 
     return (
-        <div className="w-full max-w-full mx-auto px-4 pt-4 pb-12 space-y-8 animate-in fade-in duration-500">
-            <header className="flex items-center justify-between gap-4 flex-wrap">
-                <h1 className="text-4xl md:text-5xl xl:text-5xl 2xl:text-6xl font-black tracking-tightest title-gradient">Tasks</h1>
-                <div className="flex items-center gap-3">
+        <div className="w-full max-w-full mx-auto px-3 sm:px-4 pt-3 sm:pt-4 pb-12 space-y-5 sm:space-y-8 animate-in fade-in duration-500">
+            <PageHeader
+                title="Tasks"
+                compact
+                actions={
+                    <>
                     <div className="flex items-center bg-surface-secondary/50 p-1 rounded-full border border-border/50">
                         <button
                             onClick={() => setViewMode('list')}
@@ -322,86 +363,103 @@ export default function Tasks() {
                     </div>
                     <button
                         onClick={() => setIsFormOpen(true)}
-                        className="flex items-center space-x-2 px-5 py-2.5 2xl:px-6 2xl:py-3 bg-accent hover:bg-accent/90 text-white rounded-full text-sm 2xl:text-base font-bold transition-all active:scale-95"
+                        className="flex items-center space-x-2 px-4 sm:px-5 py-2.5 2xl:px-6 2xl:py-3 bg-accent hover:bg-accent/90 text-white rounded-full text-xs sm:text-sm 2xl:text-base font-bold transition-all active:scale-95"
                     >
                         <Plus className="w-4 h-4 2xl:w-5 2xl:h-5" />
                         <span className="hidden sm:inline">Add Task</span>
+                        <span className="sm:hidden">Add</span>
                     </button>
-                </div>
-            </header>
+                    </>
+                }
+            />
 
             {/* Filter Bar */}
-            <div className="space-y-3 bg-surface-secondary/25 border border-border/40 rounded-2xl p-4">
-                <div className="flex items-center justify-between text-xs 2xl:text-sm uppercase font-bold tracking-widest text-text-muted">
-                    <div className="flex items-center space-x-2">
-                        <Filter className="w-3 h-3 2xl:w-4 2xl:h-4" />
-                        <span>Filters</span>
-                        {activeFilterCount > 0 && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs tracking-normal font-black bg-accent-warm/10 text-accent-warm border border-accent-warm/20">
-                                {activeFilterCount} active
-                            </span>
-                        )}
-                    </div>
-                    <div className="flex items-center gap-3">
+            <FilterPanelShell>
+            <div ref={filtersPanelRef} className="space-y-3">
+                <div className="flex items-center justify-end gap-2 text-xs 2xl:text-sm uppercase font-bold tracking-widest text-text-muted">
+                    <div className="flex items-center gap-2 sm:gap-3 justify-between sm:justify-end">
                         {hasActiveFilters && (
                             <button
                                 onClick={clearFilters}
-                                className="text-accent hover:underline lowercase tracking-normal font-medium"
+                                className="text-accent hover:underline lowercase tracking-normal font-medium text-xs sm:text-sm"
                             >
                                 Clear filters
                             </button>
                         )}
-                        <button
-                            onClick={() => setIsFiltersExpanded((v: boolean) => !v)}
-                            className="inline-flex items-center gap-1 text-text-muted hover:text-text-primary transition-colors lowercase tracking-normal font-medium"
-                        >
-                            <ChevronsUpDown className="w-3.5 h-3.5" />
-                            {isFiltersExpanded ? 'collapse' : 'expand'}
-                        </button>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap no-scrollbar pb-1">
-                    <div className="min-w-[290px]">
-                        <FilterGroup
-                            options={['all', 'todo', 'doing', 'waiting', 'done']}
-                            value={filters.status ?? 'all'}
-                            onChange={(val) => updateFilter({ status: val as TaskFilters['status'] })}
-                        />
+                <button
+                    onClick={() => setIsFiltersExpanded((v: boolean) => !v)}
+                    className={cn(
+                        "w-full text-left rounded-xl border border-border/60 bg-surface/60 px-3 py-3 transition-all",
+                        isFiltersExpanded ? "border-accent/30 bg-accent/5" : "hover:border-border hover:bg-surface"
+                    )}
+                    aria-expanded={isFiltersExpanded}
+                >
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 space-y-1">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-text-primary shrink-0">
+                                    <Filter className="w-3 h-3" />
+                                    Filters
+                                </span>
+                                {activeFilterCount > 0 && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] tracking-normal font-black bg-accent-warm/10 text-accent-warm border border-accent-warm/20 shrink-0">
+                                        {activeFilterCount} active
+                                    </span>
+                                )}
+                            </div>
+                            <p className="text-xs text-text-muted leading-relaxed truncate">
+                                {activeFilterSummary.length > 0
+                                    ? activeFilterSummary.join(' · ')
+                                    : 'No filters applied'}
+                            </p>
+                        </div>
+                        <ChevronsUpDown className="w-4 h-4 text-text-muted shrink-0 mt-0.5" />
                     </div>
+                </button>
 
-                    <div className="min-w-[250px]">
-                        <FilterGroup
-                            options={['any', 'today', 'upcoming', 'overdue']}
-                            value={filters.dateFilter ?? 'any'}
-                            onChange={(val) => updateFilter({ dateFilter: val as TaskFilters['dateFilter'] })}
-                        />
+                {isFiltersExpanded && (
+                    <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="relative group/select min-w-0">
+                                <select
+                                    value={filters.status ?? 'all'}
+                                    onChange={(e) => updateFilter({ status: e.target.value as TaskFilters['status'] })}
+                                    className={cn(
+                                    "w-full pl-3 pr-8 py-2.5 rounded-xl text-[11px] sm:text-xs 2xl:text-sm font-bold uppercase tracking-wide sm:tracking-wider border border-border bg-surface transition-all appearance-none cursor-pointer",
+                                        (filters.status ?? 'all') !== 'all' ? "bg-accent/10 border-accent/50 text-accent" : "text-text-muted hover:border-text-muted hover:text-text-primary"
+                                    )}
+                                >
+                                    <option value="all">All Statuses</option>
+                                    <option value="todo">Todo</option>
+                                    <option value="doing">Doing</option>
+                                    <option value="waiting">Waiting</option>
+                                    <option value="done">Done</option>
+                                </select>
+                                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted pointer-events-none group-hover/select:text-text-primary transition-colors" />
+                            </div>
+
+                            <div className="relative group/select min-w-0">
+                                <select
+                                    value={filters.projectId || ''}
+                                    onChange={(e) => updateFilter({ projectId: e.target.value || null })}
+                                    className={cn(
+                                    "w-full pl-3 pr-8 py-2.5 rounded-xl text-[11px] sm:text-xs 2xl:text-sm font-bold uppercase tracking-wide sm:tracking-wider border border-border bg-surface transition-all appearance-none cursor-pointer",
+                                        filters.projectId ? "bg-accent/10 border-accent/50 text-accent" : "text-text-muted hover:border-text-muted hover:text-text-primary"
+                                    )}
+                                >
+                                    <option value="">Any project</option>
+                                    {projects.map(p => (
+                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                    ))}
+                                </select>
+                                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted pointer-events-none group-hover/select:text-text-primary transition-colors" />
+                            </div>
+                        </div>
                     </div>
-
-                    <div className="relative group/select min-w-[170px] w-[170px]">
-                        <select
-                            value={filters.projectId || ''}
-                            onChange={(e) => updateFilter({ projectId: e.target.value || null })}
-                            className={cn(
-                                "w-full pl-3 pr-8 py-2 rounded-xl text-xs 2xl:text-sm font-bold uppercase tracking-wider border border-border bg-surface transition-all appearance-none cursor-pointer",
-                                filters.projectId ? "bg-accent/10 border-accent/50 text-accent" : "text-text-muted hover:border-text-muted hover:text-text-primary"
-                            )}
-                        >
-                            <option value="">Any project</option>
-                            {projects.map(p => (
-                                <option key={p.id} value={p.id}>{p.name}</option>
-                            ))}
-                        </select>
-                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted pointer-events-none group-hover/select:text-text-primary transition-colors" />
-                    </div>
-
-                    <button
-                        onClick={() => setIsFiltersExpanded((v: boolean) => !v)}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-surface text-xs font-black uppercase tracking-wider text-text-muted hover:text-text-primary transition-colors"
-                    >
-                        {isFiltersExpanded ? 'Simple' : 'Advanced'}
-                    </button>
-                </div>
+                )}
 
                 {isFiltersExpanded && (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 2xl:gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -410,7 +468,6 @@ export default function Tasks() {
                                 options={[null, 'home', 'outside']}
                                 value={filters.location ?? null}
                                 onChange={(val) => updateFilter({ location: val as TaskFilters['location'] })}
-                                icons={{ home: <Home className="w-3 h-3 2xl:w-3.5 2xl:h-3.5" />, outside: <MapPin className="w-3 h-3 2xl:w-3.5 2xl:h-3.5" /> }}
                             />
                         </FilterSection>
 
@@ -419,7 +476,6 @@ export default function Tasks() {
                                 options={[null, 'high', 'low']}
                                 value={filters.energy ?? null}
                                 onChange={(val) => updateFilter({ energy: val as TaskFilters['energy'] })}
-                                icons={{ high: <Zap className="w-3 h-3 2xl:w-3.5 2xl:h-3.5" />, low: <ZapOff className="w-3 h-3 2xl:w-3.5 2xl:h-3.5" /> }}
                             />
                         </FilterSection>
 
@@ -428,22 +484,23 @@ export default function Tasks() {
                                 options={[null, 'immersion', 'process']}
                                 value={filters.focus ?? null}
                                 onChange={(val) => updateFilter({ focus: val as TaskFilters['focus'] })}
-                                icons={{ immersion: <Target className="w-3 h-3 2xl:w-3.5 2xl:h-3.5" />, process: <Layers className="w-3 h-3 2xl:w-3.5 2xl:h-3.5" /> }}
                             />
                         </FilterSection>
                     </div>
                 )}
 
-                <div className="text-xs 2xl:text-sm text-text-muted uppercase font-bold tracking-widest flex items-center justify-between">
-                    <span>Showing {tasks.length} tasks</span>
-                    {!isReorderingEnabled && (
-                        <span className="text-yellow-500/80 flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3 2xl:w-4 2xl:h-4" />
-                            Clear filters to reorder
-                        </span>
-                    )}
-                </div>
+                {isFiltersExpanded && (
+                    <button
+                        onClick={() => setIsFiltersExpanded(false)}
+                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-accent text-white text-xs font-black uppercase tracking-wider hover:bg-accent/90 transition-all"
+                    >
+                        Apply Filters
+                    </button>
+                )}
+
+                {!isReorderingEnabled && <div className="h-0" aria-hidden="true" />}
             </div>
+            </FilterPanelShell>
 
             {/* Task List */}
             <div className="space-y-8">
@@ -696,18 +753,33 @@ export default function Tasks() {
                                 icon={<Trash2 className="w-4 h-4" />}
                                 label="Delete"
                                 color="text-red-500"
-                                onClick={async () => {
-                                    if (confirm(`Delete ${selectedIds.size} tasks?`)) {
-                                        await batchDeleteTasks(Array.from(selectedIds))
-                                        setSelectedIds(new Set())
-                                        showToast(`Deleted ${selectedIds.size} tasks`, 'info')
-                                    }
-                                }}
+                                onClick={() => setShowBulkDeleteConfirm(true)}
                             />
                         </div>
                     </div>
                 </div>
             )}
+            <ConfirmModal
+                isOpen={showBulkDeleteConfirm}
+                title={`Delete ${selectedIds.size} task${selectedIds.size === 1 ? '' : 's'}?`}
+                description="This action cannot be undone."
+                options={[
+                    {
+                        label: 'Delete Tasks',
+                        description: 'Permanently remove the selected tasks.',
+                        variant: 'danger',
+                        onClick: async () => {
+                            const count = selectedIds.size
+                            await batchDeleteTasks(Array.from(selectedIds))
+                            setSelectedIds(new Set())
+                            setShowBulkDeleteConfirm(false)
+                            showToast(`Deleted ${count} task${count === 1 ? '' : 's'}`, 'info')
+                        }
+                    }
+                ]}
+                onCancel={() => setShowBulkDeleteConfirm(false)}
+                onClose={() => setShowBulkDeleteConfirm(false)}
+            />
         </div>
     )
 }
@@ -801,7 +873,7 @@ function FilterGroup<T extends string | null>({ options, value, onChange, icons 
                     key={String(opt)}
                     onClick={() => onChange(opt)}
                     className={cn(
-                        "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs 2xl:text-sm font-bold uppercase tracking-wider transition-all whitespace-nowrap",
+                        "flex items-center gap-1.5 px-2 py-1.5 sm:px-2.5 rounded-lg text-[11px] sm:text-xs 2xl:text-sm font-bold uppercase tracking-wider transition-all whitespace-nowrap",
                         value === opt ? "bg-accent text-white shadow-sm" : "text-text-muted hover:text-text-primary"
                     )}
                 >
