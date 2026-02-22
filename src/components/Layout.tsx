@@ -11,6 +11,7 @@ import { KeyboardShortcutsModal } from './KeyboardShortcutsModal'
 import { OfflineBanner } from './OfflineBanner'
 import { InstallPrompt } from './InstallPrompt'
 import { PWAUpdateNotification } from './PWAUpdateNotification'
+import { FloatingTimerPill } from './FloatingTimerPill'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useShortcutContext } from '../context/ShortcutContext'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
@@ -361,6 +362,7 @@ export default function Layout() {
                 <OfflineBanner />
                 <InstallPrompt />
                 <PWAUpdateNotification />
+                <FloatingTimerPill />
             </div>
         </div>
     )

@@ -502,7 +502,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
     }, 0)
 
     return (
-        <div className="fixed inset-0 z-50 flex justify-end overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-end md:items-stretch md:justify-end overflow-hidden">
             {/* Backdrop */}
             <div
                 className={cn(
@@ -516,10 +516,10 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
             <div
                 ref={modalRef}
                 className={cn(
-                    "relative flex flex-col bg-surface border-l border-border h-full w-full max-w-[900px] shadow-2xl overflow-hidden overflow-x-hidden",
+                    "relative flex flex-col bg-surface border border-border md:border-l md:border-r-0 md:border-y-0 rounded-t-3xl md:rounded-none h-[min(96dvh,100%)] md:h-full w-full max-w-[900px] shadow-2xl overflow-hidden overflow-x-hidden overscroll-contain",
                     isClosing
-                        ? "animate-out fade-out duration-150"
-                        : "animate-in slide-in-from-right duration-200 ease-out"
+                        ? "animate-out fade-out slide-out-to-bottom-2 md:slide-out-to-bottom-0 duration-150"
+                        : "animate-in slide-in-from-bottom-2 md:slide-in-from-right duration-200 ease-out"
                 )}
                 role="dialog"
                 aria-modal="true"
@@ -527,7 +527,11 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                 tabIndex={-1}
             >
                 {/* Header */}
-                <header className="flex items-center justify-between gap-2 pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(0.75rem+env(safe-area-inset-right))] md:px-6 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 border-b border-transparent z-20 shrink-0">
+                <header className="sticky top-0 bg-surface/92 backdrop-blur-md border-b border-border/50 z-30 shrink-0">
+                    <div className="md:hidden flex justify-center pt-2 pb-1">
+                        <div className="h-1.5 w-11 rounded-full bg-text-muted/25" aria-hidden="true" />
+                    </div>
+                    <div className="flex items-center justify-between gap-2 pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(0.75rem+env(safe-area-inset-right))] md:px-6 pt-1 md:pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3">
                     <div className="flex flex-1 items-center gap-2 md:gap-3 min-w-0 flex-wrap">
                         <h2 id="task-detail-heading" className="sr-only">Task details</h2>
                         <button
@@ -631,13 +635,63 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                             <X className="w-4 h-4" />
                         </button>
                     </div>
+                    </div>
                 </header>
 
                 {/* Content Area - 2 Columns */}
-                <div ref={contentScrollRef} className="flex flex-1 min-h-0 min-w-0 flex-col md:flex-row overflow-y-auto md:overflow-hidden overflow-x-hidden">
+                <div ref={contentScrollRef} className="flex flex-1 min-h-0 min-w-0 flex-col md:flex-row overflow-y-auto md:overflow-hidden overflow-x-hidden overscroll-contain">
+                    <div className="md:hidden sticky top-0 z-20 px-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] py-2.5 border-b border-border/40 bg-surface/92 backdrop-blur-md">
+                        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+                            <button
+                                onClick={() => void handleToggleTimer()}
+                                disabled={isTimerSyncing}
+                                className={cn(
+                                    "touch-target shrink-0 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-black uppercase tracking-wider transition-all",
+                                    isTimerActiveForTask
+                                        ? "border-emerald-300/30 bg-emerald-400/15 text-emerald-200"
+                                        : "border-border/60 bg-surface-secondary/50 text-text-primary",
+                                    isTimerSyncing && "opacity-60 cursor-not-allowed"
+                                )}
+                            >
+                                {isTimerActiveForTask ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                                <span>{isTimerActiveForTask ? formatElapsed(elapsedSeconds) : 'Start Timer'}</span>
+                            </button>
+
+                            <button
+                                onClick={() => {
+                                    const nextToday = !today
+                                    setToday(nextToday)
+                                    handleFieldUpdate('today', nextToday)
+                                }}
+                                className={cn(
+                                    "touch-target shrink-0 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-black uppercase tracking-wider transition-all",
+                                    today
+                                        ? "border-yellow-400/30 bg-yellow-400/10 text-yellow-400"
+                                        : "border-border/60 bg-surface-secondary/50 text-text-muted hover:text-text-primary"
+                                )}
+                                aria-pressed={today}
+                            >
+                                <Star className={cn("w-4 h-4", today && "fill-current")} />
+                                <span>{today ? 'Today' : 'Add Today'}</span>
+                            </button>
+
+                            <button
+                                onClick={openManualSessionEditor}
+                                className="touch-target shrink-0 inline-flex items-center gap-2 rounded-xl border border-border/60 bg-surface-secondary/50 px-3 py-2 text-sm font-black uppercase tracking-wider text-text-primary transition-all"
+                            >
+                                <Clock className="w-4 h-4" />
+                                <span>Log Time</span>
+                            </button>
+
+                            <div className="shrink-0 rounded-xl border border-border/60 bg-surface-secondary/35 px-3 py-2">
+                                <p className="text-[10px] uppercase tracking-[0.18em] text-text-muted">Tracked</p>
+                                <p className="text-xs font-black text-text-primary">{formatSessionDuration(totalTrackedSeconds)}</p>
+                            </div>
+                        </div>
+                    </div>
 
                     {/* LEFTSIDE: Main Content */}
-                    <div className="min-w-0 overflow-visible md:flex-1 md:min-h-0 md:overflow-y-auto md:overflow-x-hidden custom-scrollbar p-4 md:p-10 pb-[calc(1.5rem+env(safe-area-inset-bottom))] space-y-7 md:space-y-10">
+                    <div className="min-w-0 overflow-visible md:flex-1 md:min-h-0 md:overflow-y-auto md:overflow-x-hidden custom-scrollbar p-4 md:p-10 pb-[calc(1.75rem+env(safe-area-inset-bottom))] space-y-7 md:space-y-10">
                         {/* Title & Description */}
                         <div className="space-y-4 md:space-y-6">
                             <textarea
@@ -788,7 +842,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ taskId, onClose }) => {
                     </div>
 
                     {/* RIGHTSIDE: Sidebar Metadata */}
-                    <div className="w-full md:w-[320px] lg:w-[380px] border-t md:border-t-0 md:border-l border-border/50 bg-surface/30 overflow-visible md:overflow-y-auto md:overflow-x-hidden custom-scrollbar p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] space-y-8">
+                    <div className="w-full md:w-[320px] lg:w-[380px] border-t md:border-t-0 md:border-l border-border/50 bg-surface/30 overflow-visible md:overflow-y-auto md:overflow-x-hidden custom-scrollbar p-4 md:p-6 pb-[calc(1.75rem+env(safe-area-inset-bottom))] space-y-6 md:space-y-8">
                         {/* Time Tracking */}
                         <div className="space-y-3 rounded-2xl border border-emerald-300/15 bg-emerald-400/5 p-4 md:p-5">
                             <div className="flex items-center justify-between">

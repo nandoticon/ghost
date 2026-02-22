@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
     ChevronLeft,
@@ -9,7 +9,8 @@ import {
     AlertCircle,
     Archive,
     Trash2,
-    Edit3
+    Edit3,
+    X
 } from 'lucide-react'
 import { useProjects } from '../hooks/useProjects'
 import { useProjectCategories } from '../hooks/useProjectCategories'
@@ -66,6 +67,9 @@ export default function ProjectDetail() {
     const [isTaskFormOpen, setIsTaskFormOpen] = useState(false)
     const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
     const [showMenu, setShowMenu] = useState(false)
+    const [isClosingPanel, setIsClosingPanel] = useState(false)
+    const closeTimerRef = useRef<number | null>(null)
+    const isClosingRef = useRef(false)
 
     // Inline edit state
     const [editName, setEditName] = useState('')
@@ -132,6 +136,22 @@ export default function ProjectDetail() {
         }
     }
 
+    const requestClose = useCallback(() => {
+        if (isClosingRef.current) return
+        isClosingRef.current = true
+        setIsClosingPanel(true)
+        closeTimerRef.current = window.setTimeout(() => {
+            closeTimerRef.current = null
+            navigate('/projects')
+        }, 150)
+    }, [navigate])
+
+    useEffect(() => () => {
+        if (closeTimerRef.current) {
+            window.clearTimeout(closeTimerRef.current)
+        }
+    }, [])
+
     if (projectsLoading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
@@ -150,17 +170,38 @@ export default function ProjectDetail() {
     }
 
     return (
-        <div className="w-full max-w-full mx-auto px-4 pt-2 pb-8 tablet:pt-4 tablet:pb-12 space-y-8 animate-in fade-in duration-500">
+        <div className="fixed inset-0 z-40 flex justify-end overflow-hidden">
+            <button
+                type="button"
+                aria-label="Close project panel"
+                onClick={requestClose}
+                className={cn(
+                    "absolute inset-0 bg-background/60 backdrop-blur-sm",
+                    isClosingPanel ? "animate-out fade-out duration-150" : "animate-in fade-in duration-200"
+                )}
+            />
+
+            <div
+                className={cn(
+                    "relative h-full w-full max-w-[1200px] border-l border-border bg-background md:bg-surface shadow-2xl overflow-y-auto custom-scrollbar",
+                    isClosingPanel
+                        ? "animate-out fade-out duration-150"
+                        : "animate-in slide-in-from-right duration-200"
+                )}
+            >
+                <div className="w-full max-w-full mx-auto px-4 pt-2 pb-8 tablet:pt-4 tablet:pb-12 space-y-8">
             {/* Navigation */}
             <nav className="flex items-center justify-between">
-                <Link
-                    to="/projects"
+                <button
+                    type="button"
+                    onClick={requestClose}
                     className="flex items-center space-x-2 text-text-muted hover:text-text-primary transition-colors group"
                 >
                     <ChevronLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-                    <span className="text-sm font-bold uppercase tracking-widest">Back</span>
-                </Link>
+                    <span className="text-sm font-bold uppercase tracking-widest">Projects</span>
+                </button>
 
+                <div className="flex items-center gap-1">
                 <div className="relative">
                     <button
                         onClick={() => setShowMenu(!showMenu)}
@@ -206,6 +247,15 @@ export default function ProjectDetail() {
                             </div>
                         </>
                     )}
+                </div>
+                <button
+                    type="button"
+                    onClick={requestClose}
+                    className="p-2 hover:bg-surface-secondary rounded-xl text-text-muted hover:text-text-primary transition-colors"
+                    aria-label="Close project panel"
+                >
+                    <X className="w-5 h-5" />
+                </button>
                 </div>
             </nav>
 
@@ -410,6 +460,8 @@ export default function ProjectDetail() {
                 taskId={selectedTaskId}
                 onClose={() => setSelectedTaskId(null)}
             />
+                </div>
+            </div>
         </div>
     )
 }

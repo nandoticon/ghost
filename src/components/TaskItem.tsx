@@ -151,11 +151,11 @@ export const TaskItem = React.memo<TaskItemProps>(({
     return (
         <div
             className={cn(
-                "group relative flex items-start md:items-center gap-2 md:gap-4 px-3 md:px-4 py-3 md:py-4 2xl:py-5 rounded-2xl border border-transparent transition-all cursor-pointer overflow-hidden min-w-0",
+                "group relative flex items-start md:items-center gap-2 md:gap-4 px-3 md:px-4 py-3 md:py-4 2xl:py-5 rounded-2xl border border-border/40 bg-surface-secondary/30 transition-all cursor-pointer overflow-hidden min-w-0",
                 isDragging
                     ? "bg-surface shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border-accent/30 scale-[1.03] z-50 ring-2 ring-accent/20"
-                    : "hover:bg-surface hover:border-border/60 hover:shadow-lg hover:-translate-y-0.5",
-                isCompleted && "opacity-50",
+                    : "hover:bg-surface hover:border-accent/40 hover:shadow-lg hover:-translate-y-0.5",
+                isCompleted && "opacity-60",
                 isSelected && "bg-surface border-accent/40 shadow-[0_12px_40px_rgba(0,0,0,0.2)] -translate-y-0.5 ring-1 ring-accent/20"
             )}
             onClick={(e) => {
@@ -206,10 +206,10 @@ export const TaskItem = React.memo<TaskItemProps>(({
             <div className="flex-1 min-w-0 flex flex-col justify-center">
                 <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mb-1 min-w-0">
                     <span className={cn(
-                        "text-base md:text-[1.05rem] 2xl:text-[1.15rem] leading-snug font-heavy tracking-tight transition-all duration-300 break-words line-clamp-2",
+                        "text-base md:text-[1.05rem] 2xl:text-[1.15rem] leading-snug font-bold tracking-tight transition-all duration-300 break-words line-clamp-2",
                         isCompleted
                             ? "line-through text-text-muted decoration-text-muted/60"
-                            : isSelected ? "text-accent" : "text-text-primary no-underline"
+                            : isSelected ? "text-accent" : "text-text-primary group-hover:text-accent no-underline"
                     )}>
                         {task.title}
                     </span>

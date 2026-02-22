@@ -55,7 +55,22 @@ export function QuickCapture({ isOpen, onClose }: QuickCaptureProps) {
             setTitle('')
             setProjectId(null)
             setToday(true)
-            setTimeout(() => inputRef.current?.focus(), 50)
+            window.requestAnimationFrame(() => {
+                const input = inputRef.current
+                if (!input) return
+                input.focus({ preventScroll: true })
+                const pos = input.value.length
+                try {
+                    input.setSelectionRange(pos, pos)
+                } catch {
+                    // Some mobile browsers can reject selection updates during focus transitions.
+                }
+            })
+            window.setTimeout(() => {
+                const input = inputRef.current
+                if (!input || document.activeElement === input) return
+                input.focus({ preventScroll: true })
+            }, 140)
         } else if (!isOpen && wasOpen) {
             if (isRendered && !isClosing) {
                 requestClose()
@@ -141,11 +156,16 @@ export function QuickCapture({ isOpen, onClose }: QuickCaptureProps) {
                     <input
                         ref={inputRef}
                         type="text"
+                        enterKeyHint="done"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="sentences"
                         placeholder="What's on your mind?"
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        className="w-full bg-transparent text-2xl md:text-xl font-medium text-text-primary placeholder-text-muted outline-none py-2"
+                        className="w-full bg-transparent text-2xl md:text-xl leading-tight font-medium text-text-primary placeholder-text-muted outline-none py-2"
+                        style={{ transform: 'translateZ(0)' }}
                     />
 
                     <div className="flex flex-wrap items-center gap-2 pt-2 min-w-0">
