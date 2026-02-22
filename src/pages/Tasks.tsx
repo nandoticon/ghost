@@ -12,8 +12,21 @@ import { Task, TaskFilters } from '../types'
 import { cn } from '../lib/cn'
 import { useShortcutContext } from '../context/ShortcutContext'
 import { useGlobalTasks } from '../context/TaskContext'
+import { useSearchParams } from 'react-router-dom'
 
 const STORAGE_KEY = 'ghost_tasks_filters'
+const STATUS_GROUP_COLLAPSE_KEY = 'ghost_tasks_status_group_collapses'
+const COMPLETE_OLDER_REVEAL_KEY = 'ghost_tasks_complete_older_revealed'
+
+type TaskStatusGroupKey = 'todo' | 'doing' | 'waiting' | 'done'
+type StatusCollapseState = Record<TaskStatusGroupKey, boolean>
+
+const DEFAULT_STATUS_COLLAPSES: StatusCollapseState = {
+    todo: false,
+    doing: false,
+    waiting: false,
+    done: true
+}
 
 const DEFAULT_FILTERS: TaskFilters = {
     status: 'all',
@@ -25,7 +38,19 @@ const DEFAULT_FILTERS: TaskFilters = {
 }
 
 export default function Tasks() {
+    const [searchParams, setSearchParams] = useSearchParams()
     const [filters, setFilters] = useState<TaskFilters>(() => {
+        const status = searchParams.get('status') as TaskFilters['status'] | null
+        const dateFilter = searchParams.get('date') as TaskFilters['dateFilter'] | null
+        const projectId = searchParams.get('project')
+        if (status || dateFilter || projectId) {
+            return {
+                ...DEFAULT_FILTERS,
+                ...(status ? { status } : {}),
+                ...(dateFilter ? { dateFilter } : {}),
+                ...(projectId ? { projectId } : {})
+            }
+        }
         const saved = localStorage.getItem(STORAGE_KEY)
         return saved ? JSON.parse(saved) : DEFAULT_FILTERS
     })
@@ -37,7 +62,16 @@ export default function Tasks() {
 
     const [isFormOpen, setIsFormOpen] = useState(false)
     const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
-    const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list')
+    const [viewMode, setViewMode] = useState<'list' | 'kanban'>(() => (searchParams.get('view') === 'kanban' ? 'kanban' : 'list'))
+    const [taskFormDefaults, setTaskFormDefaults] = useState<{ defaultProjectId?: string | null; defaultToday?: boolean }>({})
+    const [statusGroupCollapses, setStatusGroupCollapses] = useState<StatusCollapseState>(() => {
+        const saved = localStorage.getItem(STATUS_GROUP_COLLAPSE_KEY)
+        return saved ? { ...DEFAULT_STATUS_COLLAPSES, ...JSON.parse(saved) } : DEFAULT_STATUS_COLLAPSES
+    })
+    const [isCompleteOlderRevealed, setIsCompleteOlderRevealed] = useState<boolean>(() => {
+        const saved = localStorage.getItem(COMPLETE_OLDER_REVEAL_KEY)
+        return saved ? JSON.parse(saved) : false
+    })
 
     // Selection state
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -48,6 +82,24 @@ export default function Tasks() {
     useEffect(() => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(filters))
     }, [filters])
+    useEffect(() => {
+        const next = new URLSearchParams(searchParams)
+        if (viewMode !== 'list') next.set('view', viewMode)
+        else next.delete('view')
+        if (filters.status && filters.status !== 'all') next.set('status', filters.status)
+        else next.delete('status')
+        if (filters.dateFilter && filters.dateFilter !== 'any') next.set('date', filters.dateFilter)
+        else next.delete('date')
+        if (filters.projectId) next.set('project', filters.projectId)
+        else next.delete('project')
+        setSearchParams(next, { replace: true })
+    }, [viewMode, filters.status, filters.dateFilter, filters.projectId, searchParams, setSearchParams])
+    useEffect(() => {
+        localStorage.setItem(STATUS_GROUP_COLLAPSE_KEY, JSON.stringify(statusGroupCollapses))
+    }, [statusGroupCollapses])
+    useEffect(() => {
+        localStorage.setItem(COMPLETE_OLDER_REVEAL_KEY, JSON.stringify(isCompleteOlderRevealed))
+    }, [isCompleteOlderRevealed])
 
     const hasActiveFilters = useMemo(() => {
         return filters.status !== 'all' ||
@@ -72,12 +124,15 @@ export default function Tasks() {
 
     const handleDragEnd = (result: DropResult) => {
         if (!result.destination || !isReorderingEnabled) return
+        if (result.source.droppableId !== 'tasks-todo-list' || result.destination.droppableId !== 'tasks-todo-list') return
 
-        const items = Array.from(tasks)
-        const [reorderedItem] = items.splice(result.source.index, 1)
-        items.splice(result.destination.index, 0, reorderedItem)
+        const todoTasks = tasks.filter(t => (t.status || (t.completed ? 'done' : 'todo')) === 'todo')
+        const nonTodoTasks = tasks.filter(t => (t.status || (t.completed ? 'done' : 'todo')) !== 'todo')
+        const reorderedTodos = Array.from(todoTasks)
+        const [reorderedItem] = reorderedTodos.splice(result.source.index, 1)
+        reorderedTodos.splice(result.destination.index, 0, reorderedItem)
 
-        reorderTasks(items.map(i => i.id))
+        reorderTasks([...reorderedTodos, ...nonTodoTasks].map(i => i.id))
     }
 
     const handleSave = async (taskData: Partial<Task>) => {
@@ -142,19 +197,101 @@ export default function Tasks() {
 
     const handleTitleClick = useCallback((t: Task) => setActiveTaskId(t.id, t.short_id), [setActiveTaskId])
 
-    // Group by project logic for sticky headers
-    const groupedTasks = useMemo(() => {
-        if (filters.projectId) {
-            const project = projects.find(p => p.id === filters.projectId)
-            return [{
-                id: filters.projectId,
-                name: project?.name || 'Selected Project',
-                color: project?.color,
-                tasks: tasks
-            }]
+    const projectHeaderGroup = useMemo(() => {
+        if (!filters.projectId) return null
+        const project = projects.find(p => p.id === filters.projectId)
+        return {
+            id: filters.projectId,
+            name: project?.name || 'Selected Project',
+            color: project?.color
         }
-        return [{ id: 'all', name: null, tasks }]
-    }, [tasks, filters.projectId, projects])
+    }, [filters.projectId, projects])
+
+    const statusGroups = useMemo(() => {
+        const buckets: Record<'todo' | 'doing' | 'waiting' | 'done', Task[]> = {
+            todo: [],
+            doing: [],
+            waiting: [],
+            done: []
+        }
+        for (const task of tasks) {
+            const status = task.status || (task.completed ? 'done' : 'todo')
+            buckets[status].push(task)
+        }
+        return [
+            { key: 'todo', label: 'Todo', tasks: buckets.todo },
+            { key: 'doing', label: 'Doing', tasks: buckets.doing },
+            { key: 'waiting', label: 'Waiting', tasks: buckets.waiting },
+            { key: 'done', label: 'Complete', tasks: buckets.done }
+        ] as const
+    }, [tasks])
+
+    const completedBuckets = useMemo(() => {
+        const now = new Date()
+        const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        const startWeek = new Date(startToday)
+        startWeek.setDate(startToday.getDate() - 6)
+        const start30Days = new Date(startToday)
+        start30Days.setDate(startToday.getDate() - 29)
+
+        const recentDone = statusGroups.find(g => g.key === 'done')?.tasks ?? []
+        const today: Task[] = []
+        const thisWeek: Task[] = []
+        const older30Days: Task[] = []
+
+        for (const task of recentDone) {
+            const sourceDate = task.completed_at || task.updated_at || task.created_at
+            const completedDate = new Date(sourceDate)
+            if (Number.isNaN(completedDate.getTime())) continue
+            const day = new Date(completedDate.getFullYear(), completedDate.getMonth(), completedDate.getDate())
+
+            if (day >= startToday) {
+                today.push(task)
+                continue
+            }
+            if (day >= startWeek) {
+                thisWeek.push(task)
+                continue
+            }
+            if (day >= start30Days) {
+                older30Days.push(task)
+            }
+        }
+
+        return { today, thisWeek, older30Days }
+    }, [statusGroups])
+
+    const toggleStatusGroup = useCallback((key: TaskStatusGroupKey) => {
+        setStatusGroupCollapses(prev => ({ ...prev, [key]: !prev[key] }))
+    }, [])
+    const statusGroupOrder = useMemo(() => statusGroups.map(g => g.key), [statusGroups])
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement | null
+            if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+            if (!e.altKey) return
+
+            if (e.key.toLowerCase() === 'v') {
+                e.preventDefault()
+                setViewMode(v => v === 'list' ? 'kanban' : 'list')
+                return
+            }
+
+            const n = Number(e.key)
+            if (!Number.isInteger(n) || n < 1 || n > 4) return
+            const key = statusGroupOrder[n - 1]
+            if (!key) return
+            e.preventDefault()
+            if (e.shiftKey) {
+                toggleStatusGroup(key)
+            } else {
+                document.querySelector<HTMLElement>(`[data-task-status-group="${key}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }
+        }
+        window.addEventListener('keydown', onKeyDown)
+        return () => window.removeEventListener('keydown', onKeyDown)
+    }, [statusGroupOrder, toggleStatusGroup])
 
     return (
         <div className="w-full max-w-full mx-auto px-4 pt-4 pb-12 space-y-8 animate-in fade-in duration-500">
@@ -320,6 +457,14 @@ export default function Tasks() {
                         icon={LayoutList}
                         title={hasActiveFilters ? "No matching tasks" : "No tasks yet"}
                         description={hasActiveFilters ? "Try adjusting your filters to find what you're looking for." : "Be the master of your own destiny. Add a task to start."}
+                        actionLabel={hasActiveFilters ? 'Create Task In This View' : 'Add Task'}
+                        onAction={() => {
+                            setTaskFormDefaults({
+                                defaultProjectId: filters.projectId || null,
+                                defaultToday: filters.dateFilter === 'today'
+                            })
+                            setIsFormOpen(true)
+                        }}
                     />
                 ) : viewMode === 'kanban' ? (
                     <KanbanBoard
@@ -331,24 +476,74 @@ export default function Tasks() {
                     }}
                     />
                 ) : (
-                    <DragDropContext onDragEnd={handleDragEnd}>
-                        <Droppable droppableId="tasks-master-list" isDropDisabled={!isReorderingEnabled}>
-                            {(provided) => (
-                                <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-10">
-                                    {groupedTasks.map((group) => (
-                                        <div key={group.id} className="space-y-4">
-                                            {group.name && (
-                                                <div className="sticky top-0 z-10 bg-background/80 backdrop-blur py-2 flex items-center space-x-2 border-b border-border/50">
-                                                    {group.color && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: group.color }} />}
-                                                    <h3 className="text-sm 2xl:text-base font-bold tracking-tight text-text-primary">{group.name}</h3>
-                                                </div>
-                                            )}
-                                            <div className="space-y-2">
-                                                {group.tasks.map((task, index) => (
-                                                    <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={!isReorderingEnabled}>
-                                                        {(provided, snapshot) => (
-                                                            <div ref={provided.innerRef} {...provided.draggableProps}>
+                    <div className="space-y-10">
+                        {projectHeaderGroup && (
+                            <div className="sticky top-0 z-20 bg-background/80 backdrop-blur py-2 flex items-center space-x-2 border-b border-border/50">
+                                {projectHeaderGroup.color && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: projectHeaderGroup.color }} />}
+                                <h3 className="text-sm 2xl:text-base font-bold tracking-tight text-text-primary">{projectHeaderGroup.name}</h3>
+                            </div>
+                        )}
+
+                        {statusGroups.map((group) => {
+                            if (group.tasks.length === 0) return null
+                            const isCollapsed = statusGroupCollapses[group.key]
+                            return (
+                                <div key={group.key} className="space-y-4" data-task-status-group={group.key}>
+                                    <div className="sticky top-0 z-10 bg-background/85 backdrop-blur border-b border-border/40 py-2 flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-sm 2xl:text-base font-bold tracking-tight text-text-primary">{group.label}</h3>
+                                            <span className="text-xs uppercase tracking-widest font-black text-text-muted">{group.tasks.length}</span>
+                                        </div>
+                                        <button
+                                            onClick={() => toggleStatusGroup(group.key)}
+                                            className="inline-flex items-center gap-1 text-xs uppercase tracking-widest font-black text-text-muted hover:text-text-primary transition-colors"
+                                        >
+                                            <ChevronsUpDown className="w-3.5 h-3.5" />
+                                            {isCollapsed ? 'Reveal' : 'Hide'}
+                                        </button>
+                                    </div>
+
+                                    {!isCollapsed && (
+                                        group.key === 'done' ? (
+                                            <div className="space-y-5">
+                                                <CompletedSubsection
+                                                    label="Today"
+                                                    tasks={completedBuckets.today}
+                                                    selectedIds={selectedIds}
+                                                    onToggleComplete={handleToggleComplete}
+                                                    onToggleToday={handleToggleToday}
+                                                    onSelect={handleTaskSelect}
+                                                    onClickTitle={handleTitleClick}
+                                                />
+                                                <CompletedSubsection
+                                                    label="This Week"
+                                                    tasks={completedBuckets.thisWeek}
+                                                    selectedIds={selectedIds}
+                                                    onToggleComplete={handleToggleComplete}
+                                                    onToggleToday={handleToggleToday}
+                                                    onSelect={handleTaskSelect}
+                                                    onClickTitle={handleTitleClick}
+                                                />
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <h4 className="text-xs uppercase tracking-widest font-black text-text-muted">Older (Last 30 Days)</h4>
+                                                            <span className="text-xs uppercase tracking-widest font-black text-text-muted/80">{completedBuckets.older30Days.length}</span>
+                                                        </div>
+                                                        {completedBuckets.older30Days.length > 0 && (
+                                                            <button
+                                                                onClick={() => setIsCompleteOlderRevealed(v => !v)}
+                                                                className="text-xs uppercase tracking-widest font-black text-text-muted hover:text-text-primary"
+                                                            >
+                                                                {isCompleteOlderRevealed ? 'Hide' : 'Reveal'}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    {isCompleteOlderRevealed && completedBuckets.older30Days.length > 0 && (
+                                                        <div className="space-y-2">
+                                                            {completedBuckets.older30Days.map((task) => (
                                                                 <TaskItem
+                                                                    key={task.id}
                                                                     task={task}
                                                                     onToggleComplete={handleToggleComplete}
                                                                     onToggleToday={handleToggleToday}
@@ -356,30 +551,79 @@ export default function Tasks() {
                                                                     onSelect={handleTaskSelect}
                                                                     isSelected={selectedIds.has(task.id)}
                                                                     onClickTitle={handleTitleClick}
-                                                                    dragHandleProps={isReorderingEnabled ? provided.dragHandleProps : undefined}
-                                                                    isDragging={snapshot.isDragging}
-                                                                    hideDragHandle={!isReorderingEnabled}
+                                                                    hideDragHandle
                                                                 />
-                                                            </div>
-                                                        )}
-                                                    </Draggable>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ) :
+                                        group.key === 'todo' && isReorderingEnabled ? (
+                                            <DragDropContext onDragEnd={handleDragEnd}>
+                                                <Droppable droppableId="tasks-todo-list" isDropDisabled={!isReorderingEnabled}>
+                                                    {(provided) => (
+                                                        <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
+                                                            {group.tasks.map((task, index) => (
+                                                                <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={!isReorderingEnabled}>
+                                                                    {(provided, snapshot) => (
+                                                                        <div ref={provided.innerRef} {...provided.draggableProps}>
+                                                                            <TaskItem
+                                                                                task={task}
+                                                                                onToggleComplete={handleToggleComplete}
+                                                                                onToggleToday={handleToggleToday}
+                                                                                onClick={() => { }}
+                                                                                onSelect={handleTaskSelect}
+                                                                                isSelected={selectedIds.has(task.id)}
+                                                                                onClickTitle={handleTitleClick}
+                                                                                dragHandleProps={isReorderingEnabled ? provided.dragHandleProps : undefined}
+                                                                                isDragging={snapshot.isDragging}
+                                                                                hideDragHandle={!isReorderingEnabled}
+                                                                            />
+                                                                        </div>
+                                                                    )}
+                                                                </Draggable>
+                                                            ))}
+                                                            {provided.placeholder}
+                                                        </div>
+                                                    )}
+                                                </Droppable>
+                                            </DragDropContext>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {group.tasks.map((task) => (
+                                                    <TaskItem
+                                                        key={task.id}
+                                                        task={task}
+                                                        onToggleComplete={handleToggleComplete}
+                                                        onToggleToday={handleToggleToday}
+                                                        onClick={() => { }}
+                                                        onSelect={handleTaskSelect}
+                                                        isSelected={selectedIds.has(task.id)}
+                                                        onClickTitle={handleTitleClick}
+                                                        hideDragHandle
+                                                    />
                                                 ))}
                                             </div>
-                                        </div>
-                                    ))}
-                                    {provided.placeholder}
+                                        )
+                                    )}
                                 </div>
-                            )}
-                        </Droppable>
-                    </DragDropContext>
+                            )
+                        })}
+                    </div>
                 )}
             </div>
 
             {/* Form Modal (Create only) */}
             <TaskForm
                 isOpen={isFormOpen}
+                defaultProjectId={taskFormDefaults.defaultProjectId}
+                defaultToday={taskFormDefaults.defaultToday}
                 onSave={handleSave}
-                onCancel={() => setIsFormOpen(false)}
+                onCancel={() => {
+                    setIsFormOpen(false)
+                    setTaskFormDefaults({})
+                }}
             />
 
             {/* Batch Action Bar */}
@@ -407,6 +651,26 @@ export default function Tasks() {
                                     await batchUpdateTasks(Array.from(selectedIds), { status: 'done', completed: true })
                                     setSelectedIds(new Set())
                                     showToast(`Marked ${selectedIds.size} tasks as done`, 'success')
+                                }}
+                            />
+                            <BatchActionBtn
+                                icon={<RotateCcw className="w-4 h-4" />}
+                                label="Doing"
+                                color="text-blue-400"
+                                onClick={async () => {
+                                    await batchUpdateTasks(Array.from(selectedIds), { status: 'doing', completed: false })
+                                    setSelectedIds(new Set())
+                                    showToast(`Marked ${selectedIds.size} tasks as doing`, 'success')
+                                }}
+                            />
+                            <BatchActionBtn
+                                icon={<RotateCcw className="w-4 h-4" />}
+                                label="Waiting"
+                                color="text-orange-400"
+                                onClick={async () => {
+                                    await batchUpdateTasks(Array.from(selectedIds), { status: 'waiting', completed: false })
+                                    setSelectedIds(new Set())
+                                    showToast(`Marked ${selectedIds.size} tasks as waiting`, 'success')
                                 }}
                             />
                             <BatchActionBtn
@@ -444,6 +708,62 @@ export default function Tasks() {
                     </div>
                 </div>
             )}
+        </div>
+    )
+}
+
+function CompletedSubsection({
+    label,
+    tasks,
+    selectedIds,
+    onToggleComplete,
+    onToggleToday,
+    onSelect,
+    onClickTitle,
+    onEmpty = 'None'
+}: {
+    label: string
+    tasks: Task[]
+    selectedIds: Set<string>
+    onToggleComplete: (id: string, completed: boolean) => void
+    onToggleToday: (id: string, today: boolean) => void
+    onSelect: (taskId: string, event: React.MouseEvent) => void
+    onClickTitle: (task: Task) => void
+    onEmpty?: string
+}) {
+    if (tasks.length === 0) {
+        return (
+            <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                    <h4 className="text-xs uppercase tracking-widest font-black text-text-muted">{label}</h4>
+                    <span className="text-xs uppercase tracking-widest font-black text-text-muted/80">0</span>
+                </div>
+                <p className="text-xs text-text-muted/70">{onEmpty}</p>
+            </div>
+        )
+    }
+
+    return (
+        <div className="space-y-2">
+            <div className="flex items-center gap-2">
+                <h4 className="text-xs uppercase tracking-widest font-black text-text-muted">{label}</h4>
+                <span className="text-xs uppercase tracking-widest font-black text-text-muted/80">{tasks.length}</span>
+            </div>
+            <div className="space-y-2">
+                {tasks.map((task) => (
+                    <TaskItem
+                        key={task.id}
+                        task={task}
+                        onToggleComplete={onToggleComplete}
+                        onToggleToday={onToggleToday}
+                        onClick={() => { }}
+                        onSelect={onSelect}
+                        isSelected={selectedIds.has(task.id)}
+                        onClickTitle={onClickTitle}
+                        hideDragHandle
+                    />
+                ))}
+            </div>
         </div>
     )
 }

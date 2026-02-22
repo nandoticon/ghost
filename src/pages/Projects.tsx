@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useCallback } from 'react'
-import { Plus, Folder, ChevronDown, ChevronRight, MoreVertical, Filter, LayoutGrid, LayoutList, SortAsc, CheckCircle2 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import { Plus, Folder, ChevronDown, ChevronRight, MoreVertical, Filter, LayoutGrid, LayoutList, SortAsc, CheckCircle2, Search, Pin, PinOff, ArchiveRestore, Archive } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useProjects } from '../hooks/useProjects'
 import { useTasks } from '../hooks/useTasks'
 import { useProjectCategories } from '../hooks/useProjectCategories'
@@ -12,8 +12,15 @@ import { cn } from '../lib/cn'
 
 type SortOption = 'name' | 'progress' | 'tasks' | 'newest'
 type ViewMode = 'grid' | 'list'
+type CategoryCollapseMap = Record<string, boolean>
+
+const PROJECTS_VIEW_MODE_KEY = 'ghost_projects_view_mode'
+const PROJECTS_SORT_KEY = 'ghost_projects_sort'
+const PROJECTS_PINNED_KEY = 'ghost_projects_pinned_ids'
+const PROJECTS_CATEGORY_COLLAPSE_KEY = 'ghost_projects_category_collapses'
 
 export default function Projects() {
+    const [searchParams, setSearchParams] = useSearchParams()
     const { projects, loading: projectsLoading, createProject, updateProject, deleteProject } = useProjects()
     const { categories, loading: categoriesLoading } = useProjectCategories()
     const { tasks, loading: tasksLoading } = useTasks()
@@ -22,9 +29,44 @@ export default function Projects() {
     const [isFormOpen, setIsFormOpen] = useState(false)
     const [editingProject, setEditingProject] = useState<Project | undefined>(undefined)
     const [showArchived, setShowArchived] = useState(false)
-    const [categoryFilterId, setCategoryFilterId] = useState('')
-    const [viewMode, setViewMode] = useState<ViewMode>('grid')
-    const [sortBy, setSortBy] = useState<SortOption>('newest')
+    const [categoryFilterId, setCategoryFilterId] = useState(() => searchParams.get('category') || '')
+    const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || '')
+    const [viewMode, setViewMode] = useState<ViewMode>(() => (searchParams.get('view') as ViewMode) || (localStorage.getItem(PROJECTS_VIEW_MODE_KEY) as ViewMode) || 'grid')
+    const [sortBy, setSortBy] = useState<SortOption>(() => (searchParams.get('sort') as SortOption) || (localStorage.getItem(PROJECTS_SORT_KEY) as SortOption) || 'newest')
+    const [projectFormDefaultCategoryId, setProjectFormDefaultCategoryId] = useState<string | null>(null)
+    const [pinnedProjectIds, setPinnedProjectIds] = useState<string[]>(() => {
+        const saved = localStorage.getItem(PROJECTS_PINNED_KEY)
+        return saved ? JSON.parse(saved) : []
+    })
+    const [categoryCollapsed, setCategoryCollapsed] = useState<CategoryCollapseMap>(() => {
+        const saved = localStorage.getItem(PROJECTS_CATEGORY_COLLAPSE_KEY)
+        return saved ? JSON.parse(saved) : {}
+    })
+
+    useEffect(() => {
+        localStorage.setItem(PROJECTS_VIEW_MODE_KEY, viewMode)
+    }, [viewMode])
+    useEffect(() => {
+        localStorage.setItem(PROJECTS_SORT_KEY, sortBy)
+    }, [sortBy])
+    useEffect(() => {
+        localStorage.setItem(PROJECTS_PINNED_KEY, JSON.stringify(pinnedProjectIds))
+    }, [pinnedProjectIds])
+    useEffect(() => {
+        localStorage.setItem(PROJECTS_CATEGORY_COLLAPSE_KEY, JSON.stringify(categoryCollapsed))
+    }, [categoryCollapsed])
+    useEffect(() => {
+        const next = new URLSearchParams(searchParams)
+        if (viewMode !== 'grid') next.set('view', viewMode)
+        else next.delete('view')
+        if (sortBy !== 'newest') next.set('sort', sortBy)
+        else next.delete('sort')
+        if (categoryFilterId) next.set('category', categoryFilterId)
+        else next.delete('category')
+        if (searchQuery.trim()) next.set('q', searchQuery.trim())
+        else next.delete('q')
+        setSearchParams(next, { replace: true })
+    }, [viewMode, sortBy, categoryFilterId, searchQuery, searchParams, setSearchParams])
 
     const categoryMap = useMemo(
         () => new Map(categories.map((category) => [category.id, category.name])),
@@ -32,12 +74,21 @@ export default function Projects() {
     )
 
     const projectStatsMap = useMemo(() => {
-        const stats = new Map<string, { total: number; completed: number; progress: number }>()
+        const stats = new Map<string, { total: number; completed: number; progress: number; lastActivityAt: string | null; lastCompletedAt: string | null }>()
         for (const task of tasks) {
             if (!task.project_id) continue
-            const current = stats.get(task.project_id) || { total: 0, completed: 0, progress: 0 }
+            const current = stats.get(task.project_id) || { total: 0, completed: 0, progress: 0, lastActivityAt: null, lastCompletedAt: null }
             current.total += 1
             if (task.completed) current.completed += 1
+            const activityCandidates = [task.updated_at, task.completed_at, task.created_at].filter(Boolean) as string[]
+            for (const candidate of activityCandidates) {
+                if (!current.lastActivityAt || new Date(candidate).getTime() > new Date(current.lastActivityAt).getTime()) {
+                    current.lastActivityAt = candidate
+                }
+            }
+            if (task.completed_at && (!current.lastCompletedAt || new Date(task.completed_at).getTime() > new Date(current.lastCompletedAt).getTime())) {
+                current.lastCompletedAt = task.completed_at
+            }
             stats.set(task.project_id, current)
         }
         for (const [projectId, current] of stats) {
@@ -48,11 +99,17 @@ export default function Projects() {
     }, [tasks])
 
     const getProjectStats = useCallback((projectId: string) => {
-        return projectStatsMap.get(projectId) || { total: 0, completed: 0, progress: 0 }
+        return projectStatsMap.get(projectId) || { total: 0, completed: 0, progress: 0, lastActivityAt: null, lastCompletedAt: null }
     }, [projectStatsMap])
 
     const processProjects = useCallback((projectList: Project[]) => {
-        const filtered = projectList.filter(p => !categoryFilterId || p.category_id === categoryFilterId)
+        const query = searchQuery.trim().toLowerCase()
+        const filtered = projectList.filter(p => {
+            if (categoryFilterId && p.category_id !== categoryFilterId) return false
+            if (!query) return true
+            const haystack = `${p.name} ${p.description || ''}`.toLowerCase()
+            return haystack.includes(query)
+        })
 
         return [...filtered].sort((a, b) => {
             if (sortBy === 'name') return a.name.localeCompare(b.name)
@@ -65,10 +122,40 @@ export default function Projects() {
             if (sortBy === 'tasks') return statsB.total - statsA.total
             return 0
         })
-    }, [categoryFilterId, sortBy, getProjectStats])
+    }, [categoryFilterId, searchQuery, sortBy, getProjectStats])
 
     const activeProjects = useMemo(() => processProjects(projects.filter(p => !p.archived)), [projects, processProjects])
     const archivedProjects = useMemo(() => processProjects(projects.filter(p => p.archived)), [projects, processProjects])
+    const groupProjectsByCategory = useCallback((projectList: Project[]) => {
+        const grouped = new Map<string, { key: string; label: string; projects: Project[] }>()
+        for (const project of projectList) {
+            const key = project.category_id || 'uncategorized'
+            const label = project.category_id ? (categoryMap.get(project.category_id) || 'Unknown Category') : 'Uncategorized'
+            const existing = grouped.get(key)
+            if (existing) {
+                existing.projects.push(project)
+            } else {
+                grouped.set(key, { key, label, projects: [project] })
+            }
+        }
+        return Array.from(grouped.values())
+            .filter(group => group.projects.length > 0)
+            .sort((a, b) => {
+                if (a.key === 'uncategorized') return 1
+                if (b.key === 'uncategorized') return -1
+                return a.label.localeCompare(b.label)
+            })
+    }, [categoryMap])
+    const archivedProjectGroups = useMemo(() => groupProjectsByCategory(archivedProjects), [archivedProjects, groupProjectsByCategory])
+    const pinnedActiveProjects = useMemo(() => {
+        const pinned = new Set(pinnedProjectIds)
+        return activeProjects.filter(p => pinned.has(p.id))
+    }, [activeProjects, pinnedProjectIds])
+    const unpinnedActiveProjects = useMemo(() => {
+        const pinned = new Set(pinnedProjectIds)
+        return activeProjects.filter(p => !pinned.has(p.id))
+    }, [activeProjects, pinnedProjectIds])
+    const unpinnedActiveProjectGroups = useMemo(() => groupProjectsByCategory(unpinnedActiveProjects), [unpinnedActiveProjects, groupProjectsByCategory])
 
     const handleSave = useCallback(async (projectData: Partial<Project>) => {
         try {
@@ -90,6 +177,57 @@ export default function Projects() {
         await updateProject(project.id, { archived: !project.archived })
         showToast(project.archived ? 'Project unarchived' : 'Project archived', 'success')
     }, [updateProject, showToast])
+    const togglePinned = useCallback((projectId: string) => {
+        setPinnedProjectIds(prev => prev.includes(projectId) ? prev.filter(id => id !== projectId) : [projectId, ...prev])
+    }, [])
+    const toggleCategoryCollapsed = useCallback((scope: 'active' | 'archived', key: string) => {
+        const storageKey = `${scope}:${key}`
+        setCategoryCollapsed(prev => ({ ...prev, [storageKey]: !prev[storageKey] }))
+    }, [])
+    const isCategoryCollapsed = useCallback((scope: 'active' | 'archived', key: string) => {
+        return Boolean(categoryCollapsed[`${scope}:${key}`])
+    }, [categoryCollapsed])
+    const getGroupSummary = useCallback((projectList: Project[]) => {
+        const projectCount = projectList.length
+        let totalTasks = 0
+        let completedTasks = 0
+        for (const project of projectList) {
+            const stats = getProjectStats(project.id)
+            totalTasks += stats.total
+            completedTasks += stats.completed
+        }
+        const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+        return { projectCount, totalTasks, progress }
+    }, [getProjectStats])
+    const visibleCategoryGroupKeys = useMemo(() => {
+        if (viewMode !== 'list') return [] as string[]
+        return unpinnedActiveProjectGroups.map(g => g.key)
+    }, [viewMode, unpinnedActiveProjectGroups])
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement | null
+            if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+            if (!e.altKey) return
+            if (e.key.toLowerCase() === 'v') {
+                e.preventDefault()
+                setViewMode(v => v === 'grid' ? 'list' : 'grid')
+                return
+            }
+            const n = Number(e.key)
+            if (!Number.isInteger(n) || n < 1 || n > 9) return
+            const key = visibleCategoryGroupKeys[n - 1]
+            if (!key) return
+            e.preventDefault()
+            if (e.shiftKey) {
+                toggleCategoryCollapsed('active', key)
+            } else {
+                document.querySelector<HTMLElement>(`[data-project-category-group="${key}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }
+        }
+        window.addEventListener('keydown', onKeyDown)
+        return () => window.removeEventListener('keydown', onKeyDown)
+    }, [visibleCategoryGroupKeys, toggleCategoryCollapsed])
 
     return (
         <div className="w-full max-w-full mx-auto px-4 pt-2 pb-8 tablet:pt-4 tablet:pb-12 space-y-10 animate-in fade-in duration-500">
@@ -132,7 +270,16 @@ export default function Projects() {
 
             {/* Filter & Sort Bar */}
             <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-surface-secondary/20 p-3 2xl:p-4 rounded-2xl border border-border/40">
-                <div className="flex flex-wrap items-center gap-4 md:gap-8 w-full md:w-auto">
+                <div className="flex flex-wrap items-center gap-4 md:gap-6 w-full md:w-auto">
+                    <div className="flex items-center gap-2 bg-surface border border-border/50 rounded-xl px-3 py-1.5 min-w-[220px]">
+                        <Search className="w-4 h-4 text-text-muted" />
+                        <input
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search projects"
+                            className="bg-transparent outline-none text-xs 2xl:text-sm text-text-primary placeholder:text-text-muted w-full"
+                        />
+                    </div>
                     <div className="flex items-center gap-3 shrink-0">
                         <div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-text-muted">
                             <Filter className="w-3.5 h-3.5" />
@@ -193,7 +340,6 @@ export default function Projects() {
                     </button>
                 </div>
             </div>
-
             {/* Content Area with Loading State */}
             {projectsLoading || tasksLoading || categoriesLoading ? (
                 <div className="flex flex-col items-center justify-center py-20 2xl:py-32 space-y-6">
@@ -212,37 +358,123 @@ export default function Projects() {
                                     ? 'Try another category filter or create a project in this category.'
                                     : 'Organize your tasks into projects to track progress and stay focused.'
                             }
+                            actionLabel={categoryFilterId ? 'Create Project In Category' : 'New Project'}
+                            onAction={() => {
+                                setProjectFormDefaultCategoryId(categoryFilterId || null)
+                                setIsFormOpen(true)
+                            }}
                         />
                     ) : viewMode === 'grid' ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 min-[1500px]:grid-cols-4 4k:grid-cols-4 gap-6 2xl:gap-8">
-                            {activeProjects.map(project => (
-                                <ProjectCard
-                                    key={project.id}
-                                    project={project}
-                                    categoryName={project.category_id ? categoryMap.get(project.category_id) || null : null}
-                                    stats={getProjectStats(project.id)}
-                                    onEdit={(p) => {
-                                        setEditingProject(p)
-                                        setIsFormOpen(true)
-                                    }}
-                                    onArchive={() => toggleArchive(project)}
-                                />
-                            ))}
+                        <div className="space-y-8">
+                            {pinnedActiveProjects.length > 0 && (
+                                <section className="space-y-4">
+                                    <div className="flex items-center justify-between border-b border-border/40 pb-2">
+                                        <h3 className="text-sm 2xl:text-base font-black uppercase tracking-widest text-text-primary">Pinned</h3>
+                                        <span className="text-xs font-black uppercase tracking-widest text-text-muted">{pinnedActiveProjects.length}</span>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 min-[1500px]:grid-cols-4 4k:grid-cols-4 gap-6 2xl:gap-8">
+                                        {pinnedActiveProjects.map(project => (
+                                            <ProjectCard
+                                                key={project.id}
+                                                project={project}
+                                                categoryName={project.category_id ? categoryMap.get(project.category_id) || null : null}
+                                                stats={getProjectStats(project.id)}
+                                                onEdit={(p) => {
+                                                    setEditingProject(p)
+                                                    setIsFormOpen(true)
+                                                }}
+                                                onArchive={() => toggleArchive(project)}
+                                            />
+                                        ))}
+                                    </div>
+                                </section>
+                            )}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 min-[1500px]:grid-cols-4 4k:grid-cols-4 gap-6 2xl:gap-8">
+                                {unpinnedActiveProjects.map(project => (
+                                    <ProjectCard
+                                        key={project.id}
+                                        project={project}
+                                        categoryName={project.category_id ? categoryMap.get(project.category_id) || null : null}
+                                        stats={getProjectStats(project.id)}
+                                        onEdit={(p) => {
+                                            setEditingProject(p)
+                                            setIsFormOpen(true)
+                                        }}
+                                        onArchive={() => toggleArchive(project)}
+                                    />
+                                ))}
+                            </div>
                         </div>
                     ) : (
-                        <div className="space-y-3">
-                            {activeProjects.map(project => (
-                                <ProjectListItem
-                                    key={project.id}
-                                    project={project}
-                                    categoryName={project.category_id ? categoryMap.get(project.category_id) || null : null}
-                                    stats={getProjectStats(project.id)}
-                                    onEdit={(p) => {
-                                        setEditingProject(p)
-                                        setIsFormOpen(true)
-                                    }}
-                                />
-                            ))}
+                        <div className="space-y-8">
+                            {pinnedActiveProjects.length > 0 && (
+                                <section className="space-y-3">
+                                    <div className="flex items-center justify-between border-b border-border/40 pb-2">
+                                        <h3 className="text-sm 2xl:text-base font-black uppercase tracking-widest text-text-primary">Pinned</h3>
+                                        <span className="text-xs font-black uppercase tracking-widest text-text-muted">{pinnedActiveProjects.length}</span>
+                                    </div>
+                                    <div className="space-y-3">
+                                        {pinnedActiveProjects.map(project => (
+                                            <ProjectListItem
+                                                key={project.id}
+                                                project={project}
+                                                categoryName={project.category_id ? categoryMap.get(project.category_id) || null : null}
+                                                stats={getProjectStats(project.id)}
+                                                onEdit={(p) => {
+                                                    setEditingProject(p)
+                                                    setIsFormOpen(true)
+                                                }}
+                                                onArchive={() => toggleArchive(project)}
+                                                onTogglePinned={() => togglePinned(project.id)}
+                                                isPinned={pinnedProjectIds.includes(project.id)}
+                                            />
+                                        ))}
+                                    </div>
+                                </section>
+                            )}
+                            {unpinnedActiveProjectGroups.map((group) => {
+                                const summary = getGroupSummary(group.projects)
+                                const collapsed = isCategoryCollapsed('active', group.key)
+                                return (
+                                    <section key={group.key} className="space-y-3" data-project-category-group={group.key}>
+                                        <button
+                                            onClick={() => toggleCategoryCollapsed('active', group.key)}
+                                            className="w-full flex items-center justify-between border-b border-border/40 pb-2 text-left"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                {collapsed ? <ChevronRight className="w-4 h-4 text-text-muted" /> : <ChevronDown className="w-4 h-4 text-text-muted" />}
+                                                <h3 className="text-sm 2xl:text-base font-black uppercase tracking-widest text-text-primary">
+                                                    {group.label}
+                                                </h3>
+                                            </div>
+                                            <div className="flex items-center gap-4 text-xs font-black uppercase tracking-widest text-text-muted">
+                                                <span>{summary.projectCount} projects</span>
+                                                <span>{summary.totalTasks} tasks</span>
+                                                <span>{summary.progress}% complete</span>
+                                            </div>
+                                        </button>
+                                        {!collapsed && (
+                                            <div className="space-y-3">
+                                                {group.projects.map(project => (
+                                                    <ProjectListItem
+                                                        key={project.id}
+                                                        project={project}
+                                                        categoryName={project.category_id ? categoryMap.get(project.category_id) || null : null}
+                                                        stats={getProjectStats(project.id)}
+                                                        onEdit={(p) => {
+                                                            setEditingProject(p)
+                                                            setIsFormOpen(true)
+                                                        }}
+                                                        onArchive={() => toggleArchive(project)}
+                                                        onTogglePinned={() => togglePinned(project.id)}
+                                                        isPinned={pinnedProjectIds.includes(project.id)}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
+                                    </section>
+                                )
+                            })}
                         </div>
                     )}
 
@@ -261,35 +493,68 @@ export default function Projects() {
                                 <div className={cn(
                                     viewMode === 'grid'
                                         ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 min-[1500px]:grid-cols-4 4k:grid-cols-4 gap-6 2xl:gap-8 opacity-60 grayscale hover:grayscale-0 transition-all duration-500"
-                                        : "space-y-3 opacity-60 grayscale hover:grayscale-0 transition-all duration-500"
+                                        : "space-y-8 opacity-60 grayscale hover:grayscale-0 transition-all duration-500"
                                 )}>
-                                    {archivedProjects.map(project => (
-                                        viewMode === 'grid' ? (
-                                            <ProjectCard
-                                                key={project.id}
-                                                project={project}
-                                                categoryName={project.category_id ? categoryMap.get(project.category_id) || null : null}
-                                                stats={getProjectStats(project.id)}
-                                                onEdit={(p) => {
-                                                    setEditingProject(p)
-                                                    setIsFormOpen(true)
-                                                }}
-                                                onArchive={() => toggleArchive(project)}
-                                                isArchived
-                                            />
-                                        ) : (
-                                            <ProjectListItem
-                                                key={project.id}
-                                                project={project}
-                                                categoryName={project.category_id ? categoryMap.get(project.category_id) || null : null}
-                                                stats={getProjectStats(project.id)}
-                                                onEdit={(p) => {
-                                                    setEditingProject(p)
-                                                    setIsFormOpen(true)
-                                                }}
-                                                isArchived
-                                            />
-                                        )
+                                    {viewMode === 'grid' ? archivedProjects.map(project => (
+                                        <ProjectCard
+                                            key={project.id}
+                                            project={project}
+                                            categoryName={project.category_id ? categoryMap.get(project.category_id) || null : null}
+                                            stats={getProjectStats(project.id)}
+                                            onEdit={(p) => {
+                                                setEditingProject(p)
+                                                setIsFormOpen(true)
+                                            }}
+                                            onArchive={() => toggleArchive(project)}
+                                            isArchived
+                                        />
+                                    )) : archivedProjectGroups.map((group) => (
+                                        <section key={group.key} className="space-y-3">
+                                            <div className="flex items-center justify-between border-b border-border/40 pb-2">
+                                                {(() => {
+                                                    const summary = getGroupSummary(group.projects)
+                                                    const collapsed = isCategoryCollapsed('archived', group.key)
+                                                    return (
+                                                        <>
+                                                            <button
+                                                                onClick={() => toggleCategoryCollapsed('archived', group.key)}
+                                                                className="flex items-center gap-2 text-left"
+                                                            >
+                                                                {collapsed ? <ChevronRight className="w-4 h-4 text-text-muted" /> : <ChevronDown className="w-4 h-4 text-text-muted" />}
+                                                                <h3 className="text-sm 2xl:text-base font-black uppercase tracking-widest text-text-primary">
+                                                                    {group.label}
+                                                                </h3>
+                                                            </button>
+                                                            <div className="flex items-center gap-4 text-xs font-black uppercase tracking-widest text-text-muted">
+                                                                <span>{summary.projectCount} projects</span>
+                                                                <span>{summary.totalTasks} tasks</span>
+                                                                <span>{summary.progress}% complete</span>
+                                                            </div>
+                                                        </>
+                                                    )
+                                                })()}
+                                            </div>
+                                            {!isCategoryCollapsed('archived', group.key) && (
+                                                <div className="space-y-3">
+                                                    {group.projects.map(project => (
+                                                        <ProjectListItem
+                                                            key={project.id}
+                                                            project={project}
+                                                            categoryName={project.category_id ? categoryMap.get(project.category_id) || null : null}
+                                                            stats={getProjectStats(project.id)}
+                                                            onEdit={(p) => {
+                                                                setEditingProject(p)
+                                                                setIsFormOpen(true)
+                                                            }}
+                                                            onArchive={() => toggleArchive(project)}
+                                                            onTogglePinned={() => togglePinned(project.id)}
+                                                            isPinned={pinnedProjectIds.includes(project.id)}
+                                                            isArchived
+                                                        />
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </section>
                                     ))}
                                 </div>
                             )}
@@ -302,16 +567,19 @@ export default function Projects() {
             <ProjectForm
                 isOpen={isFormOpen}
                 project={editingProject}
+                defaultCategoryId={projectFormDefaultCategoryId}
                 categories={categories}
                 onSave={handleSave}
                 onCancel={() => {
                     setIsFormOpen(false)
                     setEditingProject(undefined)
+                    setProjectFormDefaultCategoryId(null)
                 }}
                 onDelete={async (id) => {
                     await deleteProject(id)
                     setIsFormOpen(false)
                     setEditingProject(undefined)
+                    setProjectFormDefaultCategoryId(null)
                 }}
             />
         </div>
@@ -321,22 +589,35 @@ export default function Projects() {
 const ProjectListItem = React.memo<{
     project: Project,
     categoryName: string | null,
-    stats: { total: number, completed: number, progress: number },
+    stats: { total: number, completed: number, progress: number, lastActivityAt: string | null, lastCompletedAt: string | null },
     onEdit: (p: Project) => void,
+    onArchive: () => void,
+    onTogglePinned: () => void,
+    isPinned?: boolean,
     isArchived?: boolean
 }>(function ProjectListItem({
     project,
     categoryName,
     stats,
     onEdit,
+    onArchive,
+    onTogglePinned,
+    isPinned = false,
     isArchived = false
 }: {
     project: Project,
     categoryName: string | null,
-    stats: { total: number, completed: number, progress: number },
+    stats: { total: number, completed: number, progress: number, lastActivityAt: string | null, lastCompletedAt: string | null },
     onEdit: (p: Project) => void,
+    onArchive: () => void,
+    onTogglePinned: () => void,
+    isPinned?: boolean,
     isArchived?: boolean
 }) {
+    const lastActivityLabel = stats.lastActivityAt
+        ? new Date(stats.lastActivityAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+        : 'No activity'
+
     return (
         <div className="group relative flex items-center bg-surface-secondary/30 hover:bg-surface border border-border/40 hover:border-accent/40 rounded-2xl p-4 transition-all hover:shadow-lg gap-6">
             <Link to={`/projects/${project.short_id || project.id}`} className="absolute inset-0 z-[5] rounded-2xl" />
@@ -361,11 +642,20 @@ const ProjectListItem = React.memo<{
                             Archived
                         </span>
                     )}
+                    {isPinned && (
+                        <span className="px-2 py-0.5 text-[10px] rounded-full border border-yellow-400/20 bg-yellow-400/10 text-yellow-300 uppercase tracking-widest font-black">
+                            Pinned
+                        </span>
+                    )}
                 </div>
-                <div className="flex items-center gap-4 text-xs text-text-muted font-medium">
+                <div className="flex items-center flex-wrap gap-4 text-xs text-text-muted font-medium">
                     <div className="flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5 text-accent" />
                         <span>{stats.completed} / {stats.total} tasks</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <span className="uppercase tracking-widest font-black text-[10px] text-text-muted/80">Last</span>
+                        <span>{lastActivityLabel}</span>
                     </div>
                 </div>
             </div>
@@ -381,15 +671,37 @@ const ProjectListItem = React.memo<{
                 </div>
             </div>
 
-            <button
-                onClick={(e) => {
-                    e.preventDefault()
-                    onEdit(project)
-                }}
-                className="relative z-20 p-2 hover:bg-surface-secondary rounded-xl text-text-muted hover:text-text-primary transition-all flex-shrink-0 pointer-events-auto"
-            >
-                <MoreVertical className="w-5 h-5" />
-            </button>
+            <div className="relative z-20 flex items-center gap-1 flex-shrink-0 pointer-events-auto">
+                <button
+                    onClick={(e) => {
+                        e.preventDefault()
+                        onTogglePinned()
+                    }}
+                    className="p-2 hover:bg-surface-secondary rounded-xl text-text-muted hover:text-yellow-300 transition-all"
+                    title={isPinned ? 'Unpin project' : 'Pin project'}
+                >
+                    {isPinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
+                </button>
+                <button
+                    onClick={(e) => {
+                        e.preventDefault()
+                        onArchive()
+                    }}
+                    className="p-2 hover:bg-surface-secondary rounded-xl text-text-muted hover:text-text-primary transition-all"
+                    title={isArchived ? 'Unarchive project' : 'Archive project'}
+                >
+                    {isArchived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+                </button>
+                <button
+                    onClick={(e) => {
+                        e.preventDefault()
+                        onEdit(project)
+                    }}
+                    className="p-2 hover:bg-surface-secondary rounded-xl text-text-muted hover:text-text-primary transition-all"
+                >
+                    <MoreVertical className="w-5 h-5" />
+                </button>
+            </div>
         </div>
     )
 })

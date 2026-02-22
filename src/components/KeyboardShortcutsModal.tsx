@@ -76,6 +76,9 @@ export const KeyboardShortcutsModal: React.FC = () => {
                             <ShortcutRow keys={['E']} description="Edit focused task" />
                             <ShortcutRow keys={['X']} description="Toggle complete" />
                             <ShortcutRow keys={['T']} description="Toggle today" />
+                            <ShortcutRow keys={['Alt', 'V']} description="Toggle task list/kanban view" />
+                            <ShortcutRow keys={['Alt', '1..4']} description="Jump task status group" />
+                            <ShortcutRow keys={['Alt', 'Shift', '1..4']} description="Collapse/expand task status group" />
                         </Section>
                     </div>
 
@@ -87,6 +90,9 @@ export const KeyboardShortcutsModal: React.FC = () => {
 
                         <Section title="Views">
                             <ShortcutRow keys={['Cmd', 'Enter']} description="Submit form/comment" />
+                            <ShortcutRow keys={['Alt', 'V']} description="Toggle project grid/list view" />
+                            <ShortcutRow keys={['Alt', '1..9']} description="Jump project category group (list)" />
+                            <ShortcutRow keys={['Alt', 'Shift', '1..9']} description="Collapse/expand project category" />
                         </Section>
                     </div>
                 </div>
